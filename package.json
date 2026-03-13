@@ -1,0 +1,6 @@
+{
+  "name": "mimir",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Monorepo skeleton for the Mimir project."
+}
