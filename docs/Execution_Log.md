@@ -81,3 +81,22 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 在进入 `services/api` Stage 0 前，单独确认是否要安装 `uv`
   - 后续每个实施 session 完成后继续追加本日志
+
+## M0-003 UV Toolchain Readiness
+
+- 日期时间: 2026-03-14 15:42:17 CST (+0800)
+- 任务包编号: M0-003
+- session 标识: codex-20260314-m0-003-uv-readiness
+- 目标摘要: 补齐 backend 开发所需的 `uv` 工具链，优先通过 Homebrew 以最小风险方式完成安装与可调用性验证，不进入 `services/api` 项目初始化或任何 Stage 0 代码工作。
+- 修改文件:
+  - `README.md`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `date '+%Y-%m-%d %H:%M:%S %Z (%z)'`；`command -v uv || true`；`command -v brew || true`；`brew --version`；`brew list --versions uv`；`brew info uv`；`HOMEBREW_NO_AUTO_UPDATE=1 brew install uv`；`command -v uv`；`uv --version`；`uv venv --help`；`uv pip --help`
+  - 未运行: 任何 `uv` 虚拟环境创建、`services/api` 初始化、backend Stage 0 测试或脚手架命令
+- 验收结论: accepted；`uv` 已安装并可直接调用，要求的三个验收命令全部成功，且本任务未越界进入 backend Stage 0 项目脚手架。
+- blocker / 风险:
+  - 无当前 blocker
+  - `brew list --versions uv` 与 `brew info uv` 在沙箱内会因 Homebrew cache 写权限失败，需要提权后才能完整执行或安装
+- 下一步建议:
+  - 可在后续独立任务包中进入 `services/api` Stage 0，使用 `uv` 作为默认 Python 工具链
