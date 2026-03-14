@@ -1,6 +1,16 @@
 # services/api
 
-Placeholder for the FastAPI backend service.
+Stage 0 FastAPI harness for the Mimir backend.
 
-This directory is intentionally left without application scaffolding in M0-001.
-Follow-up sessions can add backend Stage 0 files here once the task package explicitly covers that work.
+## Current scope
+
+- minimal `FastAPI` app factory under `app/`
+- `GET /api/v1/health` endpoint
+- `pytest` + `pytest-asyncio` test harness
+- shared Stage 0 fixtures under `tests/fixtures/`
+
+## Local commands
+
+- `uv sync --group dev`
+- `uv run --group dev pytest tests/unit`
+- `uv run --group dev pytest tests/contract`

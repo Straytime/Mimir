@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mimir-api"
+version = "0.1.0"
+description = "Stage 0 FastAPI harness for the Mimir backend."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116,<1.0",
+  "httpx>=0.28,<1.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4,<9.0",
+  "pytest-asyncio>=1.0,<2.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = [
+  "tests/unit",
+  "tests/contract",
+]

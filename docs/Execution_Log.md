@@ -100,3 +100,43 @@ Copy the template below for each completed session:
   - `brew list --versions uv` 与 `brew info uv` 在沙箱内会因 Homebrew cache 写权限失败，需要提权后才能完整执行或安装
 - 下一步建议:
   - 可在后续独立任务包中进入 `services/api` Stage 0，使用 `uv` 作为默认 Python 工具链
+
+## M0-004 Backend Stage 0 Harness
+
+- 日期时间: 2026-03-14 16:01:22 CST (+0800)
+- 任务包编号: M0-004
+- session 标识: codex-20260314-m0-004-backend-stage0-harness
+- 目标摘要: 按 `docs/Backend_TDD_Plan.md` 的 Stage 0 在 `services/api` 建立最小 FastAPI 项目骨架、`uv` 管理的 Python 依赖声明、共享测试 fixtures、异步 pytest 基础设施，以及可访问的 `GET /api/v1/health` endpoint；本次实现严格停留在 harness 层，没有进入 `/tasks`、SSE、数据库模型或状态机业务实现。
+- 修改文件:
+  - `.gitignore`
+  - `services/api/README.md`
+  - `services/api/pyproject.toml`
+  - `services/api/uv.lock`
+  - `services/api/app/__init__.py`
+  - `services/api/app/main.py`
+  - `services/api/app/api/__init__.py`
+  - `services/api/app/api/v1/__init__.py`
+  - `services/api/app/api/v1/router.py`
+  - `services/api/app/api/v1/health.py`
+  - `services/api/tests/__init__.py`
+  - `services/api/tests/conftest.py`
+  - `services/api/tests/fixtures/__init__.py`
+  - `services/api/tests/fixtures/app.py`
+  - `services/api/tests/fixtures/db.py`
+  - `services/api/tests/fixtures/runtime.py`
+  - `services/api/tests/fixtures/storage.py`
+  - `services/api/tests/unit/test_async_harness.py`
+  - `services/api/tests/unit/test_fixture_exports.py`
+  - `services/api/tests/unit/test_app_factory.py`
+  - `services/api/tests/contract/rest/test_health.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `uv run --with fastapi --with httpx --with pytest --with pytest-asyncio pytest tests/unit tests/contract`（红测，确认缺少 `app` 与 `tests.fixtures`）; `uv sync --group dev`; `uv run --no-sync --group dev pytest tests/unit`; `uv run --no-sync --group dev pytest tests/contract`; `uv run --no-sync --group dev pytest tests/unit tests/contract`
+  - 未运行: `ruff check`、`mypy`、`pytest tests/integration`；本任务包仅要求 Stage 0 harness，且当前未进入静态检查和集成测试阶段
+- 验收结论: accepted；`tests/unit` 与 `tests/contract` 均可独立运行，异步测试可发现执行，`tests/fixtures` 基础入口可导入，最小 FastAPI app factory 与 `/api/v1/health` 已可启动并通过 contract test，且未越界进入 Backend Stage 1。
+- blocker / 风险:
+  - 无当前 blocker
+  - `db_engine` / `db_session` 仍是 Stage 0 占位 fixture，真实 PostgreSQL 集成应在后续阶段按任务包单独引入
+- 下一步建议:
+  - 进入独立的 Backend Stage 1 任务包，补 `Core Schema` 与状态机的 red-green 测试
+  - 在后续基础设施任务中补 `ruff`、`mypy` 与 integration gate 所需依赖
