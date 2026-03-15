@@ -191,3 +191,54 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Frontend Stage 1 任务包，补 `TaskSnapshot` / `EventEnvelope` 契约类型、fixture 与 reducer/store red-green 测试
   - 在后续前端基础设施任务中补 `MSW`、更多浏览器 API mock 与 integration 场景的 shared fixtures
+
+## M0-006 Accepted M0 Integration + Baseline Verification
+
+- 日期时间: 2026-03-15 10:31:02 CST (+0800)
+- 任务包编号: M0-006
+- session 标识: codex-20260315-m0-006-m0-closure
+- 目标摘要: 将已验收的 M0 成果确认整合到同一工作基线，核对 `main` 上的来源分支与关键冲突文件状态，执行 root、backend Stage 0、frontend Stage 0 的基线验证，并在仅出现最小集成问题时做最小修补，为 M1 做收口准备。
+- 修改文件:
+  - `apps/web/.eslintrc.json`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `git status --short`；`git branch --all --verbose --no-abbrev`；`git log --oneline --decorate --graph --all --max-count=40`；`find . -maxdepth 3 \( -type d -o -type f \) | sort`；`pnpm --version`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract`；`cd apps/web && pnpm typecheck`；`cd apps/web && pnpm lint`；`cd apps/web && pnpm test:unit`；`cd apps/web && pnpm test:contract`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:e2e`
+  - 未运行: `cd apps/web && pnpm test:integration`；当前任务包建议验证命令未要求该项，且本次收口聚焦已验收的 M0 基线共存与建议命令通过
+- 验收结论: accepted；`main` 已包含 `M0-001` 至 `M0-005` 的已验收成果并可共存，backend Stage 0 验证通过，frontend Stage 0 的 typecheck / lint / unit / contract / component / e2e 基线已通过，本次未进入 M1。
+- blocker / 风险:
+  - 无当前 blocker
+  - `apps/web` 的 e2e 基线在沙箱内无法监听 `127.0.0.1:3100`，需要提权或非受限环境运行；这属于执行环境限制，不是代码回归
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过；该 warning 按任务要求未在本次处理
+- 下一步建议:
+  - M0 可正式收口，下一批任务包可进入 M1 但应继续保持单任务串行推进
+  - 如需在受限环境重复跑 e2e，应沿用已批准的提权路径
+
+## M0-007 Backend Stage 1 Core Schema + State Machine
+
+- 日期时间: 2026-03-15 20:56:27 CST (+0800)
+- 任务包编号: M0-007
+- session 标识: codex-20260315-m0-007-backend-stage1
+- 目标摘要: 按 `docs/Backend_TDD_Plan.md` Stage 1 在 `services/api` 固化后端核心 schema、domain enums、任务状态机、基础 token payload model 与纯 `RetryPolicy`，并以 unit tests 覆盖 schema 约束、`status × phase` 组合矩阵、合法/非法流转与重试预算，且实现严格停留在纯领域/纯策略层，不进入 `/tasks`、鉴权签名实现、repository、DB 或 SSE broker。
+- 修改文件:
+  - `services/api/app/core/__init__.py`
+  - `services/api/app/core/retry.py`
+  - `services/api/app/domain/__init__.py`
+  - `services/api/app/domain/enums.py`
+  - `services/api/app/domain/exceptions.py`
+  - `services/api/app/domain/state_machine.py`
+  - `services/api/app/domain/schemas.py`
+  - `services/api/app/domain/tokens.py`
+  - `services/api/tests/unit/core/test_retry.py`
+  - `services/api/tests/unit/domain/test_schemas.py`
+  - `services/api/tests/unit/domain/test_state_machine.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/domain tests/unit/core`（红测，初始因缺少 `app.domain` / `app.core` 失败，补实现后通过）；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit`; `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract`
+  - 未运行: `ruff check`、`mypy`、`pytest tests/integration`；本任务包只要求 Stage 1 纯领域与纯策略，不包含静态门禁补齐和集成层工作
+- 验收结论: accepted；`TaskSnapshot`、`RevisionSummary`、`RequirementDetail`、`CollectPlan`、`CollectSummary`、`EventEnvelope`、domain enums、`TaskStateMachine`、token payload model 与 `RetryPolicy` 均已落地并具备 unit tests，非法状态流转会抛明确领域异常，Stage 0 health contract 回归也通过，本次未越界进入 Backend Stage 2。
+- blocker / 风险:
+  - 无当前 blocker
+  - `RequirementDetail.raw_llm_output` 作为内部领域字段实现为可选，以同时兼容 `Architecture.md` 的内部 schema 与 `OpenAPI_v1.md` 的对外返回形态；后续若要外显该字段，需先改文档
+- 下一步建议:
+  - 进入独立的 Backend Stage 2 任务包，实现 `/tasks`、鉴权骨架与基础策略的 contract-first red-green
+  - 在后续基础设施任务中再补真实 signer、repository 和 DB migration
