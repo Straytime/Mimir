@@ -1,5 +1,7 @@
 import type {
   ClarificationDeltaEventEnvelope,
+  CreateTaskResponse,
+  ErrorResponse,
   EventEnvelope,
   HeartbeatEventEnvelope,
   PhaseChangedEventEnvelope,
@@ -62,6 +64,81 @@ export function makeTaskDetailResponse(
     snapshot: makeTaskSnapshot(),
     current_revision: makeRevisionSummary(),
     delivery: null,
+    ...overrides,
+  };
+}
+
+export function makeCreateTaskResponse(
+  overrides: Partial<CreateTaskResponse> = {},
+): CreateTaskResponse {
+  return {
+    task_id: "tsk_stage0",
+    task_token: "secret_stage0",
+    trace_id: "trc_stage0",
+    snapshot: makeTaskSnapshot(),
+    urls: {
+      events: "/api/v1/tasks/tsk_stage0/events",
+      heartbeat: "/api/v1/tasks/tsk_stage0/heartbeat",
+      disconnect: "/api/v1/tasks/tsk_stage0/disconnect",
+    },
+    connect_deadline_at: "2026-03-13T14:30:10+08:00",
+    ...overrides,
+  };
+}
+
+export function makeValidationErrorResponse(
+  overrides: Partial<ErrorResponse> = {},
+): ErrorResponse {
+  return {
+    error: {
+      code: "validation_error",
+      message: "请求参数不合法。",
+      detail: {
+        errors: [
+          {
+            loc: ["body", "initial_query"],
+            msg: "研究主题不能为空。",
+            type: "value_error",
+          },
+        ],
+      },
+      request_id: "req_stage0",
+      trace_id: null,
+    },
+    ...overrides,
+  };
+}
+
+export function makeResourceBusyErrorResponse(
+  overrides: Partial<ErrorResponse> = {},
+): ErrorResponse {
+  return {
+    error: {
+      code: "resource_busy",
+      message: "当前系统正处理另一项研究，请稍后重试。",
+      detail: {},
+      request_id: "req_busy",
+      trace_id: null,
+    },
+    ...overrides,
+  };
+}
+
+export function makeQuotaExceededErrorResponse(
+  overrides: Partial<ErrorResponse> = {},
+): ErrorResponse {
+  return {
+    error: {
+      code: "ip_quota_exceeded",
+      message: "24 小时内创建任务次数已达上限，请稍后再试。",
+      detail: {
+        quota_limit: 3,
+        quota_used: 3,
+        next_available_at: "2026-03-14T02:15:00+08:00",
+      },
+      request_id: "req_quota",
+      trace_id: null,
+    },
     ...overrides,
   };
 }
@@ -200,6 +277,7 @@ export function makeResearchSessionState(
   overrides: ResearchSessionStateOverrides = {},
 ): ResearchSessionState {
   const baseState = createResearchSessionState();
+  const createTaskOverrides = overrides.ui?.createTask ?? {};
 
   return {
     session: {
@@ -221,6 +299,10 @@ export function makeResearchSessionState(
     ui: {
       ...baseState.ui,
       ...overrides.ui,
+      createTask: {
+        ...baseState.ui.createTask,
+        ...createTaskOverrides,
+      },
     },
     deliveryUi: {
       ...baseState.deliveryUi,
