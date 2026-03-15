@@ -298,3 +298,55 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 后续任务包可以正式进入 M1，但应继续保持单线程串行开发与 `docs/Execution_Log.md` 追加维护
   - M1 应从任务框架最小闭环开始，不回退扩张 M0 范围
+
+## M1-001 Backend Stage 2 Tasks API Shell
+
+- 日期时间: 2026-03-15 22:40:51 CST (+0800)
+- 任务包编号: M1-001
+- session 标识: codex-20260315-m1-001-backend-stage2-shell
+- 目标摘要: 按 `docs/Backend_TDD_Plan.md` Stage 2 实现后端任务框架第一批最小闭环，在 `services/api` 落地 `POST /api/v1/tasks`、`GET /api/v1/tasks/{task_id}`、最小 `POST /api/v1/tasks/{task_id}/disconnect` 鉴权壳、task/access token signer 接口骨架、单活动任务锁、同 IP 配额策略、CORS、request/trace id middleware，并补齐真实 PostgreSQL 路径下的 SQLAlchemy/Alembic scaffolding 与首个 migration；严格停留在 REST shell，不进入 `GET /events`、heartbeat / connect deadline 生命周期、clarification / feedback / downloads 或任何 Stage 3 内容。
+- 修改文件:
+  - `services/api/pyproject.toml`
+  - `services/api/alembic.ini`
+  - `services/api/app/main.py`
+  - `services/api/app/api/deps.py`
+  - `services/api/app/api/error_handlers.py`
+  - `services/api/app/api/errors.py`
+  - `services/api/app/api/middleware.py`
+  - `services/api/app/api/v1/router.py`
+  - `services/api/app/api/v1/tasks.py`
+  - `services/api/app/application/dto/tasks.py`
+  - `services/api/app/application/policies/activity_lock.py`
+  - `services/api/app/application/policies/ip_quota.py`
+  - `services/api/app/application/ports/security.py`
+  - `services/api/app/application/services/tasks.py`
+  - `services/api/app/core/config.py`
+  - `services/api/app/core/ids.py`
+  - `services/api/app/infrastructure/db/base.py`
+  - `services/api/app/infrastructure/db/models.py`
+  - `services/api/app/infrastructure/db/repositories.py`
+  - `services/api/app/infrastructure/db/session.py`
+  - `services/api/app/infrastructure/db/migrations/env.py`
+  - `services/api/app/infrastructure/db/migrations/versions/20260315_0001_stage2_api_shell.py`
+  - `services/api/app/infrastructure/security/hmac_signers.py`
+  - `services/api/tests/conftest.py`
+  - `services/api/tests/fixtures/app.py`
+  - `services/api/tests/fixtures/db.py`
+  - `services/api/tests/unit/application/test_policies.py`
+  - `services/api/tests/unit/infrastructure/test_token_signers.py`
+  - `services/api/tests/contract/rest/test_tasks.py`
+  - `services/api/tests/integration/db/test_migrations.py`
+  - `services/api/uv.lock`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv sync --group dev`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application tests/unit/infrastructure`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_tasks.py tests/integration/db/test_migrations.py`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+  - 调试过程: 初始 red tests 因缺少 Stage 2 模块失败；真实 PostgreSQL 夹具随后暴露两个环境问题并已修复: Unix socket 路径过长导致 `postgres` 无法启动，以及 test database DSN 组装错误导致连接指向错误 socket；修复后所有后端测试通过
+  - 未运行: `ruff check`、`mypy`；本任务包验收标准聚焦 contract / integration / 必要 unit tests 与 migration 正反向验证，未要求额外静态门禁
+- 验收结论: accepted；`POST /api/v1/tasks`、`GET /api/v1/tasks/{task_id}`、最小 disconnect 鉴权壳、单活动任务锁、IP quota、CORS、`X-Request-ID` / `X-Trace-ID` 响应头、真实 PostgreSQL migration 正反向能力均已落地并被 unit / contract / integration tests 覆盖，且实现边界停留在 Backend Stage 2 API shell，没有进入 SSE broker 或 Stage 3 生命周期。
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次 token signer 为最小 HMAC 实现与接口骨架，满足 Stage 2 契约验证；后续如需切换更强签名机制，应在独立任务包中处理并先核对文档
+  - `POST /disconnect` 仅覆盖本阶段所需的 header/body 鉴权与锁释放壳，不包含 heartbeat、connect deadline 或 SSE 连接清理语义
+- 下一步建议:
+  - 进入独立的 Backend Stage 2 后续任务包，补 `GET /events` 与 SSE 生命周期
+  - 在下一阶段继续沿用真实 PostgreSQL 路径，为 repository / orchestrator / broker 增加集成测试
