@@ -140,3 +140,54 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Backend Stage 1 任务包，补 `Core Schema` 与状态机的 red-green 测试
   - 在后续基础设施任务中补 `ruff`、`mypy` 与 integration gate 所需依赖
+
+## M0-005 Frontend Stage 0 Harness
+
+- 日期时间: 2026-03-15 10:16:53 CST (+0800)
+- 任务包编号: M0-005
+- session 标识: codex-20260315-m0-005-frontend-stage0-harness
+- 目标摘要: 按 `docs/Frontend_TDD_Plan.md` Stage 0 在 `apps/web` 建立最小 Next.js App Router 项目骨架、Vitest + jsdom + Testing Library 测试基础设施、ScriptedTaskEventSource 基础夹具、Playwright 基线与轻量 mock server，并保持实现停留在 harness 层，不进入 Stage 1 的契约类型、store、research workflow UI 或真实 REST/SSE 消费逻辑。
+- 修改文件:
+  - `.gitignore`
+  - `README.md`
+  - `package.json`
+  - `pnpm-lock.yaml`
+  - `apps/web/README.md`
+  - `apps/web/.eslintrc.json`
+  - `apps/web/package.json`
+  - `apps/web/tsconfig.json`
+  - `apps/web/next-env.d.ts`
+  - `apps/web/postcss.config.mjs`
+  - `apps/web/tailwind.config.ts`
+  - `apps/web/vitest.config.ts`
+  - `apps/web/playwright.config.ts`
+  - `apps/web/app/globals.css`
+  - `apps/web/app/layout.tsx`
+  - `apps/web/app/page.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/lib/sse/task-event-source.ts`
+  - `apps/web/components/ui/.gitkeep`
+  - `apps/web/tests/setup.ts`
+  - `apps/web/tests/fixtures/browser.ts`
+  - `apps/web/tests/fixtures/render.tsx`
+  - `apps/web/tests/fixtures/scripted-task-event-source.ts`
+  - `apps/web/tests/unit/setup.spec.ts`
+  - `apps/web/tests/unit/scripted-task-event-source.spec.ts`
+  - `apps/web/tests/contract/contracts-package.spec.ts`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/integration/.gitkeep`
+  - `apps/web/tests/e2e/fixtures/constants.ts`
+  - `apps/web/tests/e2e/fixtures/mock-server.mjs`
+  - `apps/web/tests/e2e/specs/harness.spec.ts`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `pnpm install`（首次在沙箱内因 npm registry `ENOTFOUND` 失败，提权后完成）；`pnpm typecheck`；`pnpm lint`；`pnpm test:unit`；`pnpm test:contract`；`pnpm test:component`；`pnpm test:integration`；`pnpm test:e2e`（首次暴露 `webServer` 命令写法问题与缺少 Playwright browser，修复后通过）；`pnpm exec playwright install chromium`
+  - 未运行: `pnpm build`；本任务包的验收聚焦 Stage 0 harness 与测试基线，不要求进入生产构建与业务联调
+- 验收结论: accepted；`apps/web` 已具备最小 Next.js App Router、Vitest/jsdom、Testing Library、ScriptedTaskEventSource、Playwright + mock server 基线，`unit / contract / component` 可独立运行，且本次实现未越界进入 Frontend Stage 1。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 目前通过 `ESLINT_USE_FLAT_CONFIG=false` 兼容 `eslint-config-next`，运行时会打印 ESLint 9 的 legacy config deprecation warning；后续可在独立工具链任务中切回 flat config
+  - Playwright 依赖本机已安装 Chromium；新环境首次执行前仍需运行 `pnpm exec playwright install chromium`
+- 下一步建议:
+  - 进入独立的 Frontend Stage 1 任务包，补 `TaskSnapshot` / `EventEnvelope` 契约类型、fixture 与 reducer/store red-green 测试
+  - 在后续前端基础设施任务中补 `MSW`、更多浏览器 API mock 与 integration 场景的 shared fixtures

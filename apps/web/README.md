@@ -1,6 +1,17 @@
 # apps/web
 
-Placeholder for the Next.js App Router frontend.
+Frontend Stage 0 harness for the Next.js App Router application.
 
-This directory is intentionally left without application scaffolding in M0-001.
-Follow-up sessions can add frontend Stage 0 files here once the task package explicitly covers that work.
+Current scope:
+
+- minimal App Router shell only
+- Vitest + jsdom + Testing Library baseline
+- Playwright baseline with a lightweight mock API server skeleton
+- shared test fixtures for Stage 1 follow-up work
+
+Out of scope in this stage:
+
+- research workflow UI
+- frontend store / reducer / selector logic
+- real REST / SSE consumption
+- any backend integration
