@@ -350,3 +350,45 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Backend Stage 2 后续任务包，补 `GET /events` 与 SSE 生命周期
   - 在下一阶段继续沿用真实 PostgreSQL 路径，为 repository / orchestrator / broker 增加集成测试
+
+## M1-002 Frontend Stage 2 Workspace Shell + Create Task Flow
+
+- 日期时间: 2026-03-15 23:16:27 CST (+0800)
+- 任务包编号: M1-002
+- session 标识: codex-20260315-m1-002-frontend-stage2-shell
+- 目标摘要: 按 `docs/Frontend_TDD_Plan.md` Stage 2 在 `apps/web` 落地首页空态、研究输入面板、研究配置面板、创建任务 REST client / hook、工作台壳层和创建后立即触发 SSE 建连动作的最小闭环；严格停留在“创建任务并启动建连动作”，不进入 Stage 3 的 SSE 生命周期消费、heartbeat / disconnect 处理、澄清流程、timeline / report / feedback UI 或任何真实后端联调。
+- 修改文件:
+  - `packages/contracts/src/index.ts`
+  - `apps/web/package.json`
+  - `apps/web/lib/api/task-api-client.ts`
+  - `apps/web/lib/sse/task-event-source.ts`
+  - `apps/web/features/research/store/research-session-store.types.ts`
+  - `apps/web/features/research/store/research-session-store.ts`
+  - `apps/web/features/research/providers/research-workspace-providers.tsx`
+  - `apps/web/features/research/hooks/use-create-task.ts`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/research-input-panel.tsx`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/tests/setup.ts`
+  - `apps/web/tests/fixtures/msw-server.ts`
+  - `apps/web/tests/fixtures/render.tsx`
+  - `apps/web/tests/fixtures/builders.ts`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/component/research-input-panel.spec.tsx`
+  - `apps/web/tests/component/research-config-panel.spec.tsx`
+  - `apps/web/tests/integration/create-task-flow.spec.tsx`
+  - `pnpm-lock.yaml`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm typecheck`；`cd apps/web && pnpm lint`；`cd apps/web && pnpm test:contract`；`cd apps/web && pnpm test:unit`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:integration`
+  - 调试过程: 初始 integration tests 因测试环境下默认 runtime 的请求地址/`fetch` 组合未与 MSW handler 基址对齐，导致 `POST /tasks` 走入 generic error 分支；已改为在 Stage 2 integration tests 中显式注入真实 `fetch`-based `taskApiClient` 与测试 origin 对齐，继续保持 REST+MSW 验证，不以 stub 替代 HTTP client 行为
+  - 未运行: `pnpm test:e2e`；Stage 2 验收标准聚焦 unit / component / integration 闭环，本任务包未扩张到 Playwright 回归
+- 验收结论: accepted；`ResearchPageClient`、workspace shell、`ResearchInputPanel`、`ResearchConfigPanel`、create task REST client / hook 已落地，首页可从 `Idle` 空态提交 `POST /api/v1/tasks` 进入活跃工作台，成功写入 `task_id` / `task_token` / `urls` / 初始 snapshot，并立即触发 SSE 建连动作；`creating_task` pendingAction 生命周期、`422 validation_error`、`409 resource_busy`、`429 ip_quota_exceeded`、创建中禁用输入与配置、以及“创建成功后不额外调用 `GET /tasks`”均已被 component / integration tests 覆盖，且实现边界停留在 Frontend Stage 2，没有越界进入 Stage 3。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过，且按本任务约束未处理配置迁移
+  - 当前默认 runtime 仍采用最小浏览器端 fetch client；真实部署时若需独立 API base 配置，应在后续独立任务包中按文档与部署方案统一处理，不在本次 Stage 2 内扩张
+- 下一步建议:
+  - 进入独立的 Frontend Stage 3 任务包，实现 SSE 生命周期消费、heartbeat / disconnect 与终态处理
+  - 在后续前端任务中再接入 clarification / timeline / report 等业务 UI，继续保持 contract-first 与阶段边界

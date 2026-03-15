@@ -1,6 +1,24 @@
 "use client";
 
-export function ResearchPageClient() {
+import type { StoreApi } from "zustand";
+
+import { ResearchWorkspaceProviders, type ResearchRuntime } from "../providers/research-workspace-providers";
+import type { ResearchSessionStore } from "../store/research-session-store.types";
+import { useResearchSessionStore } from "../providers/research-workspace-providers";
+import { ResearchConfigPanel } from "./research-config-panel";
+import { ResearchInputPanel } from "./research-input-panel";
+import { ResearchWorkspaceShell } from "./research-workspace-shell";
+
+export type ResearchPageClientProps = {
+  runtime?: Partial<ResearchRuntime>;
+  store?: StoreApi<ResearchSessionStore>;
+};
+
+function ResearchPageContent() {
+  const taskId = useResearchSessionStore((state) => state.session.taskId);
+  const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
+  const isActiveWorkspace = taskId !== null && snapshot !== null;
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-16">
       <div className="space-y-4">
@@ -8,42 +26,44 @@ export function ResearchPageClient() {
           Mimir
         </p>
         <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
-          Mimir Frontend Stage 0 Harness
+          AI 研究工作台
         </h1>
         <p className="max-w-2xl text-base leading-7 text-slate-700">
-          This shell verifies the Next.js App Router, test harness, and Playwright
-          baseline without entering the research workflow implementation.
+          当前阶段只打通首页空态、研究输入、配置面板、创建任务提交和工作台切换，
+          不进入 Stage 3 的 SSE 生命周期消费。
         </p>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <article className="rounded-3xl border border-slate-200/70 bg-white/70 p-6 shadow-sm backdrop-blur">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-            App Router
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-slate-700">
-            A minimal client component is mounted from <code>app/page.tsx</code>.
-          </p>
-        </article>
-
-        <article className="rounded-3xl border border-slate-200/70 bg-white/70 p-6 shadow-sm backdrop-blur">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Test Harness
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-slate-700">
-            Vitest, jsdom, Testing Library, shared fixtures, and scripted SSE are wired.
-          </p>
-        </article>
-
-        <article className="rounded-3xl border border-slate-200/70 bg-white/70 p-6 shadow-sm backdrop-blur">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Playwright
-          </h2>
-          <p className="mt-3 text-sm leading-6 text-slate-700">
-            The browser baseline uses a lightweight mock API server with a health route.
-          </p>
-        </article>
-      </section>
+      {isActiveWorkspace ? (
+        <ResearchWorkspaceShell />
+      ) : (
+        <section className="grid gap-6 lg:grid-cols-[1.25fr_0.95fr]">
+          <ResearchInputPanel />
+          <div className="space-y-6">
+            <ResearchConfigPanel />
+            <article className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-6 shadow-sm backdrop-blur">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Idle
+              </p>
+              <h2 className="mt-4 text-xl font-semibold text-slate-950">
+                从空态进入研究工作台
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-slate-700">
+                创建成功后，前端会立即把 `task_id`、`task_token`、`urls` 与初始
+                snapshot 写入 store，并请求开始建立 SSE 连接。
+              </p>
+            </article>
+          </div>
+        </section>
+      )}
     </main>
+  );
+}
+
+export function ResearchPageClient({ runtime, store }: ResearchPageClientProps) {
+  return (
+    <ResearchWorkspaceProviders runtime={runtime} store={store}>
+      <ResearchPageContent />
+    </ResearchWorkspaceProviders>
   );
 }

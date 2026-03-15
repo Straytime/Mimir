@@ -1,6 +1,8 @@
 import type {
   ArtifactSummary,
+  ClarificationMode,
   ClarificationQuestionSet,
+  CreateTaskResponse,
   DeliverySummary,
   EventEnvelope,
   RevisionSummary,
@@ -24,6 +26,22 @@ export type RevisionTransitionState = {
 };
 
 export type TerminalReason = "terminated" | "failed" | "expired" | null;
+
+export type CreateTaskErrorCode =
+  | "validation_error"
+  | "resource_busy"
+  | "ip_quota_exceeded"
+  | "unknown"
+  | null;
+
+export type CreateTaskUiState = {
+  clarificationModeDraft: ClarificationMode;
+  initialQueryError: string | null;
+  submitError: string | null;
+  errorCode: CreateTaskErrorCode;
+  nextAvailableAt: string | null;
+  retryAfterLabel: string | null;
+};
 
 export type ResearchOutlineSection = {
   section_id: string;
@@ -84,6 +102,7 @@ export type ResearchSessionState = {
     initialPromptDraft: string;
     clarificationDraft: string;
     feedbackDraft: string;
+    createTask: CreateTaskUiState;
     optionAnswers: Record<string, string>;
     clarificationCountdownDeadlineAt: string | null;
     pendingAction: PendingAction;
@@ -100,9 +119,18 @@ export type ResearchSessionState = {
 
 export type ResearchSessionStoreActions = {
   reset: () => void;
+  setInitialPromptDraft: (draft: string) => void;
+  setCreateTaskClarificationModeDraft: (mode: ClarificationMode) => void;
+  setCreateTaskUiState: (patch: Partial<CreateTaskUiState>) => void;
+  clearCreateTaskUiState: () => void;
+  setPendingAction: (pendingAction: PendingAction) => void;
   setSessionContext: (
     sessionPatch: Partial<ResearchSessionState["session"]>,
   ) => void;
+  bootstrapCreateTask: (args: {
+    response: CreateTaskResponse;
+    requestId: string | null;
+  }) => void;
   mergeTaskDetail: (detail: TaskDetailResponse) => void;
   applyEvent: (event: EventEnvelope) => void;
 };
@@ -144,6 +172,14 @@ export function createResearchSessionState(): ResearchSessionState {
       initialPromptDraft: "",
       clarificationDraft: "",
       feedbackDraft: "",
+      createTask: {
+        clarificationModeDraft: "natural",
+        initialQueryError: null,
+        submitError: null,
+        errorCode: null,
+        nextAvailableAt: null,
+        retryAfterLabel: null,
+      },
       optionAnswers: {},
       clarificationCountdownDeadlineAt: null,
       pendingAction: null,

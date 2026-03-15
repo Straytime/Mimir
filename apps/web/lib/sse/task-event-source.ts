@@ -10,3 +10,9 @@ export type TaskEventSourceConnectArgs<TEvent = unknown> = {
 export type TaskEventSource<TEvent = unknown> = {
   connect: (args: TaskEventSourceConnectArgs<TEvent>) => () => void;
 };
+
+export function createNoopTaskEventSource<TEvent = unknown>(): TaskEventSource<TEvent> {
+  return {
+    connect: () => () => {},
+  };
+}

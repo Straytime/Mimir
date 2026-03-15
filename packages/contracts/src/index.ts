@@ -148,6 +148,56 @@ export type TaskDetailResponse = {
   delivery: DeliverySummary | null;
 };
 
+export type ResearchConfig = {
+  clarification_mode: ClarificationMode;
+};
+
+export type TaskClientInfo = {
+  timezone: string;
+  locale?: string;
+};
+
+export type CreateTaskRequest = {
+  initial_query: string;
+  config: ResearchConfig;
+  client: TaskClientInfo;
+};
+
+export type TaskUrls = {
+  events: string;
+  heartbeat: string;
+  disconnect: string;
+};
+
+export type CreateTaskResponse = {
+  task_id: string;
+  task_token: string;
+  trace_id: string;
+  snapshot: TaskSnapshot;
+  urls: TaskUrls;
+  connect_deadline_at: IsoDateTimeString;
+};
+
+export type ApiError = {
+  code: string;
+  message: string;
+  detail: Record<string, unknown>;
+  request_id: string | null;
+  trace_id: string | null;
+};
+
+export type ErrorResponse = {
+  error: ApiError;
+};
+
+export type ValidationErrorItem = {
+  type?: string;
+  loc: Array<string | number>;
+  msg: string;
+  input?: unknown;
+  ctx?: Record<string, unknown>;
+};
+
 export type BaseEventEnvelope<
   TEvent extends string,
   TPayload extends Record<string, unknown>,
