@@ -21,7 +21,8 @@
     "@mimir/contracts": "workspace:*",
     "next": "^15.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",

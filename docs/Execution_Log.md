@@ -192,6 +192,42 @@ Copy the template below for each completed session:
   - 进入独立的 Frontend Stage 1 任务包，补 `TaskSnapshot` / `EventEnvelope` 契约类型、fixture 与 reducer/store red-green 测试
   - 在后续前端基础设施任务中补 `MSW`、更多浏览器 API mock 与 integration 场景的 shared fixtures
 
+## M0-008 Frontend Stage 1 Contract Types + Store Skeleton
+
+- 日期时间: 2026-03-15 21:58:23 CST (+0800)
+- 任务包编号: M0-008
+- session 标识: codex-20260315-m0-008-frontend-stage1-contract-store
+- 目标摘要: 按 `docs/Frontend_TDD_Plan.md` Stage 1 固化前端共享契约类型接入方式、Research session store skeleton、`available_actions` selectors、`task-snapshot-merger`、通用 SSE event reducer 以及 Stage 1 所需 builders / fixtures；本次仅实现 `task.created`、`phase.changed`、`heartbeat`、终态事件与 unsupported event no-op，不进入创建任务、真实 REST / SSE hook、页面壳扩展或 revision 切换逻辑。
+- 修改文件:
+  - `packages/contracts/src/index.ts`
+  - `apps/web/package.json`
+  - `pnpm-lock.yaml`
+  - `apps/web/lib/contracts/index.ts`
+  - `apps/web/features/research/mappers/task-snapshot-merger.ts`
+  - `apps/web/features/research/reducers/event-reducer.ts`
+  - `apps/web/features/research/store/research-session-store.types.ts`
+  - `apps/web/features/research/store/research-session-store.ts`
+  - `apps/web/features/research/store/selectors.ts`
+  - `apps/web/tests/fixtures/builders.ts`
+  - `apps/web/tests/contract/contracts-package.spec.ts`
+  - `apps/web/tests/contract/task-snapshot-fixture.spec.ts`
+  - `apps/web/tests/contract/event-envelope-fixture.spec.ts`
+  - `apps/web/tests/unit/mappers/task-snapshot-merger.spec.ts`
+  - `apps/web/tests/unit/reducers/event-reducer.spec.ts`
+  - `apps/web/tests/unit/selectors/available-actions.spec.ts`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `pnpm install`；`pnpm typecheck`；`pnpm lint`；`pnpm test:contract`；`pnpm test:unit`；`pnpm test:component`；`pnpm test:integration`
+  - 未运行: `pnpm build`、`pnpm test:e2e`；本任务包仅覆盖 Frontend Stage 1 的 contracts/store/reducer/selectors 基础，不涉及新的页面交互链路或浏览器级行为变更
+- 验收结论: accepted；Stage 1 所需 contracts 类型、store skeleton、snapshot merger、通用事件 reducer、available actions selectors 与 builders / fixtures 已固定，关键分支均有 contract 或 unit tests 保护，且 revision 切换与 Stage 2 页面/API 行为未提前落地。
+- blocker / 风险:
+  - 无当前 blocker
+  - 共享 `EventEnvelope` union 当前只覆盖 Stage 1 已进入测试的关键事件与一个已知 unsupported 事件；后续阶段引入更多事件时需要继续按文档扩展
+  - `pnpm lint` 仍沿用 legacy `.eslintrc` 兼容 `eslint-config-next`，会打印 ESLint 9 deprecation warning
+- 下一步建议:
+  - 进入独立的 Frontend Stage 2 任务包，打通首页 shell、`POST /tasks` 状态写入与“创建后立即建 SSE”的 red-green 流程
+  - 在后续阶段按 `Frontend_IA.md` §8 持续扩充 `EventEnvelope` 联合类型、event fixtures 与 reducer 分支
+
 ## M0-006 Accepted M0 Integration + Baseline Verification
 
 - 日期时间: 2026-03-15 10:31:02 CST (+0800)
