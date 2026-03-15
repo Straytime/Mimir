@@ -278,3 +278,23 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Backend Stage 2 任务包，实现 `/tasks`、鉴权骨架与基础策略的 contract-first red-green
   - 在后续基础设施任务中再补真实 signer、repository 和 DB migration
+
+## M0-009 Stage 1 Integration + M0 Final Closure
+
+- 日期时间: 2026-03-15 22:07:52 CST (+0800)
+- 任务包编号: M0-009
+- session 标识: codex-20260315-m0-009-m0-final-closure
+- 目标摘要: 对已验收的 `M0-007` 与 `M0-008` 做统一基线核对，确认当前 `main` 已同时包含 Backend Stage 0+1 与 Frontend Stage 0+1，检查 `packages/contracts`、后端 schema 与前端 contracts 接入没有真实语义冲突，并完成完整的 M0 基线验证，作为 M1 前唯一开发基线。
+- 修改文件:
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `git status --short`；`git branch --all --verbose --no-abbrev`；`git log --oneline --decorate --graph --all --max-count=60`；`sed -n '1,260p' packages/contracts/src/index.ts`；`sed -n '1,260p' apps/web/lib/contracts/index.ts`；`sed -n '1,260p' services/api/app/domain/schemas.py`；`sed -n '1,260p' services/api/app/domain/enums.py`；`pnpm --version`；`uv --version`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract`；`cd apps/web && pnpm typecheck`；`cd apps/web && pnpm lint`；`cd apps/web && pnpm test:contract`；`cd apps/web && pnpm test:unit`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:integration`；`cd apps/web && pnpm test:e2e`
+  - 未运行: 无
+- 验收结论: accepted；`main` 已通过 PR #3 与 PR #4 吸收 `M0-007` 和 `M0-008`，Backend Stage 0+1 与 Frontend Stage 0+1 基线验证全部通过，`packages/contracts` 与前后端 Stage 1 契约接入可共存，M0 可明确宣布完成。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过，且按任务约束本次未处理
+  - `pnpm test:e2e` 在受限环境下需要最小范围提权以启动本地 web server；代码本身已验证通过
+- 下一步建议:
+  - 后续任务包可以正式进入 M1，但应继续保持单线程串行开发与 `docs/Execution_Log.md` 追加维护
+  - M1 应从任务框架最小闭环开始，不回退扩张 M0 范围
