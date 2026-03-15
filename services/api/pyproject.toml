@@ -9,8 +9,11 @@ description = "Stage 0 FastAPI harness for the Mimir backend."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.16,<2.0",
   "fastapi>=0.116,<1.0",
   "httpx>=0.28,<1.0",
+  "psycopg[binary]>=3.2,<4.0",
+  "sqlalchemy>=2.0,<3.0",
 ]
 
 [dependency-groups]
@@ -29,4 +32,5 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = [
   "tests/unit",
   "tests/contract",
+  "tests/integration",
 ]
