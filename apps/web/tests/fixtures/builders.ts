@@ -7,12 +7,23 @@ import type {
   ClarificationOptionsReadyEventEnvelope,
   ClarificationCountdownStartedEventEnvelope,
   ClarificationAcceptedResponse,
+  CollectorCompletedEventEnvelope,
+  CollectorFetchCompletedEventEnvelope,
+  CollectorFetchStartedEventEnvelope,
+  CollectorReasoningDeltaEventEnvelope,
+  CollectorSearchCompletedEventEnvelope,
+  CollectorSearchStartedEventEnvelope,
   CreateTaskResponse,
   ErrorResponse,
   EventEnvelope,
   HeartbeatEventEnvelope,
+  OutlineDeltaEventEnvelope,
+  PlannerReasoningDeltaEventEnvelope,
+  PlannerToolCallRequestedEventEnvelope,
   PhaseChangedEventEnvelope,
   RevisionSummary,
+  SourcesMergedEventEnvelope,
+  SummaryCompletedEventEnvelope,
   TaskCreatedEventEnvelope,
   TaskDetailResponse,
   TaskExpiredEventEnvelope,
@@ -21,7 +32,10 @@ import type {
   TaskTerminatedEventEnvelope,
 } from "@/lib/contracts";
 import { createResearchSessionState } from "@/features/research/store/research-session-store.types";
-import type { ResearchSessionState } from "@/features/research/store/research-session-store.types";
+import type {
+  ResearchSessionState,
+  TimelineItem,
+} from "@/features/research/store/research-session-store.types";
 
 type ResearchSessionStateOverrides = {
   session?: Partial<ResearchSessionState["session"]>;
@@ -434,6 +448,236 @@ export function makeAnalysisCompletedEvent(
   };
 }
 
+export function makePlannerReasoningDeltaEvent(
+  overrides: Partial<PlannerReasoningDeltaEventEnvelope> = {},
+): PlannerReasoningDeltaEventEnvelope {
+  return {
+    seq: 14,
+    event: "planner.reasoning.delta",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "planning_collection",
+    timestamp: "2026-03-13T14:32:00+08:00",
+    payload: {
+      delta: "当前还缺少代表性玩家与市场趋势信息。",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makePlannerToolCallRequestedEvent(
+  overrides: Partial<PlannerToolCallRequestedEventEnvelope> = {},
+): PlannerToolCallRequestedEventEnvelope {
+  return {
+    seq: 15,
+    event: "planner.tool_call.requested",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "planning_collection",
+    timestamp: "2026-03-13T14:32:05+08:00",
+    payload: {
+      tool_call_id: "call_ai_search",
+      collect_target: "收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展",
+      additional_info: "优先官方发布与高可信媒体。",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeCollectorReasoningDeltaEvent(
+  overrides: Partial<CollectorReasoningDeltaEventEnvelope> = {},
+): CollectorReasoningDeltaEventEnvelope {
+  return {
+    seq: 16,
+    event: "collector.reasoning.delta",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "collecting",
+    timestamp: "2026-03-13T14:32:10+08:00",
+    payload: {
+      subtask_id: "sub_ai_search",
+      tool_call_id: "call_ai_search",
+      delta: "先做高时效搜索，再读取官方来源。",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeCollectorSearchStartedEvent(
+  overrides: Partial<CollectorSearchStartedEventEnvelope> = {},
+): CollectorSearchStartedEventEnvelope {
+  return {
+    seq: 17,
+    event: "collector.search.started",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "collecting",
+    timestamp: "2026-03-13T14:32:12+08:00",
+    payload: {
+      subtask_id: "sub_ai_search",
+      tool_call_id: "call_ai_search",
+      search_query: "中国 AI 搜索 产品 2025",
+      search_recency_filter: "noLimit",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeCollectorSearchCompletedEvent(
+  overrides: Partial<CollectorSearchCompletedEventEnvelope> = {},
+): CollectorSearchCompletedEventEnvelope {
+  return {
+    seq: 18,
+    event: "collector.search.completed",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "collecting",
+    timestamp: "2026-03-13T14:32:16+08:00",
+    payload: {
+      subtask_id: "sub_ai_search",
+      tool_call_id: "call_ai_search",
+      search_query: "中国 AI 搜索 产品 2025",
+      result_count: 10,
+      titles: ["某公司发布会回顾", "2025 中国 AI 搜索市场观察"],
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeCollectorFetchStartedEvent(
+  overrides: Partial<CollectorFetchStartedEventEnvelope> = {},
+): CollectorFetchStartedEventEnvelope {
+  return {
+    seq: 19,
+    event: "collector.fetch.started",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "collecting",
+    timestamp: "2026-03-13T14:32:20+08:00",
+    payload: {
+      subtask_id: "sub_ai_search",
+      tool_call_id: "call_ai_search",
+      url: "https://example.com/article",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeCollectorFetchCompletedEvent(
+  overrides: Partial<CollectorFetchCompletedEventEnvelope> = {},
+): CollectorFetchCompletedEventEnvelope {
+  return {
+    seq: 20,
+    event: "collector.fetch.completed",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "collecting",
+    timestamp: "2026-03-13T14:32:23+08:00",
+    payload: {
+      subtask_id: "sub_ai_search",
+      tool_call_id: "call_ai_search",
+      url: "https://example.com/article",
+      success: true,
+      title: "某公司发布会回顾",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeCollectorCompletedEvent(
+  overrides: Partial<CollectorCompletedEventEnvelope> = {},
+): CollectorCompletedEventEnvelope {
+  return {
+    seq: 21,
+    event: "collector.completed",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "collecting",
+    timestamp: "2026-03-13T14:32:30+08:00",
+    payload: {
+      subtask_id: "sub_ai_search",
+      tool_call_id: "call_ai_search",
+      status: "completed",
+      item_count: 4,
+      search_queries: [
+        "中国 AI 搜索 产品 2025",
+        "AI 搜索 中国 厂商 2024 2026",
+      ],
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeSummaryCompletedEvent(
+  overrides: Partial<SummaryCompletedEventEnvelope> = {},
+): SummaryCompletedEventEnvelope {
+  return {
+    seq: 22,
+    event: "summary.completed",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "summarizing_collection",
+    timestamp: "2026-03-13T14:32:40+08:00",
+    payload: {
+      subtask_id: "sub_ai_search",
+      tool_call_id: "call_ai_search",
+      collect_target: "收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展",
+      status: "completed",
+      search_queries: ["中国 AI 搜索 产品 2025"],
+      key_findings_markdown:
+        "- 官方披露更多集中在 2025 年后。\n- 已出现多个垂直场景产品。",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeSourcesMergedEvent(
+  overrides: Partial<SourcesMergedEventEnvelope> = {},
+): SourcesMergedEventEnvelope {
+  return {
+    seq: 23,
+    event: "sources.merged",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "merging_sources",
+    timestamp: "2026-03-13T14:32:50+08:00",
+    payload: {
+      source_count_before_merge: 18,
+      source_count_after_merge: 11,
+      reference_count: 11,
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeOutlineDeltaEvent(
+  overrides: Partial<OutlineDeltaEventEnvelope> = {},
+): OutlineDeltaEventEnvelope {
+  return {
+    seq: 24,
+    event: "outline.delta",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "preparing_outline",
+    timestamp: "2026-03-13T14:33:10+08:00",
+    payload: {
+      delta: '{\n  "research_outline": {',
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
 export function makeClarificationAcceptedResponse(
   overrides: Partial<ClarificationAcceptedResponse> = {},
 ): ClarificationAcceptedResponse {
@@ -487,6 +731,20 @@ export function makeResearchSessionState(
   };
 }
 
+export function makeTimelineItem(
+  overrides: Partial<TimelineItem> = {},
+): TimelineItem {
+  return {
+    id: "timeline_stage5",
+    revisionId: "rev_stage0",
+    kind: "system",
+    label: "正在分析你的研究需求",
+    status: "running",
+    occurredAt: "2026-03-13T14:31:15+08:00",
+    ...overrides,
+  };
+}
+
 export function makeEventEnvelopeFixtureSet(): EventEnvelope[] {
   return [
     makeTaskCreatedEvent(),
@@ -501,6 +759,17 @@ export function makeEventEnvelopeFixtureSet(): EventEnvelope[] {
     makeClarificationFallbackToNaturalEvent(),
     makeAnalysisDeltaEvent(),
     makeAnalysisCompletedEvent(),
+    makePlannerReasoningDeltaEvent(),
+    makePlannerToolCallRequestedEvent(),
+    makeCollectorReasoningDeltaEvent(),
+    makeCollectorSearchStartedEvent(),
+    makeCollectorSearchCompletedEvent(),
+    makeCollectorFetchStartedEvent(),
+    makeCollectorFetchCompletedEvent(),
+    makeCollectorCompletedEvent(),
+    makeSummaryCompletedEvent(),
+    makeSourcesMergedEvent(),
+    makeOutlineDeltaEvent(),
     makeClarificationDeltaEvent(),
   ];
 }

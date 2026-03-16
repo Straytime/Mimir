@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-import { ClarificationActionPanel, ClarificationDetailPanel, RequirementAnalysisPanel } from "./clarification-panels";
+import {
+  ClarificationActionPanel,
+  ClarificationDetailPanel,
+} from "./clarification-panels";
+import { RequirementSummaryCard } from "./requirement-summary-card";
 import { useClarificationCountdown } from "../hooks/use-clarification-countdown";
 import { useDisconnectGuard } from "../hooks/use-disconnect-guard";
 import { useHeartbeatLoop } from "../hooks/use-heartbeat-loop";
@@ -11,8 +15,63 @@ import { useResearchSessionStore } from "../providers/research-workspace-provide
 import { selectCanDisconnectTask } from "../store/selectors";
 import { SessionStatusBar } from "./session-status-bar";
 import { TerminalBanner } from "./terminal-banner";
+import { TimelinePanel } from "./timeline-panel";
 
 type MobileSegment = "control" | "detail" | "progress";
+
+function getStageStatusCopy(phase: string) {
+  switch (phase) {
+    case "analyzing_requirement":
+      return {
+        eyebrow: "Requirement Analysis",
+        title: "正在分析你的研究需求",
+        description:
+          "系统会先固化研究目标、范围、输出格式与语言要求，再进入后续规划与搜集。",
+      };
+    case "planning_collection":
+      return {
+        eyebrow: "Collection Planning",
+        title: "正在规划研究路径",
+        description:
+          "规划器正在拆解搜集目标，并把 collect_target 写入时间线供后续子任务接力。",
+      };
+    case "collecting":
+      return {
+        eyebrow: "Collection",
+        title: "正在搜索与读取资料",
+        description:
+          "子任务会按 collect_target 搜索、读取资料，并把关键动作串到线性时间线里。",
+      };
+    case "summarizing_collection":
+      return {
+        eyebrow: "Collection Summary",
+        title: "正在整理阶段结论",
+        description:
+          "每个搜集目标的阶段结论会依次落入时间线，为后续来源合并做准备。",
+      };
+    case "merging_sources":
+      return {
+        eyebrow: "Source Merge",
+        title: "正在去重并整理引用",
+        description:
+          "系统正在合并重复来源，并固定当前 revision 可用的引用集合。",
+      };
+    case "preparing_outline":
+      return {
+        eyebrow: "Outline Drafting",
+        title: "正在构思报告结构",
+        description:
+          "本阶段只显示通用状态文案，不渲染 raw outline delta。",
+      };
+    default:
+      return {
+        eyebrow: "Workspace",
+        title: "工作台已接管当前任务",
+        description:
+          "当前任务仍在进行中；本任务包只覆盖研究透明度，不提前进入报告与交付界面。",
+      };
+  }
+}
 
 function useIsMobileLayout() {
   const [isMobileLayout, setIsMobileLayout] = useState(() => {
@@ -52,6 +111,11 @@ export function ResearchWorkspaceShell() {
   const session = useResearchSessionStore((state) => state.session);
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
   const pendingAction = useResearchSessionStore((state) => state.ui.pendingAction);
+  const analysisText = useResearchSessionStore((state) => state.stream.analysisText);
+  const timelineItems = useResearchSessionStore((state) => state.stream.timeline);
+  const requirementDetail = useResearchSessionStore(
+    (state) => state.remote.currentRevision?.requirement_detail ?? null,
+  );
   const clarificationMode = useResearchSessionStore(
     (state) => state.remote.snapshot?.clarification_mode ?? "natural",
   );
@@ -67,6 +131,7 @@ export function ResearchWorkspaceShell() {
     return null;
   }
 
+  const stageStatusCopy = getStageStatusCopy(snapshot.phase);
   const detailSegmentLabel =
     snapshot.phase === "clarifying" ? "澄清详情" : "报告";
 
@@ -81,7 +146,7 @@ export function ResearchWorkspaceShell() {
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {snapshot.phase === "clarifying"
               ? "当前处于澄清阶段，提交成功后将立即切到需求分析。"
-              : "澄清已提交，当前工作台只展示最小需求分析交接结果。"}
+              : "当前工作台已接入需求分析、规划与搜集透明度；report / artifact 仍留到下一阶段。"}
           </p>
         </div>
         <button
@@ -121,42 +186,57 @@ export function ResearchWorkspaceShell() {
       <div className="mt-6">
         <ClarificationActionPanel compact={isMobileLayout} />
       </div>
+
+      <div className="mt-6 rounded-3xl border border-slate-200 bg-white/90 p-5">
+        <p className="text-sm font-semibold text-slate-950">当前允许动作</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          {availableActions.length > 0 ? availableActions.join(", ") : "无"}
+        </p>
+      </div>
+
+      <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/85 p-5">
+        <p className="text-sm font-semibold text-slate-950">v1 约束</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          不支持断线恢复、自动重连或跨刷新保留 task_token；时间线只展示 Stage 5 透明度事件。
+        </p>
+      </div>
     </article>
   );
 
   const detailPanel = (
     <article className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur">
       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-        {snapshot.phase === "clarifying" ? "Clarification Detail" : "Analysis Handoff"}
+        {snapshot.phase === "clarifying"
+          ? "Clarification Detail"
+          : stageStatusCopy.eyebrow}
       </p>
       <div className="mt-4">
         {snapshot.phase === "clarifying" ? (
           <ClarificationDetailPanel compact={isMobileLayout} />
         ) : (
-          <RequirementAnalysisPanel />
+          <div className="space-y-5">
+            <div className="rounded-3xl border border-sky-200 bg-sky-50 px-5 py-5">
+              <h3 className="text-xl font-semibold text-slate-950">
+                {stageStatusCopy.title}
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-slate-700">
+                {stageStatusCopy.description}
+              </p>
+              {analysisText.length > 0 ? (
+                <p className="mt-4 whitespace-pre-line text-sm leading-7 text-sky-900">
+                  正在分析需求：{analysisText}
+                </p>
+              ) : null}
+            </div>
+
+            <RequirementSummaryCard requirementDetail={requirementDetail} />
+          </div>
         )}
       </div>
     </article>
   );
 
-  const progressPanel = (
-    <article className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur">
-      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-        Progress
-      </p>
-      <div className="mt-4 space-y-4 text-sm leading-7 text-slate-700">
-        <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 p-5">
-          当前允许动作：{availableActions.length > 0 ? availableActions.join(", ") : "无"}
-        </div>
-        <div className="rounded-3xl border border-slate-200 bg-white/90 p-5">
-          <p className="font-semibold text-slate-950">v1 约束</p>
-          <p className="mt-2 text-slate-600">
-            不支持断线恢复、自动重连或跨刷新保留 task_token。本阶段只处理澄清与需求分析交接。
-          </p>
-        </div>
-      </div>
-    </article>
-  );
+  const progressPanel = <TimelinePanel items={timelineItems} />;
 
   return (
     <section className="space-y-6">

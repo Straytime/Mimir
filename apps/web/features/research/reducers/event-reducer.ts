@@ -8,6 +8,7 @@ import type {
 } from "@/lib/contracts";
 
 import { mergeTaskSnapshot } from "../mappers/task-snapshot-merger";
+import { reduceTimelineStream } from "../mappers/timeline-mapper";
 import type {
   ResearchSessionState,
   TerminalReason,
@@ -115,6 +116,19 @@ function ensureCurrentRevision(
     finished_at: null,
     requirement_detail: null,
   };
+}
+
+function reduceStreamTimeline(
+  state: ResearchSessionState,
+  event: EventEnvelope,
+) {
+  return reduceTimelineStream(
+    {
+      timeline: state.stream.timeline,
+      outlineReady: state.stream.outlineReady,
+    },
+    event,
+  );
 }
 
 export function reduceResearchSessionEvent(
@@ -270,26 +284,60 @@ export function reduceResearchSessionEvent(
         },
       };
     case "analysis.delta":
-      return {
-        ...stateWithLastEventSeq,
-        stream: {
-          ...stateWithLastEventSeq.stream,
-          analysisText: `${state.stream.analysisText}${event.payload.delta}`,
-        },
-      };
-    case "analysis.completed":
-      return {
-        ...stateWithLastEventSeq,
-        remote: {
-          ...state.remote,
-          currentRevision: {
-            ...ensureCurrentRevision(state, event),
-            requirement_detail: event.payload.requirement_detail,
+      {
+        const nextTimelineStream = reduceStreamTimeline(
+          stateWithLastEventSeq,
+          event,
+        );
+
+        return {
+          ...stateWithLastEventSeq,
+          stream: {
+            ...stateWithLastEventSeq.stream,
+            ...nextTimelineStream,
+            analysisText: `${state.stream.analysisText}${event.payload.delta}`,
           },
-        },
+        };
+      }
+    case "analysis.completed":
+      {
+        const nextTimelineStream = reduceStreamTimeline(
+          stateWithLastEventSeq,
+          event,
+        );
+
+        return {
+          ...stateWithLastEventSeq,
+          remote: {
+            ...state.remote,
+            currentRevision: {
+              ...ensureCurrentRevision(state, event),
+              requirement_detail: event.payload.requirement_detail,
+            },
+          },
+          stream: {
+            ...stateWithLastEventSeq.stream,
+            ...nextTimelineStream,
+            analysisText: "",
+          },
+        };
+      }
+    case "planner.reasoning.delta":
+    case "planner.tool_call.requested":
+    case "collector.reasoning.delta":
+    case "collector.search.started":
+    case "collector.search.completed":
+    case "collector.fetch.started":
+    case "collector.fetch.completed":
+    case "collector.completed":
+    case "summary.completed":
+    case "sources.merged":
+    case "outline.delta":
+      return {
+        ...stateWithLastEventSeq,
         stream: {
           ...stateWithLastEventSeq.stream,
-          analysisText: "",
+          ...reduceStreamTimeline(stateWithLastEventSeq, event),
         },
       };
     case "task.failed":

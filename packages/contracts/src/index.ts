@@ -49,6 +49,12 @@ export const REVISION_STATUSES = [
   "terminated",
 ] as const;
 
+export const COLLECT_SUMMARY_STATUSES = [
+  "completed",
+  "partial",
+  "risk_blocked",
+] as const;
+
 export const TERMINAL_TASK_STATUSES = [
   "terminated",
   "failed",
@@ -80,6 +86,7 @@ export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 export type FreshnessRequirement = (typeof FRESHNESS_REQUIREMENTS)[number];
 export type AvailableAction = (typeof AVAILABLE_ACTIONS)[number];
 export type RevisionStatus = (typeof REVISION_STATUSES)[number];
+export type CollectSummaryStatus = (typeof COLLECT_SUMMARY_STATUSES)[number];
 export type TerminalTaskStatus = (typeof TERMINAL_TASK_STATUSES)[number];
 export type TerminationReason = (typeof TERMINATION_REASONS)[number];
 export type DisconnectRequestReason =
@@ -317,6 +324,79 @@ export type AnalysisCompletedPayload = {
   requirement_detail: RequirementDetail;
 };
 
+export type PlannerReasoningDeltaPayload = {
+  delta: string;
+};
+
+export type PlannerToolCallRequestedPayload = {
+  tool_call_id: string;
+  collect_target: string;
+  additional_info: string;
+};
+
+export type CollectorReasoningDeltaPayload = {
+  subtask_id: string;
+  tool_call_id: string;
+  delta: string;
+};
+
+export type CollectorSearchStartedPayload = {
+  subtask_id: string;
+  tool_call_id: string;
+  search_query: string;
+  search_recency_filter: string;
+};
+
+export type CollectorSearchCompletedPayload = {
+  subtask_id: string;
+  tool_call_id: string;
+  search_query: string;
+  result_count: number;
+  titles: string[];
+};
+
+export type CollectorFetchStartedPayload = {
+  subtask_id: string;
+  tool_call_id: string;
+  url: string;
+};
+
+export type CollectorFetchCompletedPayload = {
+  subtask_id: string;
+  tool_call_id: string;
+  url: string;
+  success: boolean;
+  title: string | null;
+};
+
+export type CollectorCompletedPayload = {
+  subtask_id: string;
+  tool_call_id: string;
+  status: CollectSummaryStatus;
+  item_count: number;
+  search_queries: string[];
+};
+
+export type SummaryCompletedPayload = {
+  tool_call_id: string;
+  subtask_id: string;
+  collect_target?: string | null;
+  status: CollectSummaryStatus;
+  search_queries?: string[];
+  key_findings_markdown?: string | null;
+  message?: string | null;
+};
+
+export type SourcesMergedPayload = {
+  source_count_before_merge: number;
+  source_count_after_merge: number;
+  reference_count: number;
+};
+
+export type OutlineDeltaPayload = {
+  delta: string;
+};
+
 export type TaskCreatedEventEnvelope = BaseEventEnvelope<
   "task.created",
   TaskCreatedPayload
@@ -382,6 +462,61 @@ export type AnalysisCompletedEventEnvelope = BaseEventEnvelope<
   AnalysisCompletedPayload
 >;
 
+export type PlannerReasoningDeltaEventEnvelope = BaseEventEnvelope<
+  "planner.reasoning.delta",
+  PlannerReasoningDeltaPayload
+>;
+
+export type PlannerToolCallRequestedEventEnvelope = BaseEventEnvelope<
+  "planner.tool_call.requested",
+  PlannerToolCallRequestedPayload
+>;
+
+export type CollectorReasoningDeltaEventEnvelope = BaseEventEnvelope<
+  "collector.reasoning.delta",
+  CollectorReasoningDeltaPayload
+>;
+
+export type CollectorSearchStartedEventEnvelope = BaseEventEnvelope<
+  "collector.search.started",
+  CollectorSearchStartedPayload
+>;
+
+export type CollectorSearchCompletedEventEnvelope = BaseEventEnvelope<
+  "collector.search.completed",
+  CollectorSearchCompletedPayload
+>;
+
+export type CollectorFetchStartedEventEnvelope = BaseEventEnvelope<
+  "collector.fetch.started",
+  CollectorFetchStartedPayload
+>;
+
+export type CollectorFetchCompletedEventEnvelope = BaseEventEnvelope<
+  "collector.fetch.completed",
+  CollectorFetchCompletedPayload
+>;
+
+export type CollectorCompletedEventEnvelope = BaseEventEnvelope<
+  "collector.completed",
+  CollectorCompletedPayload
+>;
+
+export type SummaryCompletedEventEnvelope = BaseEventEnvelope<
+  "summary.completed",
+  SummaryCompletedPayload
+>;
+
+export type SourcesMergedEventEnvelope = BaseEventEnvelope<
+  "sources.merged",
+  SourcesMergedPayload
+>;
+
+export type OutlineDeltaEventEnvelope = BaseEventEnvelope<
+  "outline.delta",
+  OutlineDeltaPayload
+>;
+
 export type EventEnvelope =
   | TaskCreatedEventEnvelope
   | PhaseChangedEventEnvelope
@@ -395,4 +530,15 @@ export type EventEnvelope =
   | ClarificationCountdownStartedEventEnvelope
   | ClarificationFallbackToNaturalEventEnvelope
   | AnalysisDeltaEventEnvelope
-  | AnalysisCompletedEventEnvelope;
+  | AnalysisCompletedEventEnvelope
+  | PlannerReasoningDeltaEventEnvelope
+  | PlannerToolCallRequestedEventEnvelope
+  | CollectorReasoningDeltaEventEnvelope
+  | CollectorSearchStartedEventEnvelope
+  | CollectorSearchCompletedEventEnvelope
+  | CollectorFetchStartedEventEnvelope
+  | CollectorFetchCompletedEventEnvelope
+  | CollectorCompletedEventEnvelope
+  | SummaryCompletedEventEnvelope
+  | SourcesMergedEventEnvelope
+  | OutlineDeltaEventEnvelope;

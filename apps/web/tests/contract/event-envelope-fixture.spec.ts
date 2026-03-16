@@ -9,8 +9,19 @@ import {
   makeClarificationNaturalReadyEvent,
   makeClarificationOptionsReadyEvent,
   makeClarificationCountdownStartedEvent,
+  makeCollectorCompletedEvent,
+  makeCollectorFetchCompletedEvent,
+  makeCollectorFetchStartedEvent,
+  makeCollectorReasoningDeltaEvent,
+  makeCollectorSearchCompletedEvent,
+  makeCollectorSearchStartedEvent,
   makeHeartbeatEvent,
+  makeOutlineDeltaEvent,
+  makePlannerReasoningDeltaEvent,
+  makePlannerToolCallRequestedEvent,
   makePhaseChangedEvent,
+  makeSourcesMergedEvent,
+  makeSummaryCompletedEvent,
   makeTaskCreatedEvent,
   makeTaskExpiredEvent,
   makeTaskFailedEvent,
@@ -32,6 +43,17 @@ test("EventEnvelope fixtures stay aligned with the current event union", () => {
     makeClarificationFallbackToNaturalEvent(),
     makeAnalysisDeltaEvent(),
     makeAnalysisCompletedEvent(),
+    makePlannerReasoningDeltaEvent(),
+    makePlannerToolCallRequestedEvent(),
+    makeCollectorReasoningDeltaEvent(),
+    makeCollectorSearchStartedEvent(),
+    makeCollectorSearchCompletedEvent(),
+    makeCollectorFetchStartedEvent(),
+    makeCollectorFetchCompletedEvent(),
+    makeCollectorCompletedEvent(),
+    makeSummaryCompletedEvent(),
+    makeSourcesMergedEvent(),
+    makeOutlineDeltaEvent(),
   ];
 
   expect(fixtures.map((fixture) => fixture.event)).toEqual([
@@ -48,6 +70,17 @@ test("EventEnvelope fixtures stay aligned with the current event union", () => {
     "clarification.fallback_to_natural",
     "analysis.delta",
     "analysis.completed",
+    "planner.reasoning.delta",
+    "planner.tool_call.requested",
+    "collector.reasoning.delta",
+    "collector.search.started",
+    "collector.search.completed",
+    "collector.fetch.started",
+    "collector.fetch.completed",
+    "collector.completed",
+    "summary.completed",
+    "sources.merged",
+    "outline.delta",
   ]);
 
   expect(fixtures[0]?.payload).toHaveProperty("snapshot");
@@ -66,4 +99,9 @@ test("EventEnvelope fixtures stay aligned with the current event union", () => {
   expect(fixtures[8]?.payload).toHaveProperty("question_set.questions");
   expect(fixtures[11]?.payload).toHaveProperty("delta");
   expect(fixtures[12]?.payload).toHaveProperty("requirement_detail");
+  expect(fixtures[14]?.payload).toHaveProperty("collect_target");
+  expect(fixtures[18]?.payload).toHaveProperty("url");
+  expect(fixtures[20]?.payload).toHaveProperty("status");
+  expect(fixtures[21]?.payload).toHaveProperty("key_findings_markdown");
+  expect(fixtures[22]?.payload).toHaveProperty("reference_count");
 });

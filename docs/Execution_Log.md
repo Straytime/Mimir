@@ -667,3 +667,47 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Backend Stage 6 任务包，实现 outline / writer / artifact / downloads，不要在 Stage 5 基线上继续混入输出层逻辑
   - 如果后续接真实搜索或抓取 provider，先补 adapter contract tests，保持 `RiskControlTriggered` 与 `RetryableOperationError` 的统一边界
+
+## M3-002 Frontend Stage 5 Timeline + Transparency
+
+- 日期时间: 2026-03-16 16:31:36 CST (+0800)
+- 任务包编号: M3-002
+- session 标识: codex-20260316-m3-002-frontend-stage5-transparency
+- 目标摘要: 按 `docs/Frontend_TDD_Plan.md` Stage 5 在 `apps/web` 落地 analysis / planning / collection 透明度事件的前端消费，把 `analysis.delta`、`planner.*`、`collector.*`、`summary.completed`、`sources.merged`、`outline.delta` 统一映射到 timeline，接通 requirement summary card 与 workspace shell 阶段文案，并保持边界停在 Stage 5，不提前进入 report / artifact / delivery。
+- 修改文件:
+  - `packages/contracts/src/index.ts`
+  - `apps/web/features/research/mappers/timeline-mapper.ts`
+  - `apps/web/features/research/reducers/event-reducer.ts`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/requirement-summary-card.tsx`
+  - `apps/web/features/research/components/timeline-panel.tsx`
+  - `apps/web/tests/fixtures/browser.ts`
+  - `apps/web/tests/fixtures/builders.ts`
+  - `apps/web/tests/contract/event-envelope-fixture.spec.ts`
+  - `apps/web/tests/unit/mappers/timeline-mapper.spec.ts`
+  - `apps/web/tests/component/timeline-panel.spec.tsx`
+  - `apps/web/tests/integration/research-transparency.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/contract/event-envelope-fixture.spec.ts tests/unit/mappers/timeline-mapper.spec.ts tests/component/timeline-panel.spec.tsx tests/integration/research-transparency.spec.tsx`
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/integration/research-transparency.spec.tsx`
+  - 已运行: `cd apps/web && pnpm lint`
+  - 已运行: `cd apps/web && pnpm test:contract`
+  - 已运行: `cd apps/web && pnpm test:unit`
+  - 已运行: `cd apps/web && pnpm test:component`
+  - 已运行: `cd apps/web && pnpm test:integration`
+  - 调试过程:
+    - 初版 `timeline-mapper` 在 `TimelineItem.kind` 字面量收窄上被 TypeScript 拒绝；已改为显式 `TimelineItem` 构造与返回类型标注，避免 Stage 5 union 扩展后推断漂移
+    - `TimelinePanel` 初版直接调用 `scrollIntoView`，在 jsdom 默认节点上会触发 `not a function`；已同时补运行时保护和测试浏览器 mock，使 auto-scroll 基线稳定
+    - timeline detail 是多行合并文本，component / integration 断言初版用精确文本匹配会误伤；已改为按 `<p>` 节点 `textContent` 的包含关系断言，确保并发 `collect_target` 不串线的测试仍然严格
+  - 未运行: `pnpm test:e2e`；本任务包验收标准聚焦 Frontend Stage 5 的 contract / unit / component / integration 闭环
+- 验收结论: accepted；Stage 5 所需透明度事件已全部进入前端 timeline 与阶段文案：`analysis.delta` / `analysis.completed` 会更新分析状态与 requirement summary，`planner.reasoning.delta` 进入 planning detail，`planner.tool_call.requested` 生成带 `collectTarget` 的搜集项，`collector.reasoning.delta`、`collector.search.*`、`collector.fetch.*`、`collector.completed` 会持续更新对应 collect item，`summary.completed` 与 `sources.merged` 进入 timeline，`outline.delta` 只显示“正在构思报告结构”而不泄露 raw delta；timeline 默认自动滚动到底部，并发 sub-agent 事件交错时仍按 `tool_call_id / subtask_id` 正确归属，没有越界进入 Stage 6。
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前 `RequirementSummaryCard` 与 `TimelinePanel` 只覆盖 Stage 5 所需的最小信息密度；后续 Stage 6 接 report canvas 时应继续复用当前 timeline，不要回退为直接渲染原始 event
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过，且本任务按范围未处理配置迁移
+- 下一步建议:
+  - 进入独立的 Frontend Stage 6 任务包，实现 outline completed、writer 流、artifact gallery 与 delivery actions，不要在当前 Stage 5 基线上混入下载与报告正文逻辑
+  - Stage 6 若继续扩前端契约，应延续当前 contract-first 方式，优先在 `packages/contracts` 与 builder / contract tests 中固化后再进 reducer 与 UI
