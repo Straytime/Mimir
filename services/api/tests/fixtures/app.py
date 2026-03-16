@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from httpx import AsyncBaseTransport, AsyncClient, AsyncByteStream, Request, Response
 
 from app.core.config import Settings
+from app.infrastructure.delivery.local import LocalArtifactStore
 from app.main import create_app
 from tests.fixtures.runtime import FakeClock
 
@@ -190,8 +191,16 @@ def settings(
 
 
 @pytest.fixture
-def app_instance(settings: Settings, fake_clock: FakeClock) -> FastAPI:
-    return create_app(settings=settings, clock=fake_clock.now)
+def app_instance(
+    settings: Settings,
+    fake_clock: FakeClock,
+    temp_artifact_dir,
+) -> FastAPI:
+    return create_app(
+        settings=settings,
+        clock=fake_clock.now,
+        artifact_store=LocalArtifactStore(root_dir=temp_artifact_dir),
+    )
 
 
 @pytest_asyncio.fixture

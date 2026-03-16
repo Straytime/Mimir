@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session
 from app.api.errors import ApiError
 from app.application.dto.tasks import (
     AcceptedResponse,
+    ArtifactSummary,
     CreateTaskRequest,
     CreateTaskResponse,
+    DeliverySummary,
     TaskDetailResponse,
     TaskUrls,
 )
@@ -19,11 +21,17 @@ from app.application.policies.ip_quota import IPQuotaPolicy
 from app.application.ports.security import AccessTokenSigner, TaskTokenSigner
 from app.core.config import Settings
 from app.core.ids import generate_id, hash_secret
-from app.domain.enums import ClarificationMode, RevisionStatus, TaskPhase, TaskStatus
+from app.domain.enums import (
+    AccessTokenResourceType,
+    ClarificationMode,
+    RevisionStatus,
+    TaskPhase,
+    TaskStatus,
+)
 from app.domain.schemas import EventEnvelope, RequirementDetail, RevisionSummary, TaskSnapshot
 from app.domain.state_machine import TaskLifecycleState, TaskStateMachine
-from app.domain.tokens import TaskTokenPayload
-from app.infrastructure.db.models import ResearchTaskRecord, TaskRevisionRecord
+from app.domain.tokens import AccessTokenPayload, TaskTokenPayload
+from app.infrastructure.db.models import ArtifactRecord, ResearchTaskRecord, TaskRevisionRecord
 from app.infrastructure.db.repositories import TaskRepository
 from app.infrastructure.security.hmac_signers import TokenVerificationError
 
@@ -199,6 +207,11 @@ class TaskService:
         return task.trace_id, self.repository.build_task_detail_response(
             task=task,
             revision=revision,
+            delivery=self._build_delivery_summary(
+                session=session,
+                task=task,
+                revision=revision,
+            ),
         )
 
     def get_task_for_token(
@@ -500,6 +513,69 @@ class TaskService:
             created_at=now,
         )
 
+    def complete_delivery(
+        self,
+        session: Session,
+        *,
+        task_id: str,
+    ) -> EventEnvelope:
+        task_with_revision = self.repository.get_task_with_revision(
+            session=session,
+            task_id=task_id,
+        )
+        if task_with_revision is None:
+            raise ApiError(
+                status_code=404,
+                code="task_not_found",
+                message="任务不存在或已清理。",
+            )
+
+        task, revision = task_with_revision
+        current_state = TaskLifecycleState(
+            status=TaskStatus(task.status),
+            phase=TaskPhase(task.phase),
+        )
+        target_state = TaskStateMachine.transition(
+            current=current_state,
+            target=TaskLifecycleState(
+                status=TaskStatus.AWAITING_FEEDBACK,
+                phase=TaskPhase.DELIVERED,
+            ),
+        )
+        now = self.clock()
+        delivered_task = self.repository.update_task_state(
+            session=session,
+            task_id=task_id,
+            status=target_state.status.value,
+            phase=target_state.phase.value,
+            updated_at=now,
+            expires_at=now + timedelta(minutes=30),
+        )
+        assert delivered_task is not None
+        self.repository.release_lock(session=session, task_id=task_id)
+        updated_revision = self.repository.update_revision_status(
+            session=session,
+            revision_id=revision.revision_id,
+            revision_status=RevisionStatus.COMPLETED.value,
+            finished_at=now,
+        )
+        assert updated_revision is not None
+        delivery = self._build_delivery_summary(
+            session=session,
+            task=delivered_task,
+            revision=updated_revision,
+        )
+        assert delivery is not None
+        return self.repository.append_event(
+            session=session,
+            task_id=task.task_id,
+            revision_id=task.active_revision_id,
+            event="report.completed",
+            phase=target_state.phase.value,
+            payload={"delivery": delivery.model_dump(mode="json")},
+            created_at=now,
+        )
+
     def transition_phase(
         self,
         session: Session,
@@ -720,6 +796,105 @@ class TaskService:
             created_at=now,
         )
 
+    def get_binary_resource(
+        self,
+        session: Session,
+        *,
+        task_id: str,
+        access_token: str | None,
+        resource_type: AccessTokenResourceType,
+        artifact_id: str | None = None,
+    ) -> tuple[str, ArtifactRecord]:
+        task = self.repository.get_task(session=session, task_id=task_id)
+        if task is None:
+            raise ApiError(
+                status_code=404,
+                code="task_not_found",
+                message="任务不存在或已清理。",
+            )
+
+        if resource_type is AccessTokenResourceType.ARTIFACT:
+            if artifact_id is None:
+                raise ApiError(
+                    status_code=404,
+                    code="task_not_found",
+                    message="任务不存在或制品已清理。",
+                )
+            artifact = self.repository.get_artifact(session=session, artifact_id=artifact_id)
+            if artifact is None or artifact.task_id != task_id:
+                raise ApiError(
+                    status_code=404,
+                    code="task_not_found",
+                    message="任务不存在或制品已清理。",
+                )
+        else:
+            artifact = self.repository.get_download_artifact(
+                session=session,
+                revision_id=task.active_revision_id,
+                resource_type=resource_type,
+            )
+            if artifact is None:
+                raise ApiError(
+                    status_code=404,
+                    code="task_not_found",
+                    message="任务不存在或制品已清理。",
+                )
+
+        self._validate_access_token(
+            task_id=task_id,
+            access_token=access_token,
+            resource_type=resource_type,
+            resource_scope=artifact.artifact_id,
+        )
+        return task.trace_id, artifact
+
+    def build_artifact_summary(
+        self,
+        *,
+        task: ResearchTaskRecord,
+        artifact: ArtifactRecord,
+    ) -> ArtifactSummary:
+        access_expires_at = self._access_token_expires_at(task=task)
+        access_token = self.access_token_signer.sign(
+            AccessTokenPayload(
+                task_id=task.task_id,
+                resource_type=AccessTokenResourceType.ARTIFACT,
+                resource_scope=artifact.artifact_id,
+                issued_at=self.clock(),
+                expires_at=access_expires_at,
+            )
+        )
+        return ArtifactSummary(
+            artifact_id=artifact.artifact_id,
+            filename=artifact.filename,
+            mime_type=artifact.mime_type,
+            url=(
+                f"/api/v1/tasks/{task.task_id}/artifacts/{artifact.artifact_id}"
+                f"?access_token={access_token}"
+            ),
+            access_expires_at=access_expires_at,
+        )
+
+    def build_download_url(
+        self,
+        *,
+        task: ResearchTaskRecord,
+        artifact: ArtifactRecord,
+        resource_type: AccessTokenResourceType,
+    ) -> str:
+        access_token = self.access_token_signer.sign(
+            AccessTokenPayload(
+                task_id=task.task_id,
+                resource_type=resource_type,
+                resource_scope=artifact.artifact_id,
+                issued_at=self.clock(),
+                expires_at=self._access_token_expires_at(task=task),
+            )
+        )
+        if resource_type is AccessTokenResourceType.MARKDOWN_DOWNLOAD:
+            return f"/api/v1/tasks/{task.task_id}/downloads/markdown.zip?access_token={access_token}"
+        return f"/api/v1/tasks/{task.task_id}/downloads/report.pdf?access_token={access_token}"
+
     def _validate_task_token(
         self,
         *,
@@ -742,3 +917,92 @@ class TaskService:
                 code="task_token_invalid",
                 message="任务 token 无效或不匹配。",
             )
+
+    def _validate_access_token(
+        self,
+        *,
+        task_id: str,
+        access_token: str | None,
+        resource_type: AccessTokenResourceType,
+        resource_scope: str,
+    ) -> None:
+        if access_token is None:
+            raise ApiError(
+                status_code=401,
+                code="access_token_invalid",
+                message="access token 无效或已过期。",
+            )
+        try:
+            payload = self.access_token_signer.verify(access_token)
+        except TokenVerificationError as exc:
+            raise ApiError(
+                status_code=401,
+                code="access_token_invalid",
+                message="access token 无效或已过期。",
+            ) from exc
+
+        if (
+            payload.task_id != task_id
+            or payload.resource_type is not resource_type
+            or payload.resource_scope != resource_scope
+        ):
+            raise ApiError(
+                status_code=401,
+                code="access_token_invalid",
+                message="access token 无效或已过期。",
+            )
+
+    def _build_delivery_summary(
+        self,
+        *,
+        session: Session,
+        task: ResearchTaskRecord,
+        revision: TaskRevisionRecord,
+    ) -> DeliverySummary | None:
+        markdown_artifact = self.repository.get_download_artifact(
+            session=session,
+            revision_id=revision.revision_id,
+            resource_type=AccessTokenResourceType.MARKDOWN_DOWNLOAD,
+        )
+        pdf_artifact = self.repository.get_download_artifact(
+            session=session,
+            revision_id=revision.revision_id,
+            resource_type=AccessTokenResourceType.PDF_DOWNLOAD,
+        )
+        if markdown_artifact is None or pdf_artifact is None:
+            return None
+
+        image_artifacts = self.repository.list_artifacts(
+            session=session,
+            revision_id=revision.revision_id,
+            resource_type=AccessTokenResourceType.ARTIFACT.value,
+        )
+        metadata = markdown_artifact.metadata_json or {}
+        word_count = int(metadata.get("word_count", 0))
+        return DeliverySummary(
+            revision_id=revision.revision_id,
+            revision_number=revision.revision_number,
+            word_count=word_count,
+            artifact_count=len(image_artifacts),
+            markdown_zip_url=self.build_download_url(
+                task=task,
+                artifact=markdown_artifact,
+                resource_type=AccessTokenResourceType.MARKDOWN_DOWNLOAD,
+            ),
+            pdf_url=self.build_download_url(
+                task=task,
+                artifact=pdf_artifact,
+                resource_type=AccessTokenResourceType.PDF_DOWNLOAD,
+            ),
+            artifacts=[
+                self.build_artifact_summary(task=task, artifact=artifact)
+                for artifact in image_artifacts
+            ],
+        )
+
+    def _access_token_expires_at(self, *, task: ResearchTaskRecord) -> datetime:
+        now = self.clock()
+        default_expiry = now + timedelta(minutes=self.settings.access_token_ttl_minutes)
+        if task.expires_at is None:
+            return default_expiry
+        return min(default_expiry, task.expires_at.astimezone(UTC))

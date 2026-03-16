@@ -60,6 +60,7 @@ class CollectionOrchestrator:
         operation_invoker: RetryingOperationInvoker[object],
         merge_service: SourceMergeService,
         settings: Settings,
+        on_sources_merged: Callable[[str], Awaitable[None]] | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._session_factory = session_factory
@@ -72,6 +73,7 @@ class CollectionOrchestrator:
         self._operation_invoker = operation_invoker
         self._merge_service = merge_service
         self._settings = settings
+        self._on_sources_merged = on_sources_merged
         self._clock = clock or (lambda: datetime.now(UTC))
         self._runtimes: dict[str, CollectionRuntime] = {}
 
@@ -141,6 +143,8 @@ class CollectionOrchestrator:
                     target_phase=TaskPhase.MERGING_SOURCES,
                 )
                 await self._run_merge(task_id=task_id, revision_id=revision.revision_id)
+                if self._on_sources_merged is not None:
+                    await self._on_sources_merged(task_id)
                 return
 
             if not planner_decision.plans:

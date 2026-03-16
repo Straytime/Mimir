@@ -169,8 +169,32 @@ class AgentRunRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class ArtifactRecord(Base):
+    __tablename__ = "artifacts"
+
+    artifact_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("research_tasks.task_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    revision_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("task_revisions.revision_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    resource_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 Index("ix_ip_usage_counters_ip_hash_created_at", IPUsageCounterRecord.ip_hash, IPUsageCounterRecord.created_at)
 Index("ix_task_events_task_id_seq", TaskEventRecord.task_id, TaskEventRecord.seq)
 Index("ix_task_tool_calls_revision_id_created_at", TaskToolCallRecord.revision_id, TaskToolCallRecord.created_at)
 Index("ix_collected_sources_revision_id_created_at", CollectedSourceRecord.revision_id, CollectedSourceRecord.created_at)
 Index("ix_agent_runs_revision_id_created_at", AgentRunRecord.revision_id, AgentRunRecord.created_at)
+Index("ix_artifacts_revision_id_created_at", ArtifactRecord.revision_id, ArtifactRecord.created_at)

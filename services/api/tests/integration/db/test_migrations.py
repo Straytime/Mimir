@@ -24,6 +24,7 @@ def test_stage_two_migrations_upgrade_and_downgrade(
         "task_tool_calls",
         "collected_sources",
         "agent_runs",
+        "artifacts",
     }.issubset(upgraded_tables)
 
     task_revision_columns = {
@@ -48,3 +49,4 @@ def test_stage_two_migrations_upgrade_and_downgrade(
     assert "task_tool_calls" not in downgraded_tables
     assert "collected_sources" not in downgraded_tables
     assert "agent_runs" not in downgraded_tables
+    assert "artifacts" not in downgraded_tables

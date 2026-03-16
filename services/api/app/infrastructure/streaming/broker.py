@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.services.collection import CollectionOrchestrator
 from app.application.services.clarification import ClarificationOrchestrator
+from app.application.services.delivery import DeliveryOrchestrator
 from app.application.services.tasks import TaskService
 from app.core.config import Settings
 from app.domain.enums import TaskPhase, TaskStatus
@@ -44,6 +45,7 @@ class TaskLifecycleManager:
         task_service: TaskService,
         clarification_orchestrator: ClarificationOrchestrator,
         collection_orchestrator: CollectionOrchestrator,
+        delivery_orchestrator: DeliveryOrchestrator,
         settings: Settings,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -51,6 +53,7 @@ class TaskLifecycleManager:
         self._task_service = task_service
         self._clarification_orchestrator = clarification_orchestrator
         self._collection_orchestrator = collection_orchestrator
+        self._delivery_orchestrator = delivery_orchestrator
         self._settings = settings
         self._clock = clock or (lambda: datetime.now(UTC))
         self._runtimes: dict[str, TaskRuntime] = {}
@@ -178,6 +181,7 @@ class TaskLifecycleManager:
             session.commit()
         await self._clarification_orchestrator.cancel(task_id=task_id)
         await self._collection_orchestrator.cancel(task_id=task_id)
+        await self._delivery_orchestrator.cancel(task_id=task_id)
         return trace_id
 
     async def submit_clarification(
@@ -237,6 +241,7 @@ class TaskLifecycleManager:
                 await runtime.monitor_task
         await self._clarification_orchestrator.shutdown()
         await self._collection_orchestrator.shutdown()
+        await self._delivery_orchestrator.shutdown()
 
     def _ensure_monitor(self, *, task_id: str, runtime: TaskRuntime) -> None:
         if runtime.monitor_task is None or runtime.monitor_task.done():
@@ -271,6 +276,7 @@ class TaskLifecycleManager:
                         session.commit()
                         await self._clarification_orchestrator.cancel(task_id=task_id)
                         await self._collection_orchestrator.cancel(task_id=task_id)
+                        await self._delivery_orchestrator.cancel(task_id=task_id)
                         if runtime.connection_count == 0:
                             self._runtimes.pop(task_id, None)
                         return
@@ -295,6 +301,7 @@ class TaskLifecycleManager:
                             session.commit()
                             await self._clarification_orchestrator.cancel(task_id=task_id)
                             await self._collection_orchestrator.cancel(task_id=task_id)
+                            await self._delivery_orchestrator.cancel(task_id=task_id)
                             if runtime.connection_count == 0:
                                 self._runtimes.pop(task_id, None)
                             return
@@ -308,6 +315,7 @@ class TaskLifecycleManager:
                         session.commit()
                         await self._clarification_orchestrator.cancel(task_id=task_id)
                         await self._collection_orchestrator.cancel(task_id=task_id)
+                        await self._delivery_orchestrator.cancel(task_id=task_id)
                         if runtime.connection_count == 0:
                             self._runtimes.pop(task_id, None)
                         return
@@ -365,6 +373,7 @@ class TaskLifecycleManager:
             session.commit()
         await self._clarification_orchestrator.cancel(task_id=task_id)
         await self._collection_orchestrator.cancel(task_id=task_id)
+        await self._delivery_orchestrator.cancel(task_id=task_id)
 
     async def _finalize_stream(self, *, task_id: str) -> None:
         runtime = self._runtimes.get(task_id)
@@ -397,5 +406,6 @@ class TaskLifecycleManager:
                 session.commit()
                 await self._clarification_orchestrator.cancel(task_id=task_id)
                 await self._collection_orchestrator.cancel(task_id=task_id)
+                await self._delivery_orchestrator.cancel(task_id=task_id)
             else:
                 session.rollback()

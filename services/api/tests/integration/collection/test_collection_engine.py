@@ -21,6 +21,14 @@ from app.application.dto.research import (
     SummaryDecision,
     SummaryInvocation,
 )
+from app.application.dto.delivery import (
+    OutlineDecision,
+    OutlineInvocation,
+    ResearchOutline,
+    WriterDecision,
+    WriterInvocation,
+)
+from app.application.ports.delivery import E2BSandboxClient, OutlineAgent, WriterAgent
 from app.application.ports.research import (
     CollectorAgent,
     PlannerAgent,
@@ -136,6 +144,39 @@ class ScriptedWebFetchClient(WebFetchClient):
         return self.content_by_url[url]
 
 
+class NoopOutlineAgent(OutlineAgent):
+    async def prepare(self, invocation: OutlineInvocation) -> OutlineDecision:
+        return OutlineDecision(
+            deltas=(),
+            outline=ResearchOutline(
+                title="noop",
+                sections=(),
+                entities=(),
+            ),
+        )
+
+
+class NoopWriterAgent(WriterAgent):
+    async def write(self, invocation: WriterInvocation) -> WriterDecision:
+        return WriterDecision(
+            reasoning_deltas=(),
+            content_deltas=(),
+            tool_calls=(),
+            final_markdown="noop",
+        )
+
+
+class NoopSandboxClient(E2BSandboxClient):
+    async def create(self) -> str:
+        return "sandbox_noop"
+
+    async def execute_python(self, sandbox_id: str, code: str):
+        raise AssertionError("noop sandbox should not be used in Stage 5 tests")
+
+    async def destroy(self, sandbox_id: str) -> None:
+        return None
+
+
 @pytest_asyncio.fixture
 async def make_stage5_client(
     settings: Settings,
@@ -160,6 +201,9 @@ async def make_stage5_client(
             summary_agent=summary_agent,
             web_search_client=web_search_client,
             web_fetch_client=web_fetch_client,
+            outline_agent=NoopOutlineAgent(),
+            writer_agent=NoopWriterAgent(),
+            sandbox_client=NoopSandboxClient(),
         )
         await app.router.startup()
         apps_to_shutdown.append(app)
