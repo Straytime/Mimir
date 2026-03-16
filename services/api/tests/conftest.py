@@ -1,5 +1,6 @@
 from tests.fixtures.app import (
     allowed_origin,
+    app_instance,
     app_client,
     denied_origin,
     settings,
@@ -18,6 +19,7 @@ from tests.fixtures.storage import temp_artifact_dir
 __all__ = [
     "alembic_config",
     "allowed_origin",
+    "app_instance",
     "app_client",
     "database_url",
     "db_engine",

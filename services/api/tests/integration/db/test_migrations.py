@@ -20,6 +20,7 @@ def test_stage_two_migrations_upgrade_and_downgrade(
         "task_revisions",
         "system_locks",
         "ip_usage_counters",
+        "task_events",
     }.issubset(upgraded_tables)
 
     command.downgrade(alembic_config, "base")
@@ -34,3 +35,4 @@ def test_stage_two_migrations_upgrade_and_downgrade(
     assert "task_revisions" not in downgraded_tables
     assert "system_locks" not in downgraded_tables
     assert "ip_usage_counters" not in downgraded_tables
+    assert "task_events" not in downgraded_tables

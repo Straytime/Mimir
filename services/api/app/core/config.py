@@ -13,6 +13,9 @@ class Settings:
     ip_quota_limit: int = 3
     ip_quota_window_hours: int = 24
     connect_deadline_seconds: int = 10
+    sse_heartbeat_interval_seconds: int = 15
+    client_heartbeat_timeout_seconds: int = 45
+    lifecycle_poll_interval_seconds: float = 1.0
     task_token_ttl_hours: int = 24
     access_token_ttl_minutes: int = 10
 
@@ -45,6 +48,15 @@ class Settings:
             ),
             connect_deadline_seconds=int(
                 os.getenv("MIMIR_CONNECT_DEADLINE_SECONDS", "10")
+            ),
+            sse_heartbeat_interval_seconds=int(
+                os.getenv("MIMIR_SSE_HEARTBEAT_INTERVAL_SECONDS", "15")
+            ),
+            client_heartbeat_timeout_seconds=int(
+                os.getenv("MIMIR_CLIENT_HEARTBEAT_TIMEOUT_SECONDS", "45")
+            ),
+            lifecycle_poll_interval_seconds=float(
+                os.getenv("MIMIR_LIFECYCLE_POLL_INTERVAL_SECONDS", "1.0")
             ),
             task_token_ttl_hours=int(
                 os.getenv("MIMIR_TASK_TOKEN_TTL_HOURS", "24")
