@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.application.dto.tasks import TaskDetailResponse
 from app.application.dto.research import CollectedSourceItem, FormattedSource
 from app.domain.enums import (
+    AccessTokenResourceType,
     AvailableAction,
     ClarificationMode,
     RevisionStatus,
@@ -18,6 +19,7 @@ from app.domain.enums import (
 from app.domain.schemas import EventEnvelope, RequirementDetail, RevisionSummary, TaskSnapshot
 from app.infrastructure.db.models import (
     AgentRunRecord,
+    ArtifactRecord,
     CollectedSourceRecord,
     IPUsageCounterRecord,
     ResearchTaskRecord,
@@ -384,6 +386,31 @@ class TaskRepository:
             ),
         )
 
+    def list_merged_sources(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+    ) -> tuple[FormattedSource, ...]:
+        records = list(
+            session.scalars(
+                select(CollectedSourceRecord)
+                .where(CollectedSourceRecord.revision_id == revision_id)
+                .where(CollectedSourceRecord.is_merged.is_(True))
+                .order_by(CollectedSourceRecord.id.asc())
+            )
+        )
+        return tuple(
+            FormattedSource(
+                refer=record.refer or "",
+                title=record.title,
+                link=record.link,
+                info=record.info,
+            )
+            for record in records
+            if record.refer is not None
+        )
+
     def persist_merged_sources(
         self,
         *,
@@ -429,11 +456,77 @@ class TaskRepository:
             used_record_ids.add(matching_record.id)
         session.flush()
 
+    def append_artifact(
+        self,
+        *,
+        session: Session,
+        artifact_id: str,
+        task_id: str,
+        revision_id: str,
+        resource_type: str,
+        filename: str,
+        mime_type: str,
+        storage_key: str,
+        byte_size: int,
+        metadata_json: dict[str, object] | None,
+        created_at: datetime,
+    ) -> ArtifactRecord:
+        record = ArtifactRecord(
+            artifact_id=artifact_id,
+            task_id=task_id,
+            revision_id=revision_id,
+            resource_type=resource_type,
+            filename=filename,
+            mime_type=mime_type,
+            storage_key=storage_key,
+            byte_size=byte_size,
+            metadata_json=metadata_json,
+            created_at=created_at,
+        )
+        session.add(record)
+        session.flush()
+        return record
+
+    def list_artifacts(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+        resource_type: str | None = None,
+    ) -> list[ArtifactRecord]:
+        statement = select(ArtifactRecord).where(ArtifactRecord.revision_id == revision_id)
+        if resource_type is not None:
+            statement = statement.where(ArtifactRecord.resource_type == resource_type)
+        statement = statement.order_by(ArtifactRecord.created_at.asc(), ArtifactRecord.artifact_id.asc())
+        return list(session.scalars(statement))
+
+    def get_artifact(
+        self,
+        *,
+        session: Session,
+        artifact_id: str,
+    ) -> ArtifactRecord | None:
+        return session.get(ArtifactRecord, artifact_id)
+
+    def get_download_artifact(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+        resource_type: AccessTokenResourceType,
+    ) -> ArtifactRecord | None:
+        return session.scalar(
+            select(ArtifactRecord)
+            .where(ArtifactRecord.revision_id == revision_id)
+            .where(ArtifactRecord.resource_type == resource_type.value)
+        )
+
     def build_task_detail_response(
         self,
         *,
         task: ResearchTaskRecord,
         revision: TaskRevisionRecord,
+        delivery,
     ) -> TaskDetailResponse:
         requirement_detail = None
         if revision.requirement_detail_json is not None:
@@ -455,7 +548,7 @@ class TaskRepository:
                 finished_at=_as_utc(revision.finished_at),
                 requirement_detail=requirement_detail,
             ),
-            delivery=None,
+            delivery=delivery,
         )
 
     def build_snapshot(self, *, task: ResearchTaskRecord) -> TaskSnapshot:

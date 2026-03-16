@@ -9,6 +9,13 @@ from app.api.v1.router import api_v1_router
 from app.api.middleware import install_middlewares
 from app.application.policies.activity_lock import ActivityLockPolicy
 from app.application.policies.ip_quota import IPQuotaPolicy
+from app.application.ports.delivery import (
+    ArtifactStore,
+    E2BSandboxClient,
+    OutlineAgent,
+    ReportExportService,
+    WriterAgent,
+)
 from app.application.ports.llm import ClarificationGenerator, RequirementAnalyzer
 from app.application.ports.research import (
     CollectorAgent,
@@ -19,6 +26,7 @@ from app.application.ports.research import (
 )
 from app.application.services.collection import CollectionOrchestrator
 from app.application.services.clarification import ClarificationOrchestrator
+from app.application.services.delivery import DeliveryOrchestrator
 from app.application.services.invocation import RetryingOperationInvoker
 from app.application.services.llm import RetryingLLMInvoker
 from app.application.services.merge import SourceMergeService
@@ -27,6 +35,13 @@ from app.core.config import Settings
 from app.core.retry import RetryPolicy
 from app.infrastructure.db.repositories import TaskRepository
 from app.infrastructure.db.session import create_session_factory
+from app.infrastructure.delivery.local import (
+    LocalArtifactStore,
+    LocalReportExportService,
+    LocalStubOutlineAgent,
+    LocalStubSandboxClient,
+    LocalStubWriterAgent,
+)
 from app.infrastructure.llm.local_stub import (
     LocalStubClarificationGenerator,
     LocalStubRequirementAnalyzer,
@@ -56,6 +71,11 @@ def create_app(
     summary_agent: SummaryAgent | None = None,
     web_search_client: WebSearchClient | None = None,
     web_fetch_client: WebFetchClient | None = None,
+    outline_agent: OutlineAgent | None = None,
+    writer_agent: WriterAgent | None = None,
+    sandbox_client: E2BSandboxClient | None = None,
+    artifact_store: ArtifactStore | None = None,
+    report_export_service: ReportExportService | None = None,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_env()
     engine, session_factory = create_session_factory(resolved_settings.database_url)
@@ -77,6 +97,7 @@ def create_app(
     application.state.settings = resolved_settings
     application.state.engine = engine
     application.state.session_factory = session_factory
+    application.state.artifact_store = artifact_store or LocalArtifactStore()
     application.state.task_service = TaskService(
         repository=TaskRepository(),
         task_token_signer=HMACTaskTokenSigner(
@@ -107,6 +128,19 @@ def create_app(
             wait_seconds=resolved_settings.llm_retry_wait_seconds,
         )
     )
+    delivery_orchestrator = DeliveryOrchestrator(
+        session_factory=session_factory,
+        task_service=application.state.task_service,
+        outline_agent=outline_agent or LocalStubOutlineAgent(),
+        writer_agent=writer_agent or LocalStubWriterAgent(),
+        sandbox_client=sandbox_client or LocalStubSandboxClient(),
+        artifact_store=application.state.artifact_store,
+        report_export_service=report_export_service or LocalReportExportService(),
+        operation_invoker=operation_invoker,
+        settings=resolved_settings,
+        clock=resolved_clock,
+    )
+    application.state.delivery_orchestrator = delivery_orchestrator
     collection_orchestrator = CollectionOrchestrator(
         session_factory=session_factory,
         task_service=application.state.task_service,
@@ -118,6 +152,9 @@ def create_app(
         operation_invoker=operation_invoker,
         merge_service=SourceMergeService(),
         settings=resolved_settings,
+        on_sources_merged=lambda task_id: delivery_orchestrator.ensure_started(
+            task_id=task_id
+        ),
         clock=resolved_clock,
     )
     application.state.collection_orchestrator = collection_orchestrator
@@ -139,6 +176,7 @@ def create_app(
         task_service=application.state.task_service,
         clarification_orchestrator=clarification_orchestrator,
         collection_orchestrator=collection_orchestrator,
+        delivery_orchestrator=delivery_orchestrator,
         settings=resolved_settings,
         clock=resolved_clock,
     )

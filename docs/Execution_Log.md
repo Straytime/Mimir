@@ -737,3 +737,52 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 后续任务包可以正式进入 M4，但应继续保持单线程串行开发与 `docs/Execution_Log.md` 追加维护
   - M4 应聚焦 outline / writer / artifact / delivery 最小闭环，不回退扩张 Stage 5 的 collection 范围
+
+## M4-001 Backend Stage 6 Outline + Writer + E2B + Delivery
+
+- 日期时间: 2026-03-16 17:23:54 CST (+0800)
+- 任务包编号: M4-001
+- session 标识: codex-20260316-m4-001-backend-stage6-delivery
+- 目标摘要: 按 `docs/Backend_TDD_Plan.md` Stage 6 在 `services/api` 打通 `sources.merged -> preparing_outline -> writing_report -> artifact.ready -> report.completed -> downloads` 的后端主链路，实现 outline / writer prompt builder、E2B sandbox 生命周期、artifact store、delivery URL 与 access token 刷新；严格停在 Stage 6，不进入 feedback revision / cleanup / Stage 7。
+- 修改文件:
+  - `services/api/app/api/deps.py`
+  - `services/api/app/api/v1/tasks.py`
+  - `services/api/app/application/dto/delivery.py`
+  - `services/api/app/application/ports/delivery.py`
+  - `services/api/app/application/prompts/__init__.py`
+  - `services/api/app/application/prompts/delivery.py`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/application/services/tasks.py`
+  - `services/api/app/infrastructure/db/models.py`
+  - `services/api/app/infrastructure/db/repositories.py`
+  - `services/api/app/infrastructure/db/migrations/versions/20260316_0004_stage6_delivery.py`
+  - `services/api/app/infrastructure/delivery/__init__.py`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/app/infrastructure/streaming/broker.py`
+  - `services/api/app/main.py`
+  - `services/api/tests/fixtures/app.py`
+  - `services/api/tests/unit/application/test_delivery_prompts.py`
+  - `services/api/tests/contract/rest/test_delivery_events.py`
+  - `services/api/tests/contract/rest/test_downloads.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+  - `services/api/tests/integration/db/test_migrations.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_delivery_prompts.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py tests/integration/db/test_migrations.py`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+  - 调试过程:
+    - Stage 6 red tests 首先暴露缺失的 delivery 模块边界：`app.application.dto.delivery`、delivery ports / prompts / orchestrator、`artifacts` migration 与下载路由
+    - 第一次接线后，`DeliveryOrchestrator._finalize_delivery()` 把异步 `artifact_store.get()` 写成了普通 tuple 推导，导致流在生成 ZIP / PDF 前抛 `TypeError('async_generator object is not iterable')`；已改为显式异步收集 bytes
+    - 第二次调试暴露 `artifact.ready` 的事件顺序与 contract test 不一致：实现初版在 `writer.delta` 之前发出 `artifact.ready`，被 `read_until_event(writer.delta)` 吞掉；已调整为 `writer.tool_call.requested/completed -> writer.delta -> artifact.ready -> report.completed`
+    - 全量回归时，Stage 5 integration fixture 因默认 `create_app()` 已接通 Stage 6，`sources.merged` 后会继续进入 writer，从而多写 1 条 `TaskToolCallRecord`；已仅在 Stage 5 测试夹具里注入 no-op delivery adapters，隔离后续阶段，不修改生产路径
+  - 未运行: `ruff check`、`mypy`；本任务包验收标准聚焦 Backend Stage 6 的 unit / contract / integration 闭环
+- 验收结论: accepted；`sources.merged` 后已自动进入 `preparing_outline` 并输出 `outline.delta`、`outline.completed`，再进入 `writing_report` 输出 `writer.reasoning.delta`、`writer.delta`；writer 首次真实 `python_interpreter` 调用时才惰性创建 sandbox，同一 revision 内可复用，revision 成功结束、任务失败、任务终止或任务过期时都会显式销毁；tool call、artifact store、ZIP / PDF export 都通过明确 port / adapter 边界实现，sandbox 执行失败或 artifact 上传失败会按统一重试策略重试，耗尽后 `task.failed`，不做静默降级；`artifact.ready`、`report.completed`、`GET /api/v1/tasks/{task_id}/downloads/markdown.zip`、`GET /api/v1/tasks/{task_id}/downloads/report.pdf`、`GET /api/v1/tasks/{task_id}/artifacts/{artifact_id}` 均已可运行；`GET /tasks/{id}` 在 delivered 后会返回带 fresh `access_token` 的 `delivery`，旧 token 失效后重新获取 task detail 可刷新下载/图片 URL；Stage 6 migration 已新增 `artifacts` 表并通过正反迁移测试；实现边界停留在 Stage 6，没有进入 `POST /feedback`、新 revision、cleanup worker 或 Stage 7。
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前 E2B sandbox、artifact store、report exporter 仍是端口后的 local stub / scripted fake，满足 Stage 6 TDD 与无外网约束；接真实 E2B 或对象存储时必须继续保留同一异常语义与 RetryPolicy 包裹
+  - v1 仍沿用单进程 runtime 持有 revision 级 sandbox 生命周期，不支持跨实例恢复；这与现有架构约束一致，但后续若进入多实例部署，需要在独立任务包里重做 lifecycle 持久化
+- 下一步建议:
+  - 进入独立的 Backend Stage 7 任务包，实现 `POST /feedback`、revision rollover、cleanup worker 与 expiry cleanup hardening，不要在当前 Stage 6 基线上继续混入反馈链路
+  - 后续接真实 PDF / E2B / artifact provider 时，优先补 adapter contract tests 与故障注入用例，保持当前 access token 与 delivery 契约不漂移

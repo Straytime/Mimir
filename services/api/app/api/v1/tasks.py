@@ -1,15 +1,21 @@
 import json
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_session, get_task_lifecycle, get_task_service
+from app.api.deps import (
+    get_artifact_store,
+    get_db_session,
+    get_task_lifecycle,
+    get_task_service,
+)
 from app.api.errors import ApiError
 from app.application.dto.clarification import (
     ClarificationAcceptedResponse,
     ClarificationSubmission,
 )
+from app.application.ports.delivery import ArtifactStore
 from app.application.dto.tasks import (
     AcceptedResponse,
     CreateTaskRequest,
@@ -19,6 +25,7 @@ from app.application.dto.tasks import (
     TaskDetailResponse,
 )
 from app.application.services.tasks import TaskService
+from app.domain.enums import AccessTokenResourceType
 from app.infrastructure.streaming.broker import TaskLifecycleManager
 
 router = APIRouter(tags=["tasks"])
@@ -201,3 +208,80 @@ async def post_disconnect(
     )
     request.state.trace_id = trace_id
     return AcceptedResponse(accepted=True)
+
+
+@router.get("/tasks/{task_id}/downloads/markdown.zip")
+async def get_markdown_download(
+    task_id: str,
+    request: Request,
+    access_token: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+    service: TaskService = Depends(get_task_service),
+    artifact_store: ArtifactStore = Depends(get_artifact_store),
+) -> Response:
+    trace_id, artifact = service.get_binary_resource(
+        session,
+        task_id=task_id,
+        access_token=access_token,
+        resource_type=AccessTokenResourceType.MARKDOWN_DOWNLOAD,
+    )
+    request.state.trace_id = trace_id
+    return Response(
+        content=await artifact_store.get(artifact.storage_key),
+        media_type=artifact.mime_type,
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": 'attachment; filename="mimir-report.zip"',
+        },
+    )
+
+
+@router.get("/tasks/{task_id}/downloads/report.pdf")
+async def get_pdf_download(
+    task_id: str,
+    request: Request,
+    access_token: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+    service: TaskService = Depends(get_task_service),
+    artifact_store: ArtifactStore = Depends(get_artifact_store),
+) -> Response:
+    trace_id, artifact = service.get_binary_resource(
+        session,
+        task_id=task_id,
+        access_token=access_token,
+        resource_type=AccessTokenResourceType.PDF_DOWNLOAD,
+    )
+    request.state.trace_id = trace_id
+    return Response(
+        content=await artifact_store.get(artifact.storage_key),
+        media_type=artifact.mime_type,
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": 'attachment; filename="mimir-report.pdf"',
+        },
+    )
+
+
+@router.get("/tasks/{task_id}/artifacts/{artifact_id}")
+async def get_artifact(
+    task_id: str,
+    artifact_id: str,
+    request: Request,
+    access_token: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+    service: TaskService = Depends(get_task_service),
+    artifact_store: ArtifactStore = Depends(get_artifact_store),
+) -> Response:
+    trace_id, artifact = service.get_binary_resource(
+        session,
+        task_id=task_id,
+        access_token=access_token,
+        resource_type=AccessTokenResourceType.ARTIFACT,
+        artifact_id=artifact_id,
+    )
+    request.state.trace_id = trace_id
+    return Response(
+        content=await artifact_store.get(artifact.storage_key),
+        media_type=artifact.mime_type,
+        headers={"Cache-Control": "no-store"},
+    )
