@@ -21,7 +21,16 @@ def test_stage_two_migrations_upgrade_and_downgrade(
         "system_locks",
         "ip_usage_counters",
         "task_events",
+        "task_tool_calls",
+        "collected_sources",
+        "agent_runs",
     }.issubset(upgraded_tables)
+
+    task_revision_columns = {
+        column["name"]
+        for column in inspect(upgraded_engine).get_columns("task_revisions")
+    }
+    assert "collect_agent_calls_used" in task_revision_columns
 
     command.downgrade(alembic_config, "base")
 
@@ -36,3 +45,6 @@ def test_stage_two_migrations_upgrade_and_downgrade(
     assert "system_locks" not in downgraded_tables
     assert "ip_usage_counters" not in downgraded_tables
     assert "task_events" not in downgraded_tables
+    assert "task_tool_calls" not in downgraded_tables
+    assert "collected_sources" not in downgraded_tables
+    assert "agent_runs" not in downgraded_tables

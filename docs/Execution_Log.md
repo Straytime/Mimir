@@ -617,3 +617,53 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 后续任务包可以正式进入 M3，但应继续保持单线程串行开发与 `docs/Execution_Log.md` 追加维护
   - M3 应从 planner / collector / summary 的最小闭环开始，不回退扩张 M2 范围
+
+## M3-001 Backend Stage 5 Planner + Collector Core Loop
+
+- 日期时间: 2026-03-16 15:57:03 CST (+0800)
+- 任务包编号: M3-001
+- session 标识: codex-20260316-m3-001-backend-stage5-collection-loop
+- 目标摘要: 按 `docs/Backend_TDD_Plan.md` Stage 5 在 `services/api` 打通 planner -> collect subtask -> summary -> barrier -> source merge 的后端主链路，实现 `analysis.completed` 后自动进入 collection planning、并发 sub-agent 搜集、统一事件输出、same-source merge、风控阈值终止与 Stage 5 migration；严格停在搜集引擎，不进入 writer / downloads / feedback / Stage 6。
+- 修改文件:
+  - `services/api/app/application/dto/research.py`
+  - `services/api/app/application/ports/research.py`
+  - `services/api/app/application/prompts/__init__.py`
+  - `services/api/app/application/prompts/collection.py`
+  - `services/api/app/application/services/invocation.py`
+  - `services/api/app/application/services/merge.py`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/app/application/services/clarification.py`
+  - `services/api/app/application/services/tasks.py`
+  - `services/api/app/core/config.py`
+  - `services/api/app/infrastructure/db/models.py`
+  - `services/api/app/infrastructure/db/repositories.py`
+  - `services/api/app/infrastructure/db/migrations/versions/20260316_0003_stage5_collection_engine.py`
+  - `services/api/app/infrastructure/research/__init__.py`
+  - `services/api/app/infrastructure/research/local_stub.py`
+  - `services/api/app/infrastructure/streaming/broker.py`
+  - `services/api/app/main.py`
+  - `services/api/tests/unit/application/test_collection_prompts.py`
+  - `services/api/tests/unit/application/test_merge_service.py`
+  - `services/api/tests/unit/application/test_retrying_operations.py`
+  - `services/api/tests/contract/rest/test_collection_events.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+  - `services/api/tests/integration/db/test_migrations.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_collection_prompts.py tests/unit/application/test_merge_service.py tests/unit/application/test_retrying_operations.py`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_collection_events.py tests/integration/collection/test_collection_engine.py tests/integration/db/test_migrations.py`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+  - 调试过程:
+    - Stage 5 contract / integration 首次在受限沙箱内因 PostgreSQL shared memory 限制失败；已按“真实 PostgreSQL 路径”要求提权重跑，不回退到内存实现
+    - Stage 4 `ClarificationOrchestrator` 到 Stage 5 `CollectionOrchestrator` 的回调最初存在签名不匹配，导致 requirement analysis 完成后 collect loop 未启动；已改为显式 `task_id=...` 注入
+    - 并发 sub-agent 落库时，原始 `collected_sources` 自增 id 顺序不稳定，导致 merge 后 `refer` 编号受并发插入顺序污染；已改为按 `tool_call_id` 自然序稳定 merge，并单独写入有序 merged rows，保证去重后的 `ref_1..ref_n` 可预测
+    - `RetryPolicy` 的默认 3 秒等待保持不变；Stage 5 integration fixture 改为测试环境零等待，以满足仓库“CI 不依赖真实计时器”的约束，同时保留重试次数语义
+  - 未运行: `ruff check`、`mypy`；本任务包验收标准聚焦 Backend Stage 5 的 unit / contract / integration 闭环
+- 验收结论: accepted；`analysis.completed` 后已自动进入 `planning_collection`；planner 可输出单/多 `CollectPlan`，单轮并发上限 3、单 revision `collect_agent` 上限 5、单 sub-agent 工具调用上限 10 都有测试保护；collector 能输出 `planner.reasoning.delta`、`planner.tool_call.requested`、`collector.reasoning.delta`、`collector.search.started/completed`、`collector.fetch.started/completed`、`collector.completed`、`summary.completed`、`sources.merged` 等统一事件；3 个 sub-agent 并发时 barrier 会等待全部完成后再返回 master；`1301` 风控在 collect 阶段会转成 `CollectSummary(status=risk_blocked)`，累计达到阈值后终止整个任务；same-source merge 后 `FormattedSource.refer` 重新按去重顺序稳定编号；Stage 5 migration 已覆盖 `task_tool_calls`、`collected_sources`、`agent_runs` 与 `task_revisions.collect_agent_calls_used`，正向和反向迁移测试通过；实现边界停留在 Backend Stage 5，没有进入 writer / downloads / feedback / Stage 6。
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前 planner / collector / summary、`web_search`、`web_fetch` 仍是明确 port 后的 local stub / scripted fake；满足 Stage 5 TDD 和无外网约束，但接真实 provider 时必须继续保持相同异常收口与 RetryPolicy 包裹
+  - v1 仍沿用单进程 broker / runtime 协调；并发 barrier、风险累计与 collect loop 生命周期目前不做跨实例恢复，这与现有架构约束一致
+- 下一步建议:
+  - 进入独立的 Backend Stage 6 任务包，实现 outline / writer / artifact / downloads，不要在 Stage 5 基线上继续混入输出层逻辑
+  - 如果后续接真实搜索或抓取 provider，先补 adapter contract tests，保持 `RiskControlTriggered` 与 `RetryableOperationError` 的统一边界

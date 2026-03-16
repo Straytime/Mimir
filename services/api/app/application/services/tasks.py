@@ -383,6 +383,14 @@ class TaskService:
         if task is None:
             return None
 
+        if TaskStatus(task.status) in {
+            TaskStatus.TERMINATED,
+            TaskStatus.FAILED,
+            TaskStatus.EXPIRED,
+            TaskStatus.PURGED,
+        }:
+            return None
+
         return self.repository.append_event(
             session=session,
             task_id=task.task_id,

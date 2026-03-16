@@ -3,6 +3,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Awaitable
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -65,6 +66,7 @@ class ClarificationOrchestrator:
         requirement_analyzer: RequirementAnalyzer,
         llm_invoker: RetryingLLMInvoker,
         settings,
+        on_requirement_completed: Callable[[str], Awaitable[None]] | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._session_factory = session_factory
@@ -73,6 +75,7 @@ class ClarificationOrchestrator:
         self._requirement_analyzer = requirement_analyzer
         self._llm_invoker = llm_invoker
         self._settings = settings
+        self._on_requirement_completed = on_requirement_completed
         self._clock = clock or (lambda: datetime.now(UTC))
         self._runtimes: dict[str, ClarificationRuntime] = {}
 
@@ -428,6 +431,8 @@ class ClarificationOrchestrator:
                 detail=detail,
             )
             session.commit()
+        if self._on_requirement_completed is not None:
+            await self._on_requirement_completed(task_id)
 
     async def _emit_deltas(
         self,

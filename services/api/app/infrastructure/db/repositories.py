@@ -1,3 +1,5 @@
+import json
+import re
 from datetime import UTC, datetime
 from typing import Final
 
@@ -5,6 +7,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.application.dto.tasks import TaskDetailResponse
+from app.application.dto.research import CollectedSourceItem, FormattedSource
 from app.domain.enums import (
     AvailableAction,
     ClarificationMode,
@@ -14,9 +17,12 @@ from app.domain.enums import (
 )
 from app.domain.schemas import EventEnvelope, RequirementDetail, RevisionSummary, TaskSnapshot
 from app.infrastructure.db.models import (
+    AgentRunRecord,
+    CollectedSourceRecord,
     IPUsageCounterRecord,
     ResearchTaskRecord,
     SystemLockRecord,
+    TaskToolCallRecord,
     TaskEventRecord,
     TaskRevisionRecord,
 )
@@ -182,6 +188,21 @@ class TaskRepository:
         session.flush()
         return revision
 
+    def increment_collect_agent_calls_used(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+        increment_by: int,
+    ) -> TaskRevisionRecord | None:
+        revision = self.get_revision(session=session, revision_id=revision_id)
+        if revision is None:
+            return None
+
+        revision.collect_agent_calls_used += increment_by
+        session.flush()
+        return revision
+
     def list_events_after(
         self,
         *,
@@ -245,6 +266,169 @@ class TaskRepository:
         session.flush()
         return self.build_event_envelope(record=record)
 
+    def append_agent_run(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        revision_id: str,
+        subtask_id: str | None,
+        agent_type: str,
+        prompt_name: str,
+        status: str | None,
+        reasoning_text: str | None,
+        content_text: str | None,
+        finish_reason: str | None,
+        tool_calls_json: dict[str, object] | None,
+        created_at: datetime,
+        updated_at: datetime,
+    ) -> AgentRunRecord:
+        record = AgentRunRecord(
+            task_id=task_id,
+            revision_id=revision_id,
+            subtask_id=subtask_id,
+            agent_type=agent_type,
+            prompt_name=prompt_name,
+            status=status,
+            reasoning_text=reasoning_text,
+            content_text=content_text,
+            finish_reason=finish_reason,
+            tool_calls_json=tool_calls_json,
+            compressed=False,
+            created_at=created_at,
+            updated_at=updated_at,
+        )
+        session.add(record)
+        session.flush()
+        return record
+
+    def append_tool_call(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        revision_id: str,
+        subtask_id: str | None,
+        tool_call_id: str | None,
+        tool_name: str,
+        status: str,
+        error_code: str | None,
+        request_json: dict[str, object],
+        response_json: dict[str, object] | None,
+        created_at: datetime,
+    ) -> TaskToolCallRecord:
+        record = TaskToolCallRecord(
+            task_id=task_id,
+            revision_id=revision_id,
+            subtask_id=subtask_id,
+            tool_call_id=tool_call_id,
+            tool_name=tool_name,
+            status=status,
+            error_code=error_code,
+            request_json=request_json,
+            response_json=response_json,
+            created_at=created_at,
+        )
+        session.add(record)
+        session.flush()
+        return record
+
+    def append_collected_sources(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        revision_id: str,
+        subtask_id: str,
+        tool_call_id: str,
+        items: tuple[CollectedSourceItem, ...],
+        created_at: datetime,
+    ) -> None:
+        for item in items:
+            session.add(
+                CollectedSourceRecord(
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    subtask_id=subtask_id,
+                    tool_call_id=tool_call_id,
+                    title=item.title,
+                    link=item.link,
+                    info=item.info,
+                    source_key=_source_key(item.link),
+                    refer=None,
+                    is_merged=False,
+                    created_at=created_at,
+                )
+            )
+        session.flush()
+
+    def list_collected_sources(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+    ) -> list[CollectedSourceRecord]:
+        records = list(
+            session.scalars(
+                select(CollectedSourceRecord)
+                .where(CollectedSourceRecord.revision_id == revision_id)
+                .where(CollectedSourceRecord.is_merged.is_(False))
+                .order_by(CollectedSourceRecord.id.asc())
+            )
+        )
+        return sorted(
+            records,
+            key=lambda record: (
+                _natural_sort_key(record.tool_call_id),
+                record.id,
+            ),
+        )
+
+    def persist_merged_sources(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+        merged_sources: tuple[FormattedSource, ...],
+    ) -> None:
+        raw_records = self.list_collected_sources(session=session, revision_id=revision_id)
+        session.execute(
+            delete(CollectedSourceRecord)
+            .where(CollectedSourceRecord.revision_id == revision_id)
+            .where(CollectedSourceRecord.is_merged.is_(True))
+        )
+
+        used_record_ids: set[int] = set()
+        for merged_source in merged_sources:
+            matching_record = next(
+                (
+                    record
+                    for record in raw_records
+                    if record.id not in used_record_ids
+                    and record.source_key == _source_key(merged_source.link)
+                ),
+                None,
+            )
+            if matching_record is None:
+                continue
+            session.add(
+                CollectedSourceRecord(
+                    task_id=matching_record.task_id,
+                    revision_id=matching_record.revision_id,
+                    subtask_id=matching_record.subtask_id,
+                    tool_call_id=matching_record.tool_call_id,
+                    title=merged_source.title,
+                    link=merged_source.link,
+                    info=merged_source.info,
+                    source_key=_source_key(merged_source.link),
+                    refer=merged_source.refer,
+                    is_merged=True,
+                    created_at=matching_record.created_at,
+                )
+            )
+            used_record_ids.add(matching_record.id)
+        session.flush()
+
     def build_task_detail_response(
         self,
         *,
@@ -306,6 +490,26 @@ def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     return value.astimezone(UTC)
+
+
+def _source_key(link: str) -> str:
+    return link.strip().lower()
+
+
+def _natural_sort_key(value: str | None) -> tuple[object, ...]:
+    if value is None:
+        return ("",)
+
+    parts = re.split(r"(\d+)", value)
+    normalized: list[object] = []
+    for part in parts:
+        if not part:
+            continue
+        if part.isdigit():
+            normalized.append(int(part))
+        else:
+            normalized.append(part)
+    return tuple(normalized)
 
 
 def _available_actions_for(

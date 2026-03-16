@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.services.collection import CollectionOrchestrator
 from app.application.services.clarification import ClarificationOrchestrator
 from app.application.services.tasks import TaskService
 from app.core.config import Settings
@@ -42,12 +43,14 @@ class TaskLifecycleManager:
         session_factory: sessionmaker[Session],
         task_service: TaskService,
         clarification_orchestrator: ClarificationOrchestrator,
+        collection_orchestrator: CollectionOrchestrator,
         settings: Settings,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._task_service = task_service
         self._clarification_orchestrator = clarification_orchestrator
+        self._collection_orchestrator = collection_orchestrator
         self._settings = settings
         self._clock = clock or (lambda: datetime.now(UTC))
         self._runtimes: dict[str, TaskRuntime] = {}
@@ -174,6 +177,7 @@ class TaskLifecycleManager:
             )
             session.commit()
         await self._clarification_orchestrator.cancel(task_id=task_id)
+        await self._collection_orchestrator.cancel(task_id=task_id)
         return trace_id
 
     async def submit_clarification(
@@ -232,6 +236,7 @@ class TaskLifecycleManager:
             with suppress(asyncio.CancelledError):
                 await runtime.monitor_task
         await self._clarification_orchestrator.shutdown()
+        await self._collection_orchestrator.shutdown()
 
     def _ensure_monitor(self, *, task_id: str, runtime: TaskRuntime) -> None:
         if runtime.monitor_task is None or runtime.monitor_task.done():
@@ -265,6 +270,7 @@ class TaskLifecycleManager:
                         )
                         session.commit()
                         await self._clarification_orchestrator.cancel(task_id=task_id)
+                        await self._collection_orchestrator.cancel(task_id=task_id)
                         if runtime.connection_count == 0:
                             self._runtimes.pop(task_id, None)
                         return
@@ -288,6 +294,7 @@ class TaskLifecycleManager:
                             )
                             session.commit()
                             await self._clarification_orchestrator.cancel(task_id=task_id)
+                            await self._collection_orchestrator.cancel(task_id=task_id)
                             if runtime.connection_count == 0:
                                 self._runtimes.pop(task_id, None)
                             return
@@ -300,6 +307,7 @@ class TaskLifecycleManager:
                         self._task_service.expire_task(session, task_id=task_id)
                         session.commit()
                         await self._clarification_orchestrator.cancel(task_id=task_id)
+                        await self._collection_orchestrator.cancel(task_id=task_id)
                         if runtime.connection_count == 0:
                             self._runtimes.pop(task_id, None)
                         return
@@ -356,6 +364,7 @@ class TaskLifecycleManager:
             )
             session.commit()
         await self._clarification_orchestrator.cancel(task_id=task_id)
+        await self._collection_orchestrator.cancel(task_id=task_id)
 
     async def _finalize_stream(self, *, task_id: str) -> None:
         runtime = self._runtimes.get(task_id)
@@ -387,5 +396,6 @@ class TaskLifecycleManager:
                 )
                 session.commit()
                 await self._clarification_orchestrator.cancel(task_id=task_id)
+                await self._collection_orchestrator.cancel(task_id=task_id)
             else:
                 session.rollback()
