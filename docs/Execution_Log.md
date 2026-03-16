@@ -786,3 +786,32 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Backend Stage 7 任务包，实现 `POST /feedback`、revision rollover、cleanup worker 与 expiry cleanup hardening，不要在当前 Stage 6 基线上继续混入反馈链路
   - 后续接真实 PDF / E2B / artifact provider 时，优先补 adapter contract tests 与故障注入用例，保持当前 access token 与 delivery 契约不漂移
+
+## M4-001R Backend Delivery Event Contract Alignment
+
+- 日期时间: 2026-03-16 18:11:57 CST (+0800)
+- 任务包编号: M4-001R
+- session 标识: codex-20260316-m4-001r-delivery-event-alignment
+- 目标摘要: 修补 Stage 6 交付完成事件顺序，使后端重新对齐 `docs/OpenAPI_v1.md` 中 `task.awaiting_feedback` 为独立 SSE 事件的既有契约；最小澄清正常交付路径顺序为 `phase.changed -> report.completed -> task.awaiting_feedback`，解除 Frontend Stage 6 对 delivery terminal events 的契约阻塞。
+- 修改文件:
+  - `docs/OpenAPI_v1.md`
+  - `services/api/app/application/services/tasks.py`
+  - `services/api/tests/contract/rest/test_delivery_events.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_delivery_prompts.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py tests/integration/db/test_migrations.py -x`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+  - 调试过程:
+    - 先补 red tests，固定正常交付路径必须依次发出 `phase.changed(delivered)`、`report.completed`、`task.awaiting_feedback`，并校验 `task.awaiting_feedback.payload.expires_at / available_actions`
+    - 第一次 red test 直接暴露 `complete_delivery()` 只发 `report.completed`，缺少 `phase.changed` 与 `task.awaiting_feedback`
+    - 修补 `complete_delivery()` 后，integration test 又读到了更早的 `phase.changed(analyzing_requirement)`；已将该测试的读取锚点收敛到 `artifact.ready` 之后，再验证 delivery terminal sequence
+    - `report.completed` 的 delivery payload、downloads / artifacts / access token 合同测试在修补后均保持通过，无需调整下载接口契约
+  - 未运行: `ruff check`、`mypy`；本次任务包是 Stage 6 契约对齐修补，验收聚焦 contract / integration 回归
+- 验收结论: accepted；实现与文档已重新一致，正常交付路径现在固定按 `phase.changed -> report.completed -> task.awaiting_feedback` 输出；`task.awaiting_feedback` 已恢复为独立 SSE 事件，payload 包含 `expires_at` 与 `available_actions`；现有 `report.completed` delivery payload、下载 URL、artifact URL 与 access token 刷新路径没有回归，已解除 Frontend Stage 6 继续实现所需的 terminal delivery event 阻塞。
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次仅做契约对齐修补，没有引入新的 Stage 7 feedback 事件或清理语义；若后续前端联调发现还缺别的 delivery 终态事件，应在独立任务包内继续收敛，而不是让前端绕过 `task.awaiting_feedback`
+- 下一步建议:
+  - 可以继续进入 Frontend Stage 6，前端按 `phase.changed(delivered)`、`report.completed`、`task.awaiting_feedback` 三段式处理下载启用、反馈入口显隐与终态时间线
+  - 后续若进入 Stage 7，再在既有 `task.awaiting_feedback` 终态上扩 revision feedback 链路，不要回退或折叠当前独立事件契约

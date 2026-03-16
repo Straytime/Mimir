@@ -267,9 +267,24 @@ async def test_writer_creates_sandbox_lazily_reuses_it_and_destroys_it_on_delive
 
     async with client:
         create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
-        _, _, report_completed_payload = await read_until_event(
+        await read_until_event(
+            lines,
+            {"artifact.ready"},
+            timeout=2.0,
+        )
+        _, phase_changed_name, phase_changed_payload = await read_until_event(
+            lines,
+            {"phase.changed"},
+            timeout=2.0,
+        )
+        _, report_completed_name, report_completed_payload = await read_until_event(
             lines,
             {"report.completed"},
+            timeout=2.0,
+        )
+        _, awaiting_feedback_name, awaiting_feedback_payload = await read_until_event(
+            lines,
+            {"task.awaiting_feedback"},
             timeout=2.0,
         )
         await _close_stream(stream_context, response)
@@ -299,7 +314,20 @@ async def test_writer_creates_sandbox_lazily_reuses_it_and_destroys_it_on_delive
         AccessTokenResourceType.MARKDOWN_DOWNLOAD.value,
         AccessTokenResourceType.PDF_DOWNLOAD.value,
     }
+    assert phase_changed_name == "phase.changed"
+    assert phase_changed_payload["payload"]["to_phase"] == "delivered"
+    assert phase_changed_payload["payload"]["status"] == "awaiting_feedback"
+    assert report_completed_name == "report.completed"
     assert report_completed_payload["payload"]["delivery"]["artifact_count"] == 2
+    assert awaiting_feedback_name == "task.awaiting_feedback"
+    assert awaiting_feedback_payload["payload"]["available_actions"] == [
+        "submit_feedback",
+        "download_markdown",
+        "download_pdf",
+    ]
+    assert awaiting_feedback_payload["payload"]["expires_at"]
+    assert int(phase_changed_payload["seq"]) < int(report_completed_payload["seq"])
+    assert int(report_completed_payload["seq"]) < int(awaiting_feedback_payload["seq"])
 
     zip_artifact = next(
         artifact

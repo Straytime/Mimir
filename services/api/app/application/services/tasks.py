@@ -560,19 +560,51 @@ class TaskService:
             finished_at=now,
         )
         assert updated_revision is not None
+        delivered_snapshot = self.repository.build_snapshot(task=delivered_task)
         delivery = self._build_delivery_summary(
             session=session,
             task=delivered_task,
             revision=updated_revision,
         )
         assert delivery is not None
-        return self.repository.append_event(
+        self.repository.append_event(
+            session=session,
+            task_id=task.task_id,
+            revision_id=task.active_revision_id,
+            event="phase.changed",
+            phase=target_state.phase.value,
+            payload={
+                "from_phase": current_state.phase.value,
+                "to_phase": target_state.phase.value,
+                "status": target_state.status.value,
+            },
+            created_at=now,
+        )
+        self.repository.append_event(
             session=session,
             task_id=task.task_id,
             revision_id=task.active_revision_id,
             event="report.completed",
             phase=target_state.phase.value,
             payload={"delivery": delivery.model_dump(mode="json")},
+            created_at=now,
+        )
+        return self.repository.append_event(
+            session=session,
+            task_id=task.task_id,
+            revision_id=task.active_revision_id,
+            event="task.awaiting_feedback",
+            phase=target_state.phase.value,
+            payload={
+                "expires_at": (
+                    delivered_snapshot.expires_at.isoformat().replace("+00:00", "Z")
+                    if delivered_snapshot.expires_at is not None
+                    else None
+                ),
+                "available_actions": [
+                    action.value for action in delivered_snapshot.available_actions
+                ],
+            },
             created_at=now,
         )
 
