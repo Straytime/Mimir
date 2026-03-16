@@ -29,8 +29,8 @@ function ResearchPageContent() {
           AI 研究工作台
         </h1>
         <p className="max-w-2xl text-base leading-7 text-slate-700">
-          当前阶段已打通 SSE 生命周期、自然/选单澄清提交，以及最小“需求分析交接”展示；
-          仍保持 v1 不恢复、不重连的约束。
+          当前阶段已接上需求分析、规划与资料搜集透明度时间线；仍保持 v1
+          不恢复、不重连，也不提前进入 report / artifact / delivery。
         </p>
       </div>
 
@@ -50,8 +50,8 @@ function ResearchPageContent() {
               </h2>
               <p className="mt-3 text-sm leading-7 text-slate-700">
                 创建成功后，前端会立即把 `task_id`、`task_token`、`urls` 与初始
-                snapshot 写入 store，并在工作台内接管后续 SSE、heartbeat、澄清提交与
-                需求分析交接展示。
+                snapshot 写入 store，并在工作台内接管后续 SSE、heartbeat、澄清提交、
+                requirement summary 与 timeline transparency 展示。
               </p>
             </article>
           </div>
