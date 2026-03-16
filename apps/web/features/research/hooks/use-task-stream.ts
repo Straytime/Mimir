@@ -23,6 +23,7 @@ export function useTaskStream() {
   const { taskEventSource } = useResearchRuntime();
 
   const streamTeardownRef = useRef<(() => void) | null>(null);
+  const isMountedRef = useRef(true);
   const connectDeadlineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -39,7 +40,6 @@ export function useTaskStream() {
       return;
     }
 
-    let disposed = false;
     let didOpen = false;
 
     const clearConnectDeadlineTimer = () => {
@@ -53,7 +53,7 @@ export function useTaskStream() {
       url: eventsUrl,
       token: taskToken,
       onOpen: () => {
-        if (disposed) {
+        if (!isMountedRef.current) {
           return;
         }
 
@@ -64,14 +64,14 @@ export function useTaskStream() {
         });
       },
       onEvent: (event) => {
-        if (disposed) {
+        if (!isMountedRef.current) {
           return;
         }
 
         applyEvent(event);
       },
       onError: () => {
-        if (disposed) {
+        if (!isMountedRef.current) {
           return;
         }
 
@@ -83,7 +83,7 @@ export function useTaskStream() {
         });
       },
       onClose: () => {
-        if (disposed) {
+        if (!isMountedRef.current) {
           return;
         }
 
@@ -108,7 +108,7 @@ export function useTaskStream() {
       );
 
       connectDeadlineTimerRef.current = setTimeout(() => {
-        if (disposed || didOpen) {
+        if (!isMountedRef.current || didOpen) {
           return;
         }
 
@@ -121,10 +121,6 @@ export function useTaskStream() {
         });
       }, connectTimeoutMs);
     }
-
-    return () => {
-      disposed = true;
-    };
   }, [
     applyEvent,
     connectDeadlineAt,
@@ -153,6 +149,8 @@ export function useTaskStream() {
 
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
+
       if (connectDeadlineTimerRef.current !== null) {
         clearTimeout(connectDeadlineTimerRef.current);
         connectDeadlineTimerRef.current = null;

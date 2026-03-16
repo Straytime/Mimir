@@ -132,6 +132,12 @@ export type ClarificationQuestionSet = {
   questions: ClarificationQuestion[];
 };
 
+export type ClarificationOptionAnswer = {
+  question_id: string;
+  selected_option_id: string;
+  selected_label: string;
+};
+
 export type ArtifactSummary = {
   artifact_id: string;
   filename: string;
@@ -191,6 +197,21 @@ export type HeartbeatRequest = {
   client_time: IsoDateTimeString;
 };
 
+export type NaturalClarificationSubmission = {
+  mode: "natural";
+  answer_text: string;
+};
+
+export type OptionsClarificationSubmission = {
+  mode: "options";
+  submitted_by_timeout: boolean;
+  answers: ClarificationOptionAnswer[];
+};
+
+export type ClarificationSubmission =
+  | NaturalClarificationSubmission
+  | OptionsClarificationSubmission;
+
 export type DisconnectRequest = {
   reason: DisconnectRequestReason;
   task_token?: string;
@@ -198,6 +219,10 @@ export type DisconnectRequest = {
 
 export type AcceptedResponse = {
   accepted: true;
+};
+
+export type ClarificationAcceptedResponse = AcceptedResponse & {
+  snapshot: TaskSnapshot;
 };
 
 export type ApiError = {
@@ -266,6 +291,32 @@ export type ClarificationDeltaPayload = {
   delta: string;
 };
 
+export type ClarificationReadyPayload = {
+  status: Extract<TaskStatus, "awaiting_user_input">;
+  available_actions: AvailableAction[];
+};
+
+export type ClarificationOptionsReadyPayload = ClarificationReadyPayload & {
+  question_set: ClarificationQuestionSet;
+};
+
+export type ClarificationCountdownStartedPayload = {
+  duration_seconds: number;
+  started_at: IsoDateTimeString;
+};
+
+export type ClarificationFallbackToNaturalPayload = {
+  reason: "parse_failed";
+};
+
+export type AnalysisDeltaPayload = {
+  delta: string;
+};
+
+export type AnalysisCompletedPayload = {
+  requirement_detail: RequirementDetail;
+};
+
 export type TaskCreatedEventEnvelope = BaseEventEnvelope<
   "task.created",
   TaskCreatedPayload
@@ -301,6 +352,36 @@ export type ClarificationDeltaEventEnvelope = BaseEventEnvelope<
   ClarificationDeltaPayload
 >;
 
+export type ClarificationNaturalReadyEventEnvelope = BaseEventEnvelope<
+  "clarification.natural.ready",
+  ClarificationReadyPayload
+>;
+
+export type ClarificationOptionsReadyEventEnvelope = BaseEventEnvelope<
+  "clarification.options.ready",
+  ClarificationOptionsReadyPayload
+>;
+
+export type ClarificationCountdownStartedEventEnvelope = BaseEventEnvelope<
+  "clarification.countdown.started",
+  ClarificationCountdownStartedPayload
+>;
+
+export type ClarificationFallbackToNaturalEventEnvelope = BaseEventEnvelope<
+  "clarification.fallback_to_natural",
+  ClarificationFallbackToNaturalPayload
+>;
+
+export type AnalysisDeltaEventEnvelope = BaseEventEnvelope<
+  "analysis.delta",
+  AnalysisDeltaPayload
+>;
+
+export type AnalysisCompletedEventEnvelope = BaseEventEnvelope<
+  "analysis.completed",
+  AnalysisCompletedPayload
+>;
+
 export type EventEnvelope =
   | TaskCreatedEventEnvelope
   | PhaseChangedEventEnvelope
@@ -308,4 +389,10 @@ export type EventEnvelope =
   | TaskFailedEventEnvelope
   | TaskTerminatedEventEnvelope
   | TaskExpiredEventEnvelope
-  | ClarificationDeltaEventEnvelope;
+  | ClarificationDeltaEventEnvelope
+  | ClarificationNaturalReadyEventEnvelope
+  | ClarificationOptionsReadyEventEnvelope
+  | ClarificationCountdownStartedEventEnvelope
+  | ClarificationFallbackToNaturalEventEnvelope
+  | AnalysisDeltaEventEnvelope
+  | AnalysisCompletedEventEnvelope;

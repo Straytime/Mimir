@@ -551,3 +551,46 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Backend Stage 5 任务包，实现 planner / collector / collect summary，并复用当前 Stage 4 产出的 `RequirementDetail`
   - 后续引入真实 LLM provider 时，优先增加 adapter contract tests 与 malformed output integration cases，避免破坏现有 clarification / analysis 闭环
+
+## M2-002 Frontend Stage 4 Clarification UI + Requirement Analysis Handoff
+
+- 日期时间: 2026-03-16 14:55:44 CST (+0800)
+- 任务包编号: M2-002
+- session 标识: codex-20260316-m2-002-frontend-stage4-clarification-ui
+- 目标摘要: 按 `docs/Frontend_TDD_Plan.md` Stage 4 在 `apps/web` 打通自然语言澄清与选单澄清两条前端提交路径，接入 `clarification.*` / `analysis.*` 事件消费、15 秒前端倒计时、移动端澄清布局替换，以及最小 requirement analysis handoff 展示；严格停在 Stage 4，不进入 timeline / planner / collector / report / feedback UI。
+- 修改文件:
+  - `packages/contracts/src/index.ts`
+  - `apps/web/lib/api/task-api-client.ts`
+  - `apps/web/features/research/store/research-session-store.types.ts`
+  - `apps/web/features/research/store/research-session-store.ts`
+  - `apps/web/features/research/reducers/event-reducer.ts`
+  - `apps/web/features/research/hooks/use-task-stream.ts`
+  - `apps/web/features/research/hooks/use-clarification-submit.ts`
+  - `apps/web/features/research/hooks/use-clarification-countdown.ts`
+  - `apps/web/features/research/components/clarification-panels.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/research-input-panel.tsx`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `apps/web/tests/fixtures/builders.ts`
+  - `apps/web/tests/contract/event-envelope-fixture.spec.ts`
+  - `apps/web/tests/unit/reducers/event-reducer.spec.ts`
+  - `apps/web/tests/component/research-input-panel.spec.tsx`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/integration/clarification-flow.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm typecheck`；`cd apps/web && pnpm lint`；`cd apps/web && pnpm test:contract`；`cd apps/web && pnpm test:unit`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:integration`
+  - 调试过程:
+    - 先补了 Stage 4 red tests：`clarification.delta`、`natural/options.ready`、倒计时、timeout auto submit、manual submit、`422 validation_error`、`fallback_to_natural`、移动端 `澄清详情` 分段替换，以及 `analysis.delta` / `analysis.completed`
+    - 实现过程中暴露出 Stage 3 遗留缺陷：`use-task-stream` 在 `onOpen` 后因 effect 重跑把旧闭包标记为 disposed，导致后续 SSE 事件在 UI 上被静默吞掉；本任务内已最小修补为 mount-ref 守卫，确保 Stage 4 事件消费真实可用
+    - 假时钟下的 clarification submit integration tests 改为注入 `taskApiClient` 测试替身，以避免 `MSW + fake timers` 干扰倒计时行为本身；`422 validation_error` 仍保留 MSW 覆盖 REST 契约错误路径
+  - 未运行: `pnpm test:e2e`；本任务包验收标准不要求 e2e 变更
+- 验收结论: accepted；自然语言澄清与选单澄清两条路径都可从 UI 成功提交；`clarification.delta`、`clarification.natural.ready`、`clarification.options.ready`、`clarification.countdown.started`、`clarification.fallback_to_natural`、`analysis.delta`、`analysis.completed` 都已接入前端状态与展示；倒计时的启动、重置、超时自动提交、手动提交取消倒计时，以及 `pendingAction = submitting_clarification` 生命周期都有测试保护；`analysis.completed` 会把 `requirement_detail` 写入 `currentRevision` 并清空 `analysisText`；移动端在 `clarifying` 阶段会把 `报告` 分段替换为 `澄清详情`；实现边界停留在 Frontend Stage 4，没有进入 Stage 5 的 timeline / planner / collector / summary / report / feedback UI。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过，且按任务约束本次未处理配置迁移
+  - 当前倒计时是纯前端 UI timer，按文档只基于 `duration_seconds` 与本地时间维护，没有发明权威 `auto_submit_at`
+- 下一步建议:
+  - 进入独立的 Frontend Stage 5 任务包，实现 requirement summary card、timeline 与研究中透明度事件映射
+  - 后续 Stage 5+ 应继续复用当前 clarification / analysis handoff 底座，不要回退到组件内临时拼装业务状态

@@ -22,7 +22,7 @@ export function ResearchConfigPanel() {
         研究配置
       </legend>
       <p className="text-sm leading-6 text-slate-600">
-        任务创建后配置会锁定。本阶段仅切换澄清模式，不进入后续澄清 UI。
+        任务创建后配置会锁定。当前阶段会按这里选择的模式进入自然语言或选单澄清 UI。
       </p>
 
       <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 px-4 py-3">
@@ -58,7 +58,7 @@ export function ResearchConfigPanel() {
             选单澄清
           </span>
           <span className="block text-sm text-slate-600">
-            由后端生成结构化问题集，后续阶段再接入倒计时与默认选项。
+            由后端生成结构化问题集，前端默认把每题初始化为 `o_auto` 并维护 15 秒倒计时。
           </span>
         </span>
       </label>

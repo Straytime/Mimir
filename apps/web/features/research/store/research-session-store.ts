@@ -4,6 +4,7 @@ import type {
   ClarificationMode,
   CreateTaskResponse,
   EventEnvelope,
+  TaskSnapshot,
   TaskDetailResponse,
 } from "@/lib/contracts";
 
@@ -50,6 +51,22 @@ function clearCreateTaskUiStateInState(
   };
 }
 
+function clearClarificationUiStateInState(
+): Pick<
+  ResearchSessionState["ui"],
+  | "clarificationFieldError"
+  | "clarificationSubmitError"
+  | "clarificationCountdownDeadlineAt"
+  | "clarificationCountdownDurationSeconds"
+> {
+  return {
+    clarificationFieldError: null,
+    clarificationSubmitError: null,
+    clarificationCountdownDeadlineAt: null,
+    clarificationCountdownDurationSeconds: null,
+  };
+}
+
 function bootstrapCreateTaskIntoState(
   state: ResearchSessionState,
   response: CreateTaskResponse,
@@ -80,6 +97,23 @@ function bootstrapCreateTaskIntoState(
     ui: {
       ...state.ui,
       createTask: clearCreateTaskUiStateInState(state),
+    },
+  };
+}
+
+function mergeRemoteSnapshotIntoState(
+  state: ResearchSessionState,
+  snapshot: TaskSnapshot,
+): ResearchSessionState {
+  return {
+    ...state,
+    remote: {
+      ...state.remote,
+      snapshot: mergeTaskSnapshot({
+        currentSnapshot: state.remote.snapshot,
+        incomingSnapshot: snapshot,
+        source: "authoritative",
+      }),
     },
   };
 }
@@ -213,6 +247,93 @@ export function createResearchSessionStore(
           pendingAction,
         },
       }));
+    },
+    setClarificationDraft: (draft) => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          clarificationDraft: draft,
+          clarificationFieldError: null,
+          clarificationSubmitError: null,
+        },
+      }));
+    },
+    setClarificationFieldError: (message) => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          clarificationFieldError: message,
+        },
+      }));
+    },
+    setClarificationSubmitError: (message) => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          clarificationSubmitError: message,
+        },
+      }));
+    },
+    clearClarificationUiState: () => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          ...clearClarificationUiStateInState(),
+        },
+      }));
+    },
+    setOptionAnswer: ({ questionId, optionId }) => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          optionAnswers: {
+            ...state.ui.optionAnswers,
+            [questionId]: optionId,
+          },
+          clarificationCountdownDeadlineAt:
+            state.ui.clarificationCountdownDurationSeconds === null
+              ? state.ui.clarificationCountdownDeadlineAt
+              : new Date(
+                  Date.now() +
+                    state.ui.clarificationCountdownDurationSeconds * 1000,
+                ).toISOString(),
+          clarificationFieldError: null,
+          clarificationSubmitError: null,
+        },
+      }));
+    },
+    setClarificationCountdown: ({ durationSeconds, startedAt }) => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          clarificationCountdownDeadlineAt: new Date(
+            (startedAt === null || startedAt === undefined
+              ? Date.now()
+              : new Date(startedAt).getTime()) +
+              durationSeconds * 1000,
+          ).toISOString(),
+          clarificationCountdownDurationSeconds: durationSeconds,
+        },
+      }));
+    },
+    clearClarificationCountdown: () => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          clarificationCountdownDeadlineAt: null,
+          clarificationCountdownDurationSeconds: null,
+        },
+      }));
+    },
+    mergeRemoteSnapshot: (snapshot: TaskSnapshot) => {
+      set((state) => mergeRemoteSnapshotIntoState(state, snapshot));
     },
     setSessionContext: (sessionPatch) => {
       set((state) => ({

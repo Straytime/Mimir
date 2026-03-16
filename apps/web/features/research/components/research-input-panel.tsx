@@ -95,7 +95,7 @@ export function ResearchInputPanel() {
 
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-slate-600">
-          创建成功后会切入 Stage 3 生命周期：SSE、heartbeat、disconnect 与终态处理。
+          创建成功后会切入工作台生命周期，并继续进入澄清提交与最小需求分析交接展示。
         </p>
         <button
           className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
