@@ -500,3 +500,54 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 后续任务包可以正式进入 M2，但应继续保持单线程串行开发与 `docs/Execution_Log.md` 追加维护
   - M2 应从 clarification / requirement analysis 的最小闭环开始，不回退扩张 M1 范围
+
+## M2-001 Backend Stage 4 Clarification + Requirement Analysis
+
+- 日期时间: 2026-03-16 14:09:16 CST (+0800)
+- 任务包编号: M2-001
+- session 标识: codex-20260316-m2-001-backend-stage4-clarification
+- 目标摘要: 按 `docs/Backend_TDD_Plan.md` Stage 4 在 `services/api` 打通从任务进入 `clarifying`、SSE 输出 natural / options 两条澄清路径、`POST /api/v1/tasks/{task_id}/clarification` 提交、到 `RequirementDetail` 生成与落库的最小后端闭环；严格停在需求阶段，不进入 planner / collector / writer / feedback / downloads 或任何 Stage 5 内容。
+- 修改文件:
+  - `services/api/app/api/v1/tasks.py`
+  - `services/api/app/application/dto/clarification.py`
+  - `services/api/app/application/parsers/__init__.py`
+  - `services/api/app/application/parsers/clarification.py`
+  - `services/api/app/application/parsers/requirement.py`
+  - `services/api/app/application/ports/llm.py`
+  - `services/api/app/application/prompts/__init__.py`
+  - `services/api/app/application/prompts/clarification.py`
+  - `services/api/app/application/prompts/requirement.py`
+  - `services/api/app/application/services/clarification.py`
+  - `services/api/app/application/services/llm.py`
+  - `services/api/app/application/services/tasks.py`
+  - `services/api/app/core/config.py`
+  - `services/api/app/infrastructure/db/repositories.py`
+  - `services/api/app/infrastructure/llm/__init__.py`
+  - `services/api/app/infrastructure/llm/local_stub.py`
+  - `services/api/app/infrastructure/streaming/broker.py`
+  - `services/api/app/main.py`
+  - `services/api/tests/contract/rest/test_clarification.py`
+  - `services/api/tests/contract/rest/test_task_events.py`
+  - `services/api/tests/contract/rest/test_tasks.py`
+  - `services/api/tests/integration/lifecycle/test_clarification_lifecycle.py`
+  - `services/api/tests/integration/lifecycle/test_task_stream_lifecycle.py`
+  - `services/api/tests/unit/application/test_clarification_parsers.py`
+  - `services/api/tests/unit/application/test_prompts.py`
+  - `services/api/tests/unit/application/test_retrying_llm.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_clarification_parsers.py tests/unit/application/test_prompts.py tests/unit/application/test_retrying_llm.py`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_clarification.py tests/integration/lifecycle/test_clarification_lifecycle.py`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+  - 调试过程:
+    - red tests 首先暴露缺失的 Stage 4 模块边界：clarification parser、prompt builder、LLM port / retry wrapper、clarification orchestrator 与 `POST /clarification`
+    - contract / integration 测试在受限沙箱里无法启动真实 PostgreSQL，报错为 shared memory segment 创建受限；已按真实 PostgreSQL 路径提权重跑，不回退到内存实现
+    - Stage 3 的 SSE tests 原先写死了 `task.created` 后的 seq，Stage 4 插入 `clarification.delta` / ready 事件后变得过脆；已改为断言单调递增与目标事件到达，不再把中间 clarification 事件当成回归
+    - Stage 4 评估后未新增 migration：现有 `research_tasks`、`task_revisions`、`task_events` 足以承载 v1 clarification runtime 与 `RequirementDetail` 落库，避免超范围发明 schema
+  - 未运行: `ruff check`、`mypy`；本任务包验收标准聚焦 Backend Stage 4 的 unit / contract / integration 闭环
+- 验收结论: accepted；natural 与 options 两条路径都可在首个 SSE 连接后启动 clarification orchestrator，输出 `clarification.delta`、`clarification.natural.ready` / `clarification.options.ready`、`clarification.countdown.started`，options 解析失败会发送 `clarification.fallback_to_natural` 并回退到 natural；`POST /api/v1/tasks/{task_id}/clarification` 已支持 natural / options 两种 body，并在成功后推进到 `running + analyzing_requirement`；需求分析通过 `RetryPolicy` 包裹的 adapter 调用输出 `analysis.delta` 与 `analysis.completed`，最终 `RequirementDetail` 落库到 revision 且对外响应隐藏 `raw_llm_output`；60 秒后端兜底超时会按默认 `o_auto` 自动推进分析；实现边界停留在 Backend Stage 4，没有进入 planner / collector / summary / writer / feedback / downloads 或 Stage 5。
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前 Stage 4 的 LLM provider 仍是挂在清晰端口后的 deterministic local stub / scripted fake，满足 TDD 与无外网约束；接真实 provider 时必须继续保留相同端口和 RetryPolicy 行为
+  - clarification 的待答问题集与 60 秒兜底 deadline 仍保留在单进程 runtime，而非数据库；这符合 v1 “不支持刷新恢复 / 单进程 broker” 约束，但如果后续要支持多实例或恢复语义，需要在独立任务包里重新设计
+- 下一步建议:
+  - 进入独立的 Backend Stage 5 任务包，实现 planner / collector / collect summary，并复用当前 Stage 4 产出的 `RequirementDetail`
+  - 后续引入真实 LLM provider 时，优先增加 adapter contract tests 与 malformed output integration cases，避免破坏现有 clarification / analysis 闭环

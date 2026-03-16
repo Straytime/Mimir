@@ -19,8 +19,8 @@ from app.application.policies.ip_quota import IPQuotaPolicy
 from app.application.ports.security import AccessTokenSigner, TaskTokenSigner
 from app.core.config import Settings
 from app.core.ids import generate_id, hash_secret
-from app.domain.enums import RevisionStatus, TaskPhase, TaskStatus
-from app.domain.schemas import EventEnvelope, RevisionSummary, TaskSnapshot
+from app.domain.enums import ClarificationMode, RevisionStatus, TaskPhase, TaskStatus
+from app.domain.schemas import EventEnvelope, RequirementDetail, RevisionSummary, TaskSnapshot
 from app.domain.state_machine import TaskLifecycleState, TaskStateMachine
 from app.domain.tokens import TaskTokenPayload
 from app.infrastructure.db.models import ResearchTaskRecord, TaskRevisionRecord
@@ -257,6 +257,142 @@ class TaskService:
             after_seq=after_seq,
         )
 
+    def enter_awaiting_user_input(
+        self,
+        session: Session,
+        *,
+        task_id: str,
+    ) -> TaskSnapshot:
+        task = self.repository.get_task(session=session, task_id=task_id)
+        if task is None:
+            raise ApiError(
+                status_code=404,
+                code="task_not_found",
+                message="任务不存在或已清理。",
+            )
+
+        current_state = TaskLifecycleState(
+            status=TaskStatus(task.status),
+            phase=TaskPhase(task.phase),
+        )
+        if current_state == TaskLifecycleState(
+            status=TaskStatus.AWAITING_USER_INPUT,
+            phase=TaskPhase.CLARIFYING,
+        ):
+            return self.repository.build_snapshot(task=task)
+
+        target_state = TaskStateMachine.transition(
+            current=current_state,
+            target=TaskLifecycleState(
+                status=TaskStatus.AWAITING_USER_INPUT,
+                phase=TaskPhase.CLARIFYING,
+            ),
+        )
+        now = self.clock()
+        updated_task = self.repository.update_task_state(
+            session=session,
+            task_id=task_id,
+            status=target_state.status.value,
+            phase=target_state.phase.value,
+            updated_at=now,
+        )
+        assert updated_task is not None
+        return self.repository.build_snapshot(task=updated_task)
+
+    def begin_requirement_analysis(
+        self,
+        session: Session,
+        *,
+        task_id: str,
+        task: ResearchTaskRecord,
+    ) -> TaskSnapshot:
+        current_state = TaskLifecycleState(
+            status=TaskStatus(task.status),
+            phase=TaskPhase(task.phase),
+        )
+        if current_state != TaskLifecycleState(
+            status=TaskStatus.AWAITING_USER_INPUT,
+            phase=TaskPhase.CLARIFYING,
+        ):
+            raise ApiError(
+                status_code=409,
+                code="invalid_task_state",
+                message="当前任务状态不允许提交澄清。",
+                trace_id=task.trace_id,
+            )
+
+        target_state = TaskStateMachine.transition(
+            current=current_state,
+            target=TaskLifecycleState(
+                status=TaskStatus.RUNNING,
+                phase=TaskPhase.ANALYZING_REQUIREMENT,
+            ),
+        )
+        now = self.clock()
+        updated_task = self.repository.update_task_state(
+            session=session,
+            task_id=task_id,
+            status=target_state.status.value,
+            phase=target_state.phase.value,
+            updated_at=now,
+        )
+        assert updated_task is not None
+        self.repository.append_event(
+            session=session,
+            task_id=task.task_id,
+            revision_id=task.active_revision_id,
+            event="phase.changed",
+            phase=target_state.phase.value,
+            payload={
+                "from_phase": current_state.phase.value,
+                "to_phase": target_state.phase.value,
+                "status": target_state.status.value,
+            },
+            created_at=now,
+        )
+        return self.repository.build_snapshot(task=updated_task)
+
+    def update_clarification_mode(
+        self,
+        session: Session,
+        *,
+        task_id: str,
+        clarification_mode: ClarificationMode,
+    ) -> None:
+        task = self.repository.update_task_clarification_mode(
+            session=session,
+            task_id=task_id,
+            clarification_mode=clarification_mode.value,
+        )
+        if task is None:
+            raise ApiError(
+                status_code=404,
+                code="task_not_found",
+                message="任务不存在或已清理。",
+            )
+
+    def append_task_event(
+        self,
+        session: Session,
+        *,
+        task_id: str,
+        event: str,
+        payload: dict[str, object],
+    ) -> EventEnvelope | None:
+        task = self.repository.get_task(session=session, task_id=task_id)
+        if task is None:
+            return None
+
+        return self.repository.append_event(
+            session=session,
+            task_id=task.task_id,
+            revision_id=task.active_revision_id,
+            event=event,
+            phase=task.phase,
+            payload=payload,
+            created_at=self.clock(),
+        )
+
     def accept_client_heartbeat(
         self,
         session: Session,
@@ -303,6 +439,56 @@ class TaskService:
             event="heartbeat",
             phase=task.phase,
             payload={"server_time": now.isoformat().replace("+00:00", "Z")},
+            created_at=now,
+        )
+
+    def complete_requirement_analysis(
+        self,
+        session: Session,
+        *,
+        task_id: str,
+        detail: RequirementDetail,
+    ) -> EventEnvelope:
+        task_with_revision = self.repository.get_task_with_revision(
+            session=session,
+            task_id=task_id,
+        )
+        if task_with_revision is None:
+            raise ApiError(
+                status_code=404,
+                code="task_not_found",
+                message="任务不存在或已清理。",
+            )
+
+        task, revision = task_with_revision
+        now = self.clock()
+        self.repository.update_task_state(
+            session=session,
+            task_id=task_id,
+            status=task.status,
+            phase=task.phase,
+            updated_at=now,
+        )
+        self.repository.update_revision_requirement_detail(
+            session=session,
+            revision_id=revision.revision_id,
+            requirement_detail_json=detail.model_dump(
+                mode="json",
+                exclude_none=True,
+            ),
+        )
+        return self.repository.append_event(
+            session=session,
+            task_id=task.task_id,
+            revision_id=task.active_revision_id,
+            event="analysis.completed",
+            phase=task.phase,
+            payload={
+                "requirement_detail": detail.model_dump(
+                    mode="json",
+                    exclude={"raw_llm_output"},
+                )
+            },
             created_at=now,
         )
 

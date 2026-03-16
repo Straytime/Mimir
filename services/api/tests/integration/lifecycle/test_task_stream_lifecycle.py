@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.enums import TaskPhase
 from app.infrastructure.db.models import ResearchTaskRecord, SystemLockRecord, TaskEventRecord
-from tests.contract.rest.test_task_events import assert_stream_closed, read_sse_event
+from tests.contract.rest.test_task_events import assert_stream_closed, read_sse_event, read_until_event
 from tests.contract.rest.test_tasks import build_create_task_payload
 from tests.fixtures.runtime import FakeClock
 
@@ -36,8 +36,12 @@ async def test_no_events_are_persisted_until_first_sse_connection(
         f"/api/v1/tasks/{create_body['task_id']}/events",
         headers={"Authorization": f"Bearer {create_body['task_token']}"},
     ) as response:
-        await read_sse_event(response.aiter_lines())
-        assert count_task_events(db_session, create_body["task_id"]) == 1
+        lines = response.aiter_lines()
+        _, event_name, _ = await read_sse_event(lines)
+        assert event_name == "task.created"
+
+        await asyncio.sleep(0.1)
+        assert count_task_events(db_session, create_body["task_id"]) >= 1
 
 
 @pytest.mark.asyncio
@@ -91,14 +95,17 @@ async def test_phase_changed_then_failed_keeps_terminal_event_last(
             task_id=create_body["task_id"],
             target_phase=TaskPhase.ANALYZING_REQUIREMENT,
         )
-        _, phase_event_name, phase_payload = await read_sse_event(lines)
+        phase_event_id, phase_event_name, phase_payload = await read_until_event(
+            lines,
+            {"phase.changed"},
+        )
 
         await app_instance.state.task_lifecycle.fail_task(
             task_id=create_body["task_id"],
             error_code="upstream_service_error",
             message="上游服务异常",
         )
-        event_id, failed_event_name, failed_payload = await read_sse_event(lines)
+        event_id, failed_event_name, failed_payload = await read_until_event(lines, {"task.failed"})
         await assert_stream_closed(lines)
 
     assert phase_event_name == "phase.changed"
@@ -107,7 +114,7 @@ async def test_phase_changed_then_failed_keeps_terminal_event_last(
         "to_phase": "analyzing_requirement",
         "status": "running",
     }
-    assert event_id == "3"
+    assert int(event_id or "0") > int(phase_event_id or "0")
     assert failed_event_name == "task.failed"
     assert failed_payload["payload"] == {
         "error": {"code": "upstream_service_error", "message": "上游服务异常"}
@@ -132,9 +139,7 @@ async def test_heartbeat_timeout_terminates_connected_task(
 
         fake_clock.advance(seconds=46)
         await asyncio.sleep(0.1)
-        _, event_name, payload = await read_sse_event(lines)
-        if event_name != "task.terminated":
-            _, event_name, payload = await read_sse_event(lines)
+        _, event_name, payload = await read_until_event(lines, {"task.terminated"})
         await assert_stream_closed(lines)
 
     assert event_name == "task.terminated"

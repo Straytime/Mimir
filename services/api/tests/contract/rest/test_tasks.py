@@ -4,10 +4,13 @@ import pytest
 from httpx import AsyncClient
 
 
-def build_create_task_payload() -> dict[str, object]:
+def build_create_task_payload(
+    *,
+    clarification_mode: str = "natural",
+) -> dict[str, object]:
     return {
         "initial_query": "帮我研究中国 AI 搜索产品竞争格局和未来机会",
-        "config": {"clarification_mode": "natural"},
+        "config": {"clarification_mode": clarification_mode},
         "client": {"timezone": "Asia/Shanghai", "locale": "zh-CN"},
     }
 

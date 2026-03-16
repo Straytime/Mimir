@@ -7,9 +7,10 @@ from datetime import UTC, datetime, timedelta
 from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.services.clarification import ClarificationOrchestrator
 from app.application.services.tasks import TaskService
 from app.core.config import Settings
-from app.domain.enums import TaskStatus
+from app.domain.enums import TaskPhase, TaskStatus
 from app.domain.schemas import EventEnvelope
 
 
@@ -40,11 +41,13 @@ class TaskLifecycleManager:
         *,
         session_factory: sessionmaker[Session],
         task_service: TaskService,
+        clarification_orchestrator: ClarificationOrchestrator,
         settings: Settings,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._task_service = task_service
+        self._clarification_orchestrator = clarification_orchestrator
         self._settings = settings
         self._clock = clock or (lambda: datetime.now(UTC))
         self._runtimes: dict[str, TaskRuntime] = {}
@@ -90,6 +93,11 @@ class TaskLifecycleManager:
                     task_id=task_id,
                 )
                 session.commit()
+                if (
+                    TaskStatus(task.status) is TaskStatus.RUNNING
+                    and task.phase == "clarifying"
+                ):
+                    await self._clarification_orchestrator.ensure_started(task_id=task_id)
 
             runtime.connection_count += 1
             self._ensure_monitor(task_id=task_id, runtime=runtime)
@@ -165,7 +173,21 @@ class TaskLifecycleManager:
                 token=token,
             )
             session.commit()
+        await self._clarification_orchestrator.cancel(task_id=task_id)
         return trace_id
+
+    async def submit_clarification(
+        self,
+        *,
+        task_id: str,
+        token: str,
+        payload,
+    ) -> tuple[str, object]:
+        return await self._clarification_orchestrator.submit(
+            task_id=task_id,
+            token=token,
+            payload=payload,
+        )
 
     async def transition_phase(
         self,
@@ -209,6 +231,7 @@ class TaskLifecycleManager:
                 continue
             with suppress(asyncio.CancelledError):
                 await runtime.monitor_task
+        await self._clarification_orchestrator.shutdown()
 
     def _ensure_monitor(self, *, task_id: str, runtime: TaskRuntime) -> None:
         if runtime.monitor_task is None or runtime.monitor_task.done():
@@ -241,6 +264,7 @@ class TaskLifecycleManager:
                             reason="sse_connect_timeout",
                         )
                         session.commit()
+                        await self._clarification_orchestrator.cancel(task_id=task_id)
                         if runtime.connection_count == 0:
                             self._runtimes.pop(task_id, None)
                         return
@@ -263,6 +287,7 @@ class TaskLifecycleManager:
                                 reason="heartbeat_timeout",
                             )
                             session.commit()
+                            await self._clarification_orchestrator.cancel(task_id=task_id)
                             if runtime.connection_count == 0:
                                 self._runtimes.pop(task_id, None)
                             return
@@ -274,11 +299,23 @@ class TaskLifecycleManager:
                     ):
                         self._task_service.expire_task(session, task_id=task_id)
                         session.commit()
+                        await self._clarification_orchestrator.cancel(task_id=task_id)
                         if runtime.connection_count == 0:
                             self._runtimes.pop(task_id, None)
                         return
 
-                    if status in {
+                await self._clarification_orchestrator.maybe_auto_submit(task_id=task_id)
+
+                with self._session_factory() as session:
+                    current_task = self._task_service.repository.get_task(
+                        session=session,
+                        task_id=task_id,
+                    )
+                    if current_task is None:
+                        self._runtimes.pop(task_id, None)
+                        return
+                    current_status = TaskStatus(current_task.status)
+                    if current_status in {
                         TaskStatus.TERMINATED,
                         TaskStatus.FAILED,
                         TaskStatus.EXPIRED,
@@ -318,6 +355,7 @@ class TaskLifecycleManager:
                 reason="client_disconnected",
             )
             session.commit()
+        await self._clarification_orchestrator.cancel(task_id=task_id)
 
     async def _finalize_stream(self, *, task_id: str) -> None:
         runtime = self._runtimes.get(task_id)
@@ -348,5 +386,6 @@ class TaskLifecycleManager:
                     reason="client_disconnected",
                 )
                 session.commit()
+                await self._clarification_orchestrator.cancel(task_id=task_id)
             else:
                 session.rollback()

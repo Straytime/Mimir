@@ -6,6 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session, get_task_lifecycle, get_task_service
 from app.api.errors import ApiError
+from app.application.dto.clarification import (
+    ClarificationAcceptedResponse,
+    ClarificationSubmission,
+)
 from app.application.dto.tasks import (
     AcceptedResponse,
     CreateTaskRequest,
@@ -138,6 +142,34 @@ async def post_heartbeat(
     )
     request.state.trace_id = trace_id
     return Response(status_code=204)
+
+
+@router.post(
+    "/tasks/{task_id}/clarification",
+    response_model=ClarificationAcceptedResponse,
+    status_code=202,
+)
+async def post_clarification(
+    task_id: str,
+    payload: ClarificationSubmission,
+    request: Request,
+    lifecycle: TaskLifecycleManager = Depends(get_task_lifecycle),
+) -> ClarificationAcceptedResponse:
+    token = _extract_bearer_token(request.headers.get("Authorization"))
+    if token is None:
+        raise ApiError(
+            status_code=401,
+            code="task_token_invalid",
+            message="任务 token 无效或不匹配。",
+        )
+
+    trace_id, response = await lifecycle.submit_clarification(
+        task_id=task_id,
+        token=token,
+        payload=payload,
+    )
+    request.state.trace_id = trace_id
+    return response
 
 
 @router.post("/tasks/{task_id}/disconnect", response_model=AcceptedResponse, status_code=202)
