@@ -105,6 +105,9 @@ export type ResearchSessionState = {
     createTask: CreateTaskUiState;
     optionAnswers: Record<string, string>;
     clarificationCountdownDeadlineAt: string | null;
+    clarificationCountdownDurationSeconds: number | null;
+    clarificationFieldError: string | null;
+    clarificationSubmitError: string | null;
     pendingAction: PendingAction;
     revisionTransition: RevisionTransitionState;
     reportAutoScrollEnabled: boolean;
@@ -124,6 +127,20 @@ export type ResearchSessionStoreActions = {
   setCreateTaskUiState: (patch: Partial<CreateTaskUiState>) => void;
   clearCreateTaskUiState: () => void;
   setPendingAction: (pendingAction: PendingAction) => void;
+  setClarificationDraft: (draft: string) => void;
+  setClarificationFieldError: (message: string | null) => void;
+  setClarificationSubmitError: (message: string | null) => void;
+  clearClarificationUiState: () => void;
+  setOptionAnswer: (args: {
+    questionId: string;
+    optionId: string;
+  }) => void;
+  setClarificationCountdown: (args: {
+    durationSeconds: number;
+    startedAt?: string | null;
+  }) => void;
+  clearClarificationCountdown: () => void;
+  mergeRemoteSnapshot: (snapshot: TaskSnapshot) => void;
   setSessionContext: (
     sessionPatch: Partial<ResearchSessionState["session"]>,
   ) => void;
@@ -188,6 +205,9 @@ export function createResearchSessionState(): ResearchSessionState {
       },
       optionAnswers: {},
       clarificationCountdownDeadlineAt: null,
+      clarificationCountdownDurationSeconds: null,
+      clarificationFieldError: null,
+      clarificationSubmitError: null,
       pendingAction: null,
       revisionTransition: {
         status: "idle",

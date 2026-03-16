@@ -1,5 +1,12 @@
 import type {
+  AnalysisCompletedEventEnvelope,
+  AnalysisDeltaEventEnvelope,
   ClarificationDeltaEventEnvelope,
+  ClarificationFallbackToNaturalEventEnvelope,
+  ClarificationNaturalReadyEventEnvelope,
+  ClarificationOptionsReadyEventEnvelope,
+  ClarificationCountdownStartedEventEnvelope,
+  ClarificationAcceptedResponse,
   CreateTaskResponse,
   ErrorResponse,
   EventEnvelope,
@@ -103,6 +110,29 @@ export function makeValidationErrorResponse(
         ],
       },
       request_id: "req_stage0",
+      trace_id: null,
+    },
+    ...overrides,
+  };
+}
+
+export function makeClarificationValidationErrorResponse(
+  overrides: Partial<ErrorResponse> = {},
+): ErrorResponse {
+  return {
+    error: {
+      code: "validation_error",
+      message: "请求参数不合法。",
+      detail: {
+        errors: [
+          {
+            loc: ["body", "answer_text"],
+            msg: "回答内容不能为空。",
+            type: "value_error",
+          },
+        ],
+      },
+      request_id: "req_clarification_validation",
       trace_id: null,
     },
     ...overrides,
@@ -273,6 +303,152 @@ export function makeClarificationDeltaEvent(
   };
 }
 
+export function makeClarificationNaturalReadyEvent(
+  overrides: Partial<ClarificationNaturalReadyEventEnvelope> = {},
+): ClarificationNaturalReadyEventEnvelope {
+  return {
+    seq: 8,
+    event: "clarification.natural.ready",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "clarifying",
+    timestamp: "2026-03-13T14:30:35+08:00",
+    payload: {
+      status: "awaiting_user_input",
+      available_actions: ["submit_clarification"],
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeClarificationOptionsReadyEvent(
+  overrides: Partial<ClarificationOptionsReadyEventEnvelope> = {},
+): ClarificationOptionsReadyEventEnvelope {
+  return {
+    seq: 9,
+    event: "clarification.options.ready",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "clarifying",
+    timestamp: "2026-03-13T14:30:35+08:00",
+    payload: {
+      status: "awaiting_user_input",
+      available_actions: ["submit_clarification"],
+      question_set: {
+        questions: [
+          {
+            question_id: "q_1",
+            question: "这次研究更偏向哪个方向？",
+            options: [
+              { option_id: "o_1", label: "行业现状与趋势" },
+              { option_id: "o_2", label: "主要参与者与格局" },
+              { option_id: "o_auto", label: "自动" },
+            ],
+          },
+        ],
+      },
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeClarificationCountdownStartedEvent(
+  overrides: Partial<ClarificationCountdownStartedEventEnvelope> = {},
+): ClarificationCountdownStartedEventEnvelope {
+  return {
+    seq: 10,
+    event: "clarification.countdown.started",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "clarifying",
+    timestamp: "2026-03-13T14:30:36+08:00",
+    payload: {
+      duration_seconds: 15,
+      started_at: "2026-03-13T14:30:36+08:00",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeClarificationFallbackToNaturalEvent(
+  overrides: Partial<ClarificationFallbackToNaturalEventEnvelope> = {},
+): ClarificationFallbackToNaturalEventEnvelope {
+  return {
+    seq: 11,
+    event: "clarification.fallback_to_natural",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "clarifying",
+    timestamp: "2026-03-13T14:30:40+08:00",
+    payload: {
+      reason: "parse_failed",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeAnalysisDeltaEvent(
+  overrides: Partial<AnalysisDeltaEventEnvelope> = {},
+): AnalysisDeltaEventEnvelope {
+  return {
+    seq: 12,
+    event: "analysis.delta",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "analyzing_requirement",
+    timestamp: "2026-03-13T14:31:15+08:00",
+    payload: {
+      delta: '{\n  "研究目标": "分析中国 AI 搜索产品竞争格局"',
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeAnalysisCompletedEvent(
+  overrides: Partial<AnalysisCompletedEventEnvelope> = {},
+): AnalysisCompletedEventEnvelope {
+  return {
+    seq: 13,
+    event: "analysis.completed",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "analyzing_requirement",
+    timestamp: "2026-03-13T14:31:20+08:00",
+    payload: {
+      requirement_detail: {
+        research_goal: "分析中国 AI 搜索产品竞争格局",
+        domain: "互联网 / AI 产品",
+        requirement_details: "聚焦中国市场，偏商业分析，覆盖近两年变化。",
+        output_format: "business_report",
+        freshness_requirement: "high",
+        language: "zh-CN",
+      },
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeClarificationAcceptedResponse(
+  overrides: Partial<ClarificationAcceptedResponse> = {},
+): ClarificationAcceptedResponse {
+  return {
+    accepted: true,
+    snapshot: makeTaskSnapshot({
+      status: "running",
+      phase: "analyzing_requirement",
+      updated_at: "2026-03-13T14:31:10+08:00",
+      available_actions: [],
+    }),
+    ...overrides,
+  };
+}
+
 export function makeResearchSessionState(
   overrides: ResearchSessionStateOverrides = {},
 ): ResearchSessionState {
@@ -319,6 +495,12 @@ export function makeEventEnvelopeFixtureSet(): EventEnvelope[] {
     makeTaskFailedEvent(),
     makeTaskTerminatedEvent(),
     makeTaskExpiredEvent(),
+    makeClarificationNaturalReadyEvent(),
+    makeClarificationOptionsReadyEvent(),
+    makeClarificationCountdownStartedEvent(),
+    makeClarificationFallbackToNaturalEvent(),
+    makeAnalysisDeltaEvent(),
+    makeAnalysisCompletedEvent(),
     makeClarificationDeltaEvent(),
   ];
 }

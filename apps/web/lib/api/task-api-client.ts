@@ -1,5 +1,7 @@
 import type {
   AcceptedResponse,
+  ClarificationAcceptedResponse,
+  ClarificationSubmission,
   CreateTaskRequest,
   CreateTaskResponse,
   DisconnectRequestReason,
@@ -21,6 +23,11 @@ export type RequestMetadata = {
 
 export type TaskApiClient = {
   createTask: (request: CreateTaskRequest) => Promise<CreateTaskResult>;
+  submitClarification: (args: {
+    taskId: string;
+    token: string;
+    request: ClarificationSubmission;
+  }) => Promise<ClarificationAcceptedResponse & RequestMetadata>;
   sendHeartbeat: (args: {
     url: string;
     token: string;
@@ -180,6 +187,30 @@ export function createFetchTaskApiClient(
 
       return {
         response: successResponse,
+        requestId: parsedResponse.requestId,
+        traceId: parsedResponse.traceId,
+      };
+    },
+
+    async submitClarification({ taskId, token, request }) {
+      const response = await fetchImpl(
+        resolveRequestUrl(baseUrl, `/api/v1/tasks/${taskId}/clarification`),
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(request),
+        },
+      );
+      const parsedResponse = ensureOkResponse(response, await parseResponse(response));
+      const successResponse =
+        parsedResponse.responseJson as ClarificationAcceptedResponse;
+
+      return {
+        ...successResponse,
         requestId: parsedResponse.requestId,
         traceId: parsedResponse.traceId,
       };

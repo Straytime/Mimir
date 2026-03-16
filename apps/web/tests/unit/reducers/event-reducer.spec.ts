@@ -3,7 +3,13 @@ import { describe, expect, test } from "vitest";
 import { reduceResearchSessionEvent } from "@/features/research/reducers/event-reducer";
 import { makeResearchSessionState } from "@/tests/fixtures/builders";
 import {
+  makeAnalysisCompletedEvent,
+  makeAnalysisDeltaEvent,
   makeClarificationDeltaEvent,
+  makeClarificationFallbackToNaturalEvent,
+  makeClarificationNaturalReadyEvent,
+  makeClarificationOptionsReadyEvent,
+  makeClarificationCountdownStartedEvent,
   makeHeartbeatEvent,
   makePhaseChangedEvent,
   makeTaskCreatedEvent,
@@ -64,6 +70,125 @@ describe("reduceResearchSessionEvent", () => {
     expect(result.stream.lastEventSeq).toBe(event.seq);
   });
 
+  test("handles clarification.delta by appending streamed clarification text", () => {
+    const state = makeResearchSessionState({
+      stream: {
+        clarificationText: "已有前文。",
+      },
+    });
+    const event = makeClarificationDeltaEvent({
+      payload: {
+        delta: "继续追问。",
+      },
+    });
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.stream.clarificationText).toBe("已有前文。继续追问。");
+    expect(result.stream.lastEventSeq).toBe(event.seq);
+  });
+
+  test("handles clarification.natural.ready by enabling clarification submission in natural mode", () => {
+    const state = makeResearchSessionState();
+    const event = makeClarificationNaturalReadyEvent();
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.remote.snapshot).toMatchObject({
+      status: "awaiting_user_input",
+      available_actions: ["submit_clarification"],
+    });
+    expect(result.stream.questionSet).toBeNull();
+    expect(result.ui.optionAnswers).toEqual({});
+  });
+
+  test("handles clarification.options.ready by storing question_set and defaulting every answer to o_auto", () => {
+    const state = makeResearchSessionState();
+    const event = makeClarificationOptionsReadyEvent();
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.stream.questionSet).toEqual(event.payload.question_set);
+    expect(result.ui.optionAnswers).toEqual({
+      q_1: "o_auto",
+    });
+    expect(result.remote.snapshot).toMatchObject({
+      status: "awaiting_user_input",
+      available_actions: ["submit_clarification"],
+    });
+  });
+
+  test("handles clarification.countdown.started by storing a client-side deadline", () => {
+    const state = makeResearchSessionState();
+    const event = makeClarificationCountdownStartedEvent();
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.ui.clarificationCountdownDeadlineAt).toBe(
+      "2026-03-13T06:30:51.000Z",
+    );
+  });
+
+  test("handles clarification.fallback_to_natural by clearing options state", () => {
+    const state = makeResearchSessionState({
+      stream: {
+        questionSet: makeClarificationOptionsReadyEvent().payload.question_set,
+      },
+      ui: {
+        optionAnswers: {
+          q_1: "o_1",
+        },
+        clarificationCountdownDeadlineAt: "2026-03-13T14:30:51.000Z",
+      },
+    });
+    const event = makeClarificationFallbackToNaturalEvent();
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.stream.questionSet).toBeNull();
+    expect(result.ui.optionAnswers).toEqual({});
+    expect(result.ui.clarificationCountdownDeadlineAt).toBeNull();
+  });
+
+  test("handles analysis.delta by appending analysis text", () => {
+    const state = makeResearchSessionState({
+      stream: {
+        analysisText: "已有分析：",
+      },
+    });
+    const event = makeAnalysisDeltaEvent({
+      payload: {
+        delta: "继续补全需求结构。",
+      },
+    });
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.stream.analysisText).toBe("已有分析：继续补全需求结构。");
+    expect(result.stream.lastEventSeq).toBe(event.seq);
+  });
+
+  test("handles analysis.completed by storing requirement_detail and clearing analysis text", () => {
+    const state = makeResearchSessionState({
+      stream: {
+        analysisText: "正在分析中",
+      },
+      remote: {
+        currentRevision: null,
+      },
+    });
+    const event = makeAnalysisCompletedEvent();
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.stream.analysisText).toBe("");
+    expect(result.remote.currentRevision).toMatchObject({
+      revision_id: "rev_stage0",
+      revision_number: 1,
+      requirement_detail: event.payload.requirement_detail,
+    });
+  });
+
   test.each([
     {
       name: "task.failed",
@@ -112,7 +237,10 @@ describe("reduceResearchSessionEvent", () => {
 
   test("keeps unsupported events as a no-op for the current stage", () => {
     const state = makeResearchSessionState();
-    const event = makeClarificationDeltaEvent();
+    const event = {
+      ...makeClarificationDeltaEvent(),
+      event: "writer.delta",
+    } as unknown as Parameters<typeof reduceResearchSessionEvent>[1];
 
     const result = reduceResearchSessionEvent(state, event);
 

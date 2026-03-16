@@ -18,6 +18,7 @@ test("ResearchInputPanel enforces the 500-character limit and submits on Enter",
     runtime: {
       taskApiClient: {
         createTask,
+        submitClarification: vi.fn(),
         sendHeartbeat: vi.fn(),
         disconnectTask: vi.fn(),
       },
