@@ -594,3 +594,26 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Frontend Stage 5 任务包，实现 requirement summary card、timeline 与研究中透明度事件映射
   - 后续 Stage 5+ 应继续复用当前 clarification / analysis handoff 底座，不要回退到组件内临时拼装业务状态
+
+## M2-003 Clarification Phase Integration + Final Closure
+
+- 日期时间: 2026-03-16 15:09:34 CST (+0800)
+- 任务包编号: M2-003
+- session 标识: codex-20260316-m2-003-final-closure
+- 目标摘要: 核对 `M2-001` 与 `M2-002` 是否已进入同一工作基线，确认当前 `main` 同时包含 Backend Stage 4、Frontend Stage 4 以及此前已闭环的 M1 生命周期能力，检查 shared contracts、后端事件契约与前端消费代码没有真实字段漂移，并完成完整的 M2 基线验证，作为 M3 前唯一开发基线。
+- 修改文件:
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `git status --short`；`git branch --all --verbose --no-abbrev`；`git log --oneline --decorate --graph --all --max-count=100`；`sed -n '520,760p' docs/Execution_Log.md`；`sed -n '1,360p' packages/contracts/src/index.ts`；`sed -n '1,320p' apps/web/lib/api/task-api-client.ts`；`sed -n '1,320p' apps/web/features/research/hooks/use-task-stream.ts`；`sed -n '1,320p' apps/web/features/research/hooks/use-clarification-submit.ts`；`sed -n '1,320p' apps/web/features/research/hooks/use-clarification-countdown.ts`；`sed -n '1,360p' apps/web/features/research/store/research-session-store.types.ts`；`sed -n '1,360p' apps/web/features/research/store/research-session-store.ts`；`sed -n '1,360p' apps/web/features/research/reducers/event-reducer.ts`；`sed -n '1,360p' services/api/app/application/services/clarification.py`；`sed -n '1,420p' services/api/app/application/services/tasks.py`；`sed -n '1,420p' services/api/app/infrastructure/streaming/broker.py`；`sed -n '1,360p' services/api/app/api/v1/tasks.py`；`pnpm --version`；`uv --version`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`；`cd apps/web && pnpm typecheck`；`cd apps/web && pnpm lint`；`cd apps/web && pnpm test:contract`；`cd apps/web && pnpm test:unit`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:integration`；`cd apps/web && pnpm test:e2e`
+  - 调试过程:
+    - 后端 Stage 4 baseline 在当前环境无需额外提权，`62 passed`
+    - 前端 e2e 仍需最小范围提权以启动本地 web server；提权后通过，代码本身无回归
+  - 未运行: 无
+- 验收结论: accepted；`main` 已通过 PR #11 与 PR #12 吸收 `M2-001` 和 `M2-002`，Backend Stage 4 与 Frontend Stage 4 基线验证通过，且统一基线上已满足 natural / options 两条澄清路径、15 秒前端倒计时、60 秒后端兜底、`analysis.completed -> RequirementDetail` 与既有 M1 生命周期能力共存，M2 可明确宣布完成。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过，且按任务约束本次未处理
+  - `pnpm test:e2e` 在受限环境下需要最小范围提权以启动本地 web server；这属于执行环境限制，不是 M2 回归
+- 下一步建议:
+  - 后续任务包可以正式进入 M3，但应继续保持单线程串行开发与 `docs/Execution_Log.md` 追加维护
+  - M3 应从 planner / collector / summary 的最小闭环开始，不回退扩张 M2 范围
