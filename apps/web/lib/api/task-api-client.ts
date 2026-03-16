@@ -7,6 +7,7 @@ import type {
   DisconnectRequestReason,
   ErrorResponse,
   HeartbeatRequest,
+  TaskDetailResponse,
   ValidationErrorItem,
 } from "@/lib/contracts";
 
@@ -21,8 +22,14 @@ export type RequestMetadata = {
   traceId: string | null;
 };
 
+export type TaskDetailResult = TaskDetailResponse & RequestMetadata;
+
 export type TaskApiClient = {
   createTask: (request: CreateTaskRequest) => Promise<CreateTaskResult>;
+  getTaskDetail: (args: {
+    taskId: string;
+    token: string;
+  }) => Promise<TaskDetailResult>;
   submitClarification: (args: {
     taskId: string;
     token: string;
@@ -187,6 +194,27 @@ export function createFetchTaskApiClient(
 
       return {
         response: successResponse,
+        requestId: parsedResponse.requestId,
+        traceId: parsedResponse.traceId,
+      };
+    },
+
+    async getTaskDetail({ taskId, token }) {
+      const response = await fetchImpl(
+        resolveRequestUrl(baseUrl, `/api/v1/tasks/${taskId}`),
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        },
+      );
+      const parsedResponse = ensureOkResponse(response, await parseResponse(response));
+      const successResponse = parsedResponse.responseJson as TaskDetailResponse;
+
+      return {
+        ...successResponse,
         requestId: parsedResponse.requestId,
         traceId: parsedResponse.traceId,
       };

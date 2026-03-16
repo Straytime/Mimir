@@ -5,6 +5,7 @@ import type {
   CreateTaskResponse,
   DeliverySummary,
   EventEnvelope,
+  ResearchOutline,
   RevisionSummary,
   TaskDetailResponse,
   TaskSnapshot,
@@ -41,19 +42,6 @@ export type CreateTaskUiState = {
   errorCode: CreateTaskErrorCode;
   nextAvailableAt: string | null;
   retryAfterLabel: string | null;
-};
-
-export type ResearchOutlineSection = {
-  section_id: string;
-  title: string;
-  description: string;
-  order: number;
-};
-
-export type ResearchOutline = {
-  title: string;
-  sections: ResearchOutlineSection[];
-  entities: string[];
 };
 
 export type TimelineItem = {
@@ -144,6 +132,12 @@ export type ResearchSessionStoreActions = {
   setSessionContext: (
     sessionPatch: Partial<ResearchSessionState["session"]>,
   ) => void;
+  setReportAutoScrollEnabled: (enabled: boolean) => void;
+  setRefreshingDelivery: (refreshingDelivery: boolean) => void;
+  setDownloadState: (args: {
+    format: "markdown" | "pdf";
+    state: ResearchSessionState["deliveryUi"]["markdownDownloadState"];
+  }) => void;
   setTerminalState: (args: {
     terminalReason: Exclude<TerminalReason, null>;
     timestamp: string;

@@ -5,17 +5,22 @@ import { makeResearchSessionState } from "@/tests/fixtures/builders";
 import {
   makeAnalysisCompletedEvent,
   makeAnalysisDeltaEvent,
+  makeArtifactReadyEvent,
   makeClarificationDeltaEvent,
   makeClarificationFallbackToNaturalEvent,
   makeClarificationNaturalReadyEvent,
   makeClarificationOptionsReadyEvent,
   makeClarificationCountdownStartedEvent,
   makeHeartbeatEvent,
+  makeOutlineCompletedEvent,
   makePhaseChangedEvent,
+  makeReportCompletedEvent,
+  makeTaskAwaitingFeedbackEvent,
   makeTaskCreatedEvent,
   makeTaskExpiredEvent,
   makeTaskFailedEvent,
   makeTaskTerminatedEvent,
+  makeWriterDeltaEvent,
 } from "@/tests/fixtures/builders";
 
 describe("reduceResearchSessionEvent", () => {
@@ -189,6 +194,100 @@ describe("reduceResearchSessionEvent", () => {
     });
   });
 
+  test("handles outline.completed by storing the outline and marking it as ready", () => {
+    const state = makeResearchSessionState({
+      stream: {
+        outline: null,
+        outlineReady: false,
+      },
+    });
+    const event = makeOutlineCompletedEvent();
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.stream.outline).toEqual(event.payload.outline);
+    expect(result.stream.outlineReady).toBe(true);
+    expect(result.stream.lastEventSeq).toBe(event.seq);
+  });
+
+  test("handles writer.delta by appending report markdown", () => {
+    const state = makeResearchSessionState({
+      stream: {
+        reportMarkdown: "# 已有标题\n",
+      },
+    });
+    const event = makeWriterDeltaEvent({
+      payload: {
+        delta: "\n追加正文段落。",
+      },
+    });
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.stream.reportMarkdown).toBe("# 已有标题\n\n追加正文段落。");
+    expect(result.stream.lastEventSeq).toBe(event.seq);
+  });
+
+  test("handles artifact.ready by appending artifacts into the stream", () => {
+    const existingArtifact = makeArtifactReadyEvent().payload.artifact;
+    const state = makeResearchSessionState({
+      stream: {
+        artifacts: [existingArtifact],
+      },
+    });
+    const event = makeArtifactReadyEvent({
+      payload: {
+        artifact: {
+          ...existingArtifact,
+          artifact_id: "art_stage0_new",
+          filename: "chart_growth.png",
+        },
+      },
+    });
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.stream.artifacts).toEqual([
+      existingArtifact,
+      event.payload.artifact,
+    ]);
+    expect(result.stream.lastEventSeq).toBe(event.seq);
+  });
+
+  test("handles report.completed by updating the current delivery payload", () => {
+    const state = makeResearchSessionState({
+      remote: {
+        delivery: null,
+      },
+    });
+    const event = makeReportCompletedEvent();
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.remote.delivery).toEqual(event.payload.delivery);
+    expect(result.stream.lastEventSeq).toBe(event.seq);
+  });
+
+  test("handles task.awaiting_feedback by updating expires_at and delivery actions", () => {
+    const state = makeResearchSessionState({
+      remote: {
+        snapshot: makeResearchSessionState().remote.snapshot,
+      },
+    });
+    const event = makeTaskAwaitingFeedbackEvent();
+
+    const result = reduceResearchSessionEvent(state, event);
+
+    expect(result.remote.snapshot).toMatchObject({
+      status: "awaiting_feedback",
+      phase: "delivered",
+      expires_at: event.payload.expires_at,
+      available_actions: event.payload.available_actions,
+      updated_at: event.timestamp,
+    });
+    expect(result.stream.lastEventSeq).toBe(event.seq);
+  });
+
   test.each([
     {
       name: "task.failed",
@@ -239,7 +338,7 @@ describe("reduceResearchSessionEvent", () => {
     const state = makeResearchSessionState();
     const event = {
       ...makeClarificationDeltaEvent(),
-      event: "writer.delta",
+      event: "feedback.submitted",
     } as unknown as Parameters<typeof reduceResearchSessionEvent>[1];
 
     const result = reduceResearchSessionEvent(state, event);

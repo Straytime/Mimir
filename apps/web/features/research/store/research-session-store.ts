@@ -344,6 +344,40 @@ export function createResearchSessionStore(
         },
       }));
     },
+    setReportAutoScrollEnabled: (enabled) => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          reportAutoScrollEnabled: enabled,
+        },
+      }));
+    },
+    setRefreshingDelivery: (refreshingDelivery) => {
+      set((state) => ({
+        ...state,
+        deliveryUi: {
+          ...state.deliveryUi,
+          refreshingDelivery,
+        },
+      }));
+    },
+    setDownloadState: ({ format, state: nextState }) => {
+      set((currentState) => ({
+        ...currentState,
+        deliveryUi: {
+          ...currentState.deliveryUi,
+          markdownDownloadState:
+            format === "markdown"
+              ? nextState
+              : currentState.deliveryUi.markdownDownloadState,
+          pdfDownloadState:
+            format === "pdf"
+              ? nextState
+              : currentState.deliveryUi.pdfDownloadState,
+        },
+      }));
+    },
     setTerminalState: (args) => {
       set((state) => setTerminalStateInState(state, args));
     },

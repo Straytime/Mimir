@@ -6,7 +6,10 @@ import {
   ClarificationActionPanel,
   ClarificationDetailPanel,
 } from "./clarification-panels";
+import { ArtifactGallery } from "./artifact-gallery";
+import { DeliveryActions } from "./delivery-actions";
 import { RequirementSummaryCard } from "./requirement-summary-card";
+import { ReportCanvas } from "./report-canvas";
 import { useClarificationCountdown } from "../hooks/use-clarification-countdown";
 import { useDisconnectGuard } from "../hooks/use-disconnect-guard";
 import { useHeartbeatLoop } from "../hooks/use-heartbeat-loop";
@@ -63,12 +66,26 @@ function getStageStatusCopy(phase: string) {
         description:
           "本阶段只显示通用状态文案，不渲染 raw outline delta。",
       };
+    case "writing_report":
+      return {
+        eyebrow: "Report Writing",
+        title: "正在撰写报告与生成配图",
+        description:
+          "正文会由 writer.delta 持续追加，writer.reasoning 只进入时间线，配图生成状态也会同步展示。",
+      };
+    case "delivered":
+      return {
+        eyebrow: "Delivery",
+        title: "报告已完成并进入交付阶段",
+        description:
+          "下载区会先被 report.completed 更新；真正开放下载与反馈仍要等 task.awaiting_feedback。",
+      };
     default:
       return {
         eyebrow: "Workspace",
         title: "工作台已接管当前任务",
         description:
-          "当前任务仍在进行中；本任务包只覆盖研究透明度，不提前进入报告与交付界面。",
+          "当前任务仍在进行中；工作台会继续按阶段切换澄清、透明度、报告与交付视图。",
       };
   }
 }
@@ -146,7 +163,7 @@ export function ResearchWorkspaceShell() {
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {snapshot.phase === "clarifying"
               ? "当前处于澄清阶段，提交成功后将立即切到需求分析。"
-              : "当前工作台已接入需求分析、规划与搜集透明度；report / artifact 仍留到下一阶段。"}
+              : "当前工作台已接入透明度时间线、报告正文、图片制品与交付下载区；feedback 仍保留到下一阶段。"}
           </p>
         </div>
         <button
@@ -197,7 +214,7 @@ export function ResearchWorkspaceShell() {
       <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/85 p-5">
         <p className="text-sm font-semibold text-slate-950">v1 约束</p>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          不支持断线恢复、自动重连或跨刷新保留 task_token；时间线只展示 Stage 5 透明度事件。
+          不支持断线恢复、自动重连或跨刷新保留 task_token；报告与交付只覆盖 Stage 6，不提前进入 feedback revision。
         </p>
       </div>
     </article>
@@ -230,6 +247,9 @@ export function ResearchWorkspaceShell() {
             </div>
 
             <RequirementSummaryCard requirementDetail={requirementDetail} />
+            <ReportCanvas />
+            <ArtifactGallery />
+            <DeliveryActions />
           </div>
         )}
       </div>

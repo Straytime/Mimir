@@ -815,3 +815,63 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 可以继续进入 Frontend Stage 6，前端按 `phase.changed(delivered)`、`report.completed`、`task.awaiting_feedback` 三段式处理下载启用、反馈入口显隐与终态时间线
   - 后续若进入 Stage 7，再在既有 `task.awaiting_feedback` 终态上扩 revision feedback 链路，不要回退或折叠当前独立事件契约
+
+## M4-002 Frontend Stage 6 Report Canvas + Artifact + Delivery
+
+- 日期时间: 2026-03-16 18:51:20 CST (+0800)
+- 任务包编号: M4-002
+- session 标识: codex-20260316-m4-002-frontend-stage6-delivery
+- 目标摘要: 按 `docs/Frontend_TDD_Plan.md` Stage 6 在 `apps/web` 打通 `outline.completed -> writer.* -> artifact.ready -> report.completed -> task.awaiting_feedback` 的最小前端闭环，实现 report canvas、artifact gallery、delivery actions、`GET /tasks/{id}` 刷新链路、安全 markdown 渲染与 report auto-scroll；严格停在 Stage 6，不进入 feedback revision / Stage 7。
+- 修改文件:
+  - `packages/contracts/src/index.ts`
+  - `apps/web/package.json`
+  - `pnpm-lock.yaml`
+  - `apps/web/lib/api/task-api-client.ts`
+  - `apps/web/features/research/store/research-session-store.types.ts`
+  - `apps/web/features/research/store/research-session-store.ts`
+  - `apps/web/features/research/reducers/event-reducer.ts`
+  - `apps/web/features/research/mappers/timeline-mapper.ts`
+  - `apps/web/features/research/hooks/use-delivery-refresh.ts`
+  - `apps/web/features/research/hooks/use-report-auto-scroll.ts`
+  - `apps/web/features/research/utils/task-artifact.ts`
+  - `apps/web/features/research/components/report-canvas.tsx`
+  - `apps/web/features/research/components/task-artifact-image.tsx`
+  - `apps/web/features/research/components/artifact-gallery.tsx`
+  - `apps/web/features/research/components/delivery-actions.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/timeline-panel.tsx`
+  - `apps/web/tests/fixtures/browser.ts`
+  - `apps/web/tests/fixtures/builders.ts`
+  - `apps/web/tests/contract/event-envelope-fixture.spec.ts`
+  - `apps/web/tests/unit/reducers/event-reducer.spec.ts`
+  - `apps/web/tests/unit/mappers/timeline-mapper.spec.ts`
+  - `apps/web/tests/component/report-canvas.spec.tsx`
+  - `apps/web/tests/component/artifact-gallery.spec.tsx`
+  - `apps/web/tests/component/delivery-actions.spec.tsx`
+  - `apps/web/tests/component/research-input-panel.spec.tsx`
+  - `apps/web/tests/integration/report-delivery-flow.spec.tsx`
+  - `apps/web/tests/integration/clarification-flow.spec.tsx`
+  - `apps/web/tests/integration/research-transparency.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 已运行: `cd apps/web && pnpm lint`
+  - 已运行: `cd apps/web && pnpm test:contract`
+  - 已运行: `cd apps/web && pnpm test:unit`
+  - 已运行: `cd apps/web && pnpm test:component`
+  - 已运行: `cd apps/web && pnpm test:integration`
+  - 调试过程:
+    - Stage 6 red tests 先暴露 contracts / builders 缺失的 `outline.completed`、`writer.*`、`artifact.ready`、`report.completed`、`task.awaiting_feedback` 事件面；已补到共享 contracts 与前端 fixtures
+    - 第一版 artifact / markdown 组件在 React 19 下用 selector 直接返回 `[]` 默认值，触发 `getSnapshot should be cached` 和最大更新深度错误；已改为稳定引用并把 `use-delivery-refresh` 收敛成稳定 callback
+    - 第一版 artifact 刷新链路在 `401 access_token_invalid` 后同时执行“手动 fresh URL 重试”和“store 刷新后 effect 重跑”，导致 fresh artifact URL 被请求两次；已改成仅依赖 `GET /tasks/{id}` 后的自然重渲染，钉住单次 refresh 行为
+    - `react-markdown` 默认把独立图片包在 `<p>` 里，和自定义 block image renderer 组合后出现 `<p><div /></p>` 警告；已补自定义段落 renderer，在“只有图片”的段落场景下改为 block 容器
+  - 未运行: `pnpm test:e2e`；本任务包验收标准聚焦 Frontend Stage 6 的 contract / unit / component / integration 闭环
+- 验收结论: accepted；`outline.completed` 已在 report canvas 中显示章节概览，`writer.delta` 会安全追加正文，`writer.reasoning.delta` 只进 timeline，`writer.tool_call.requested/completed` 会切换“正在生成配图”时间线状态；artifact gallery 与 markdown 图片都只接受当前任务 artifact URL，不渲染原始 HTML；图片或下载链接命中 `401 access_token_invalid` 时会通过 `GET /api/v1/tasks/{task_id}` 刷新 `delivery` 并按 `artifact_id` / download URL 重试一次；`refreshingDelivery` 会统一禁用下载按钮与图片重试按钮；`report.completed` 会更新 delivery 展示，下载按钮仍等待后续 `task.awaiting_feedback` 才启用；实现边界停留在 Stage 6，没有进入 feedback 提交、revision 切换、overlay 或移动端 hardening。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint legacy `.eslintrc` deprecation warning，但 lint 已通过；本任务包未扩张到 ESLint 配置迁移
+  - 当前 markdown 渲染只引入 Stage 6 所需的安全子集与 artifact image override，没有提前实现 Stage 7 feedback / revision 的 report 切换策略
+- 下一步建议:
+  - 进入独立的 Frontend Stage 7 任务包，实现 feedback composer、revision 切换、旧报告 overlay 与移动端 hardening，不要在当前 Stage 6 基线上继续混入反馈提交逻辑
+  - 后续如需接真实下载服务或对象存储，优先补 `access_token_invalid -> refresh delivery -> single retry` 的跨浏览器回归测试，保持当前契约不漂移

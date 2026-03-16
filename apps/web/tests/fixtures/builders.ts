@@ -1,6 +1,8 @@
 import type {
   AnalysisCompletedEventEnvelope,
   AnalysisDeltaEventEnvelope,
+  ArtifactReadyEventEnvelope,
+  ArtifactSummary,
   ClarificationDeltaEventEnvelope,
   ClarificationFallbackToNaturalEventEnvelope,
   ClarificationNaturalReadyEventEnvelope,
@@ -14,22 +16,31 @@ import type {
   CollectorSearchCompletedEventEnvelope,
   CollectorSearchStartedEventEnvelope,
   CreateTaskResponse,
+  DeliverySummary,
   ErrorResponse,
   EventEnvelope,
   HeartbeatEventEnvelope,
+  OutlineCompletedEventEnvelope,
   OutlineDeltaEventEnvelope,
   PlannerReasoningDeltaEventEnvelope,
   PlannerToolCallRequestedEventEnvelope,
   PhaseChangedEventEnvelope,
+  ResearchOutline,
   RevisionSummary,
+  ReportCompletedEventEnvelope,
   SourcesMergedEventEnvelope,
   SummaryCompletedEventEnvelope,
+  TaskAwaitingFeedbackEventEnvelope,
   TaskCreatedEventEnvelope,
   TaskDetailResponse,
   TaskExpiredEventEnvelope,
   TaskFailedEventEnvelope,
   TaskSnapshot,
   TaskTerminatedEventEnvelope,
+  WriterDeltaEventEnvelope,
+  WriterReasoningDeltaEventEnvelope,
+  WriterToolCallCompletedEventEnvelope,
+  WriterToolCallRequestedEventEnvelope,
 } from "@/lib/contracts";
 import { createResearchSessionState } from "@/features/research/store/research-session-store.types";
 import type {
@@ -73,6 +84,59 @@ export function makeRevisionSummary(
     started_at: "2026-03-13T14:30:00+08:00",
     finished_at: null,
     requirement_detail: null,
+    ...overrides,
+  };
+}
+
+export function makeArtifactSummary(
+  overrides: Partial<ArtifactSummary> = {},
+): ArtifactSummary {
+  return {
+    artifact_id: "art_stage0_chart",
+    filename: "chart_market_share.png",
+    mime_type: "image/png",
+    url: "/api/v1/tasks/tsk_stage0/artifacts/art_stage0_chart?access_token=stage0",
+    access_expires_at: "2026-03-13T15:00:00+08:00",
+    ...overrides,
+  };
+}
+
+export function makeDeliverySummary(
+  overrides: Partial<DeliverySummary> = {},
+): DeliverySummary {
+  return {
+    revision_id: "rev_stage0",
+    revision_number: 1,
+    word_count: 6800,
+    artifact_count: 1,
+    markdown_zip_url:
+      "/api/v1/tasks/tsk_stage0/downloads/markdown.zip?access_token=zip_stage0",
+    pdf_url: "/api/v1/tasks/tsk_stage0/downloads/report.pdf?access_token=pdf_stage0",
+    artifacts: [makeArtifactSummary()],
+    ...overrides,
+  };
+}
+
+export function makeResearchOutline(
+  overrides: Partial<ResearchOutline> = {},
+): ResearchOutline {
+  return {
+    title: "中国 AI 搜索产品竞争格局研究",
+    sections: [
+      {
+        section_id: "section_1",
+        title: "研究背景与问题定义",
+        description: "界定研究范围，说明市场背景、问题边界与分析框架。",
+        order: 1,
+      },
+      {
+        section_id: "section_2",
+        title: "主要参与者与竞争格局",
+        description: "梳理主要产品、定位差异与公开竞争态势。",
+        order: 2,
+      },
+    ],
+    entities: ["AI 搜索产品", "中国市场", "厂商竞争格局"],
     ...overrides,
   };
 }
@@ -678,6 +742,151 @@ export function makeOutlineDeltaEvent(
   };
 }
 
+export function makeOutlineCompletedEvent(
+  overrides: Partial<OutlineCompletedEventEnvelope> = {},
+): OutlineCompletedEventEnvelope {
+  return {
+    seq: 25,
+    event: "outline.completed",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "preparing_outline",
+    timestamp: "2026-03-13T14:33:20+08:00",
+    payload: {
+      outline: makeResearchOutline(overrides.payload?.outline),
+    },
+    ...overrides,
+  };
+}
+
+export function makeWriterReasoningDeltaEvent(
+  overrides: Partial<WriterReasoningDeltaEventEnvelope> = {},
+): WriterReasoningDeltaEventEnvelope {
+  return {
+    seq: 26,
+    event: "writer.reasoning.delta",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "writing_report",
+    timestamp: "2026-03-13T14:34:00+08:00",
+    payload: {
+      delta: "先完成市场格局章节，再决定是否需要图表支撑。",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeWriterToolCallRequestedEvent(
+  overrides: Partial<WriterToolCallRequestedEventEnvelope> = {},
+): WriterToolCallRequestedEventEnvelope {
+  return {
+    seq: 27,
+    event: "writer.tool_call.requested",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "writing_report",
+    timestamp: "2026-03-13T14:34:05+08:00",
+    payload: {
+      tool_call_id: "call_writer_figure",
+      tool_name: "python_interpreter",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeWriterToolCallCompletedEvent(
+  overrides: Partial<WriterToolCallCompletedEventEnvelope> = {},
+): WriterToolCallCompletedEventEnvelope {
+  return {
+    seq: 28,
+    event: "writer.tool_call.completed",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "writing_report",
+    timestamp: "2026-03-13T14:34:25+08:00",
+    payload: {
+      tool_call_id: "call_writer_figure",
+      tool_name: "python_interpreter",
+      success: true,
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeWriterDeltaEvent(
+  overrides: Partial<WriterDeltaEventEnvelope> = {},
+): WriterDeltaEventEnvelope {
+  return {
+    seq: 29,
+    event: "writer.delta",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "writing_report",
+    timestamp: "2026-03-13T14:34:30+08:00",
+    payload: {
+      delta: "## 一、研究背景与问题定义\n",
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
+export function makeArtifactReadyEvent(
+  overrides: Partial<ArtifactReadyEventEnvelope> = {},
+): ArtifactReadyEventEnvelope {
+  return {
+    seq: 30,
+    event: "artifact.ready",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "writing_report",
+    timestamp: "2026-03-13T14:34:45+08:00",
+    payload: {
+      artifact: makeArtifactSummary(overrides.payload?.artifact),
+    },
+    ...overrides,
+  };
+}
+
+export function makeReportCompletedEvent(
+  overrides: Partial<ReportCompletedEventEnvelope> = {},
+): ReportCompletedEventEnvelope {
+  return {
+    seq: 31,
+    event: "report.completed",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "delivered",
+    timestamp: "2026-03-13T14:35:00+08:00",
+    payload: {
+      delivery: makeDeliverySummary(overrides.payload?.delivery),
+    },
+    ...overrides,
+  };
+}
+
+export function makeTaskAwaitingFeedbackEvent(
+  overrides: Partial<TaskAwaitingFeedbackEventEnvelope> = {},
+): TaskAwaitingFeedbackEventEnvelope {
+  return {
+    seq: 32,
+    event: "task.awaiting_feedback",
+    task_id: "tsk_stage0",
+    revision_id: "rev_stage0",
+    phase: "delivered",
+    timestamp: "2026-03-13T14:35:05+08:00",
+    payload: {
+      expires_at: "2026-03-13T15:25:00+08:00",
+      available_actions: ["submit_feedback", "download_markdown", "download_pdf"],
+      ...overrides.payload,
+    },
+    ...overrides,
+  };
+}
+
 export function makeClarificationAcceptedResponse(
   overrides: Partial<ClarificationAcceptedResponse> = {},
 ): ClarificationAcceptedResponse {
@@ -770,6 +979,14 @@ export function makeEventEnvelopeFixtureSet(): EventEnvelope[] {
     makeSummaryCompletedEvent(),
     makeSourcesMergedEvent(),
     makeOutlineDeltaEvent(),
+    makeOutlineCompletedEvent(),
+    makeWriterReasoningDeltaEvent(),
+    makeWriterToolCallRequestedEvent(),
+    makeWriterToolCallCompletedEvent(),
+    makeWriterDeltaEvent(),
+    makeArtifactReadyEvent(),
+    makeReportCompletedEvent(),
+    makeTaskAwaitingFeedbackEvent(),
     makeClarificationDeltaEvent(),
   ];
 }

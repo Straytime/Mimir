@@ -377,6 +377,146 @@ export function reduceTimelineStream(
           }),
         ),
       };
+    case "outline.completed":
+      return {
+        ...stream,
+        outlineReady: true,
+        timeline: upsertTimelineItem(
+          stream.timeline,
+          `outline:${event.revision_id ?? "unknown"}`,
+          () => ({
+            id: `outline:${event.revision_id ?? "unknown"}`,
+            revisionId: event.revision_id,
+            kind: "system",
+            label: "章节概览已生成",
+            status: "completed",
+            occurredAt: event.timestamp,
+          }),
+          (item) => ({
+            ...item,
+            label: "章节概览已生成",
+            status: "completed",
+            occurredAt: event.timestamp,
+          }),
+        ),
+      };
+    case "writer.reasoning.delta":
+      return {
+        ...stream,
+        timeline: upsertTimelineItem(
+          stream.timeline,
+          `writer:${event.revision_id ?? "unknown"}`,
+          () => ({
+            id: `writer:${event.revision_id ?? "unknown"}`,
+            revisionId: event.revision_id,
+            kind: "reasoning",
+            label: "正在撰写报告",
+            detail: event.payload.delta,
+            status: "running",
+            occurredAt: event.timestamp,
+          }),
+          (item) => ({
+            ...item,
+            label: "正在撰写报告",
+            detail: appendDetail(item.detail, event.payload.delta),
+            status: "running",
+            occurredAt: event.timestamp,
+          }),
+        ),
+      };
+    case "writer.tool_call.requested":
+      return {
+        ...stream,
+        timeline: upsertTimelineItem(
+          stream.timeline,
+          `writer-tool:${event.payload.tool_call_id}`,
+          () => ({
+            id: `writer-tool:${event.payload.tool_call_id}`,
+            revisionId: event.revision_id,
+            kind: "tool_call",
+            label: "正在生成配图",
+            detail: event.payload.tool_name,
+            status: "running",
+            occurredAt: event.timestamp,
+            toolCallId: event.payload.tool_call_id,
+          }),
+          (item) => ({
+            ...item,
+            label: "正在生成配图",
+            detail: event.payload.tool_name,
+            status: "running",
+            occurredAt: event.timestamp,
+            toolCallId: event.payload.tool_call_id,
+          }),
+        ),
+      };
+    case "writer.tool_call.completed":
+      return {
+        ...stream,
+        timeline: upsertTimelineItem(
+          stream.timeline,
+          `writer-tool:${event.payload.tool_call_id}`,
+          () => ({
+            id: `writer-tool:${event.payload.tool_call_id}`,
+            revisionId: event.revision_id,
+            kind: "tool_call",
+            label: "正在生成配图",
+            detail: event.payload.tool_name,
+            status: event.payload.success ? "completed" : "failed",
+            occurredAt: event.timestamp,
+            toolCallId: event.payload.tool_call_id,
+          }),
+          (item) => ({
+            ...item,
+            label: "正在生成配图",
+            detail: event.payload.tool_name,
+            status: event.payload.success ? "completed" : "failed",
+            occurredAt: event.timestamp,
+            toolCallId: event.payload.tool_call_id,
+          }),
+        ),
+      };
+    case "artifact.ready":
+      {
+        const timelineItem: TimelineItem = {
+          id: `artifact:${event.payload.artifact.artifact_id}`,
+          revisionId: event.revision_id,
+          kind: "system",
+          label: "已生成配图",
+          detail: event.payload.artifact.filename,
+          status: "completed",
+          occurredAt: event.timestamp,
+        };
+
+        return {
+          ...stream,
+          timeline: [...stream.timeline, timelineItem],
+        };
+      }
+    case "report.completed":
+      return {
+        ...stream,
+        timeline: upsertTimelineItem(
+          stream.timeline,
+          `report:${event.payload.delivery.revision_id}`,
+          () => ({
+            id: `report:${event.payload.delivery.revision_id}`,
+            revisionId: event.payload.delivery.revision_id,
+            kind: "system",
+            label: "报告已完成",
+            detail: `${event.payload.delivery.word_count} 字，${event.payload.delivery.artifact_count} 张配图`,
+            status: "completed",
+            occurredAt: event.timestamp,
+          }),
+          (item) => ({
+            ...item,
+            label: "报告已完成",
+            detail: `${event.payload.delivery.word_count} 字，${event.payload.delivery.artifact_count} 张配图`,
+            status: "completed",
+            occurredAt: event.timestamp,
+          }),
+        ),
+      };
     default:
       return stream;
   }

@@ -72,6 +72,7 @@ function createMockRuntime(
   return {
     taskApiClient: {
       createTask: vi.fn(),
+      getTaskDetail: vi.fn(),
       submitClarification: vi.fn(),
       sendHeartbeat: vi.fn().mockResolvedValue({
         requestId: "req_heartbeat",

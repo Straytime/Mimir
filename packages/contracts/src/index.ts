@@ -145,6 +145,19 @@ export type ClarificationOptionAnswer = {
   selected_label: string;
 };
 
+export type ResearchOutlineSection = {
+  section_id: string;
+  title: string;
+  description: string;
+  order: number;
+};
+
+export type ResearchOutline = {
+  title: string;
+  sections: ResearchOutlineSection[];
+  entities: string[];
+};
+
 export type ArtifactSummary = {
   artifact_id: string;
   filename: string;
@@ -397,6 +410,42 @@ export type OutlineDeltaPayload = {
   delta: string;
 };
 
+export type OutlineCompletedPayload = {
+  outline: ResearchOutline;
+};
+
+export type WriterReasoningDeltaPayload = {
+  delta: string;
+};
+
+export type WriterToolCallRequestedPayload = {
+  tool_call_id: string;
+  tool_name: string;
+};
+
+export type WriterToolCallCompletedPayload = {
+  tool_call_id: string;
+  tool_name: string;
+  success: boolean;
+};
+
+export type WriterDeltaPayload = {
+  delta: string;
+};
+
+export type ArtifactReadyPayload = {
+  artifact: ArtifactSummary;
+};
+
+export type ReportCompletedPayload = {
+  delivery: DeliverySummary;
+};
+
+export type TaskAwaitingFeedbackPayload = {
+  expires_at: IsoDateTimeString;
+  available_actions: AvailableAction[];
+};
+
 export type TaskCreatedEventEnvelope = BaseEventEnvelope<
   "task.created",
   TaskCreatedPayload
@@ -517,6 +566,46 @@ export type OutlineDeltaEventEnvelope = BaseEventEnvelope<
   OutlineDeltaPayload
 >;
 
+export type OutlineCompletedEventEnvelope = BaseEventEnvelope<
+  "outline.completed",
+  OutlineCompletedPayload
+>;
+
+export type WriterReasoningDeltaEventEnvelope = BaseEventEnvelope<
+  "writer.reasoning.delta",
+  WriterReasoningDeltaPayload
+>;
+
+export type WriterToolCallRequestedEventEnvelope = BaseEventEnvelope<
+  "writer.tool_call.requested",
+  WriterToolCallRequestedPayload
+>;
+
+export type WriterToolCallCompletedEventEnvelope = BaseEventEnvelope<
+  "writer.tool_call.completed",
+  WriterToolCallCompletedPayload
+>;
+
+export type WriterDeltaEventEnvelope = BaseEventEnvelope<
+  "writer.delta",
+  WriterDeltaPayload
+>;
+
+export type ArtifactReadyEventEnvelope = BaseEventEnvelope<
+  "artifact.ready",
+  ArtifactReadyPayload
+>;
+
+export type ReportCompletedEventEnvelope = BaseEventEnvelope<
+  "report.completed",
+  ReportCompletedPayload
+>;
+
+export type TaskAwaitingFeedbackEventEnvelope = BaseEventEnvelope<
+  "task.awaiting_feedback",
+  TaskAwaitingFeedbackPayload
+>;
+
 export type EventEnvelope =
   | TaskCreatedEventEnvelope
   | PhaseChangedEventEnvelope
@@ -541,4 +630,12 @@ export type EventEnvelope =
   | CollectorCompletedEventEnvelope
   | SummaryCompletedEventEnvelope
   | SourcesMergedEventEnvelope
-  | OutlineDeltaEventEnvelope;
+  | OutlineDeltaEventEnvelope
+  | OutlineCompletedEventEnvelope
+  | WriterReasoningDeltaEventEnvelope
+  | WriterToolCallRequestedEventEnvelope
+  | WriterToolCallCompletedEventEnvelope
+  | WriterDeltaEventEnvelope
+  | ArtifactReadyEventEnvelope
+  | ReportCompletedEventEnvelope
+  | TaskAwaitingFeedbackEventEnvelope;

@@ -84,4 +84,16 @@ export function installBrowserMocks() {
     writable: true,
     value: () => true,
   });
+
+  Object.defineProperty(window.URL, "createObjectURL", {
+    configurable: true,
+    writable: true,
+    value: () => "blob:mock-object-url",
+  });
+
+  Object.defineProperty(window.URL, "revokeObjectURL", {
+    configurable: true,
+    writable: true,
+    value: () => {},
+  });
 }
