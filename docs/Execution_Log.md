@@ -990,3 +990,40 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 可以进入最终收口任务，按真实部署环境再做一轮 smoke / visual / BDD 级别验证，但不要在当前 Stage 7 基线上继续加新功能
   - 若后续要压缩 test-only surface，优先把 Playwright 的 scripted runtime / store 驱动统一沉到专用 e2e harness 层，而不是回退为真实后端联调
+
+## M4-005 Full System Integration + Final Closure
+
+- 日期时间: 2026-03-16 23:36:14 CST (+0800)
+- 任务包编号: M4-005
+- session 标识: codex-20260316-m4-005-project-final-closure
+- 目标摘要: 核对 `M4-001`、`M4-001R`、`M4-002`、`M4-003`、`M4-004` 是否已经进入同一统一基线，确认当前 `main` 同时包含 M0 契约与基础设施、M1 任务框架、M2 澄清与需求分析、M3 搜集引擎与透明度，以及 M4 输出/交付/feedback revision/cleanup；在不新增功能的前提下完成全量自动化回归、一轮人工 smoke checklist，并形成整个实施阶段的最终收口结论。
+- 修改文件:
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `git status --short`；`git branch --all --verbose --no-abbrev`；`git log --oneline --decorate --graph --all --max-count=60`；`rg -n "^## M4-|Project Final Closure|Full System Integration" docs/Execution_Log.md`；`sed -n '1,240p' docs/Implementation_Playbook.md`
+  - 已运行: `sed -n '741,1045p' docs/Execution_Log.md`；`sed -n '1,420p' packages/contracts/src/index.ts`；`sed -n '1,360p' apps/web/lib/api/task-api-client.ts`；`sed -n '1,320p' services/api/app/api/v1/tasks.py`；`sed -n '1,240p' services/api/app/infrastructure/db/migrations/env.py`；`sed -n '1,240p' services/api/app/infrastructure/db/session.py`；`sed -n '1,240p' apps/web/features/research/providers/research-workspace-providers.tsx`；`rg -n "__MIMIR_TEST_RUNTIME__|__MIMIR_TEST_STORE__" apps/web -S`
+  - 已运行: `pnpm --version`；`uv --version`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`；`cd apps/web && pnpm typecheck`；`cd apps/web && pnpm lint`；`cd apps/web && pnpm test:contract`；`cd apps/web && pnpm test:unit`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:integration`；`cd apps/web && pnpm test:e2e`
+  - 已运行: `brew services list`；`brew services start postgresql@16`；`sed '/^\\[alembic\\]$/a\\\nsqlalchemy.url = postgresql+psycopg://aminer@127.0.0.1:5432/postgres' alembic.ini > /tmp/mimir-alembic.ini`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync alembic -c /tmp/mimir-alembic.ini upgrade head`
+  - 已运行: `cd services/api && PYTHONPATH="/opt/miniconda3/lib/python3.12/site-packages:$PWD/.venv/lib/python3.12/site-packages" MIMIR_DATABASE_URL='postgresql+psycopg://aminer@127.0.0.1:5432/postgres' MIMIR_CORS_ALLOW_ORIGINS='http://localhost:3000,http://127.0.0.1:3000' .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`；`cd apps/web && pnpm exec next dev --hostname 127.0.0.1 --port 3000`
+  - 人工 smoke checklist:
+    - 已完成: 启动本地 PostgreSQL / API / Web，并用现有 stub/fake provider 路径跑通浏览器 smoke
+    - 已完成: natural clarification 主链路，从创建任务、立即建连、澄清提交，到 `analysis -> planning -> collecting -> summarizing -> merge -> outline -> writer -> report.completed -> task.awaiting_feedback`
+    - 已完成: 在 `analyzing_requirement` 阶段确认 feedback 区未出现；进入 `task.awaiting_feedback` 后 feedback 区出现且下载区开放
+    - 已完成: 提交 feedback 后确认 overlay 出现、旧报告继续可见、下载锁定；收到新 revision 首个 SSE 事件后切换到第 2 轮并继续完成新一轮研究
+    - 已完成: 通过浏览器上下文直接请求绝对下载 / artifact URL，验证 `markdown.zip`、`report.pdf`、artifact 图片均返回 `200`
+    - 已完成: 通过 `__MIMIR_TEST_STORE__` 注入 `task.expired`，确认终态 banner 出现、`available_actions` 清空、反馈与下载按钮立即禁用
+  - 调试过程:
+    - 当前 `main` 已通过 PR #17、#18、#19、#20、#21 吸收全部 M4 成果，本次不需要再做新的 merge
+    - 本机已有 Homebrew `postgresql@16` 但默认未启动；已最小范围启动现成服务，不安装新数据库工具
+    - 仓库当前 `services/api` 依赖并未直接包含 `uvicorn`，且 `alembic.ini` 未写死 `sqlalchemy.url`；为完成本轮 smoke，使用了 `/tmp` 临时 alembic 配置与项目 `.venv` + 系统 `uvicorn` 模块的本地启动方式，不改仓库文件
+    - 前端默认没有同源 API proxy，也没有生产态 SSE client；本轮 smoke 通过现有 test-only `window.__MIMIR_TEST_RUNTIME__ / __MIMIR_TEST_STORE__` 做浏览器注入，将 Web 指向本地 API，并确认这些 hook 仅在 [apps/web/features/research/providers/research-workspace-providers.tsx](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/apps/web/features/research/providers/research-workspace-providers.tsx) 检测到显式注入时才生效，类型仅在 [apps/web/types/global.d.ts](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/apps/web/types/global.d.ts) 暴露，正常生产运行时不会改变行为
+    - 全量自动化结果：后端 `93 passed`；前端 `typecheck` 通过、`lint` 通过但保留 ESLint 9 legacy warning、`contract 4 passed`、`unit 33 passed`、`component 16 passed`、`integration 30 passed`、`e2e 2 passed`
+  - 未运行: 无
+- 验收结论: accepted；统一基线已同时包含 M0~M4 全部已验收成果，后端与前端全量自动化回归通过，人工 smoke checklist 完成且未发现阻塞问题；创建任务 -> 立即建连 -> heartbeat / disconnect / 终态、natural / options clarification、15 秒前端倒计时、60 秒后端兜底、planning -> collecting -> summarizing -> merge、outline -> writer -> artifact -> report.completed -> task.awaiting_feedback、access_token_invalid -> GET /tasks -> retry、feedback -> waiting_next_revision -> switching -> planning_collection、cleanup_pending 补偿清理都已在统一基线上成立，可以明确宣布整个实施阶段完成。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过，且按任务约束本次未处理
+  - 手工 smoke 目前依赖本机已存在的 PostgreSQL 服务与 test-only 浏览器注入；这不影响统一基线正确性，但说明当前仓库还没有“一条命令拉起完整本地联调环境”的正式开发入口
+- 下一步建议:
+  - 实施阶段已完成；后续如进入运营或真实部署准备，应单独规划“本地开发体验 / 部署脚本 / 真实 provider 接线”任务包，而不是继续混在当前实施收口里
+  - 若后续要压缩 test-only surface，优先把浏览器注入与 e2e harness 收敛成显式开发工具层，不要回退修改既有业务契约
