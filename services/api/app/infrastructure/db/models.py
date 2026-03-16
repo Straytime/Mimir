@@ -1,7 +1,16 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,6 +58,7 @@ class TaskRevisionRecord(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     requirement_detail_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    collect_agent_calls_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class SystemLockRecord(Base):
@@ -83,5 +93,84 @@ class TaskEventRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class TaskToolCallRecord(Base):
+    __tablename__ = "task_tool_calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("research_tasks.task_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    revision_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("task_revisions.revision_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    subtask_id: Mapped[str | None] = mapped_column(String(64))
+    tool_call_id: Mapped[str | None] = mapped_column(String(64))
+    tool_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CollectedSourceRecord(Base):
+    __tablename__ = "collected_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("research_tasks.task_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    revision_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("task_revisions.revision_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    subtask_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    tool_call_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    link: Mapped[str] = mapped_column(Text, nullable=False)
+    info: Mapped[str] = mapped_column(Text, nullable=False)
+    source_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    refer: Mapped[str | None] = mapped_column(String(64))
+    is_merged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AgentRunRecord(Base):
+    __tablename__ = "agent_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("research_tasks.task_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    revision_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("task_revisions.revision_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    subtask_id: Mapped[str | None] = mapped_column(String(64))
+    agent_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    prompt_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str | None] = mapped_column(String(32))
+    reasoning_text: Mapped[str | None] = mapped_column(Text)
+    content_text: Mapped[str | None] = mapped_column(Text)
+    finish_reason: Mapped[str | None] = mapped_column(String(64))
+    tool_calls_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    compressed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 Index("ix_ip_usage_counters_ip_hash_created_at", IPUsageCounterRecord.ip_hash, IPUsageCounterRecord.created_at)
 Index("ix_task_events_task_id_seq", TaskEventRecord.task_id, TaskEventRecord.seq)
+Index("ix_task_tool_calls_revision_id_created_at", TaskToolCallRecord.revision_id, TaskToolCallRecord.created_at)
+Index("ix_collected_sources_revision_id_created_at", CollectedSourceRecord.revision_id, CollectedSourceRecord.created_at)
+Index("ix_agent_runs_revision_id_created_at", AgentRunRecord.revision_id, AgentRunRecord.created_at)

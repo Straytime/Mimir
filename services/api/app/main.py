@@ -10,8 +10,18 @@ from app.api.middleware import install_middlewares
 from app.application.policies.activity_lock import ActivityLockPolicy
 from app.application.policies.ip_quota import IPQuotaPolicy
 from app.application.ports.llm import ClarificationGenerator, RequirementAnalyzer
+from app.application.ports.research import (
+    CollectorAgent,
+    PlannerAgent,
+    SummaryAgent,
+    WebFetchClient,
+    WebSearchClient,
+)
+from app.application.services.collection import CollectionOrchestrator
 from app.application.services.clarification import ClarificationOrchestrator
+from app.application.services.invocation import RetryingOperationInvoker
 from app.application.services.llm import RetryingLLMInvoker
+from app.application.services.merge import SourceMergeService
 from app.application.services.tasks import TaskService
 from app.core.config import Settings
 from app.core.retry import RetryPolicy
@@ -20,6 +30,13 @@ from app.infrastructure.db.session import create_session_factory
 from app.infrastructure.llm.local_stub import (
     LocalStubClarificationGenerator,
     LocalStubRequirementAnalyzer,
+)
+from app.infrastructure.research.local_stub import (
+    LocalStubCollectorAgent,
+    LocalStubPlannerAgent,
+    LocalStubSummaryAgent,
+    LocalStubWebFetchClient,
+    LocalStubWebSearchClient,
 )
 from app.infrastructure.security.hmac_signers import (
     HMACAccessTokenSigner,
@@ -34,6 +51,11 @@ def create_app(
     clock: Callable[[], datetime] | None = None,
     clarification_generator: ClarificationGenerator | None = None,
     requirement_analyzer: RequirementAnalyzer | None = None,
+    planner_agent: PlannerAgent | None = None,
+    collector_agent: CollectorAgent | None = None,
+    summary_agent: SummaryAgent | None = None,
+    web_search_client: WebSearchClient | None = None,
+    web_fetch_client: WebFetchClient | None = None,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_env()
     engine, session_factory = create_session_factory(resolved_settings.database_url)
@@ -79,6 +101,26 @@ def create_app(
             wait_seconds=resolved_settings.llm_retry_wait_seconds,
         )
     )
+    operation_invoker = RetryingOperationInvoker[object](
+        retry_policy=RetryPolicy(
+            max_retries=resolved_settings.llm_retry_max_retries,
+            wait_seconds=resolved_settings.llm_retry_wait_seconds,
+        )
+    )
+    collection_orchestrator = CollectionOrchestrator(
+        session_factory=session_factory,
+        task_service=application.state.task_service,
+        planner_agent=planner_agent or LocalStubPlannerAgent(),
+        collector_agent=collector_agent or LocalStubCollectorAgent(),
+        summary_agent=summary_agent or LocalStubSummaryAgent(),
+        web_search_client=web_search_client or LocalStubWebSearchClient(),
+        web_fetch_client=web_fetch_client or LocalStubWebFetchClient(),
+        operation_invoker=operation_invoker,
+        merge_service=SourceMergeService(),
+        settings=resolved_settings,
+        clock=resolved_clock,
+    )
+    application.state.collection_orchestrator = collection_orchestrator
     clarification_orchestrator = ClarificationOrchestrator(
         session_factory=session_factory,
         task_service=application.state.task_service,
@@ -86,6 +128,9 @@ def create_app(
         requirement_analyzer=requirement_analyzer or LocalStubRequirementAnalyzer(),
         llm_invoker=llm_invoker,
         settings=resolved_settings,
+        on_requirement_completed=lambda task_id: collection_orchestrator.ensure_started(
+            task_id=task_id
+        ),
         clock=resolved_clock,
     )
     application.state.clarification_orchestrator = clarification_orchestrator
@@ -93,6 +138,7 @@ def create_app(
         session_factory=session_factory,
         task_service=application.state.task_service,
         clarification_orchestrator=clarification_orchestrator,
+        collection_orchestrator=collection_orchestrator,
         settings=resolved_settings,
         clock=resolved_clock,
     )

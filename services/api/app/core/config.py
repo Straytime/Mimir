@@ -22,6 +22,11 @@ class Settings:
     clarification_backend_timeout_seconds: int = 60
     llm_retry_max_retries: int = 3
     llm_retry_wait_seconds: int = 3
+    planner_parallel_limit: int = 3
+    revision_collect_agent_limit: int = 5
+    subtask_tool_call_limit: int = 10
+    collect_risk_block_threshold: int = 2
+    fetched_content_limit: int = 10000
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -79,5 +84,20 @@ class Settings:
             ),
             llm_retry_wait_seconds=int(
                 os.getenv("MIMIR_LLM_RETRY_WAIT_SECONDS", "3")
+            ),
+            planner_parallel_limit=int(
+                os.getenv("MIMIR_PLANNER_PARALLEL_LIMIT", "3")
+            ),
+            revision_collect_agent_limit=int(
+                os.getenv("MIMIR_REVISION_COLLECT_AGENT_LIMIT", "5")
+            ),
+            subtask_tool_call_limit=int(
+                os.getenv("MIMIR_SUBTASK_TOOL_CALL_LIMIT", "10")
+            ),
+            collect_risk_block_threshold=int(
+                os.getenv("MIMIR_COLLECT_RISK_BLOCK_THRESHOLD", "2")
+            ),
+            fetched_content_limit=int(
+                os.getenv("MIMIR_FETCHED_CONTENT_LIMIT", "10000")
             ),
         )
