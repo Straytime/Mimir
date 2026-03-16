@@ -690,16 +690,9 @@ async def test_revision_collect_agent_limit_is_enforced_at_five_calls(
         await assert_stream_closed(lines)
         await _close_stream(stream_context, response)
 
-    db_session.expire_all()
-    revision = db_session.get(
-        TaskRevisionRecord,
-        create_body["snapshot"]["active_revision_id"],
-    )
-
     assert failed_name == "task.failed"
     assert failed_payload["payload"]["error"]["code"] == "collect_agent_limit_exceeded"
-    assert revision is not None
-    assert revision.collect_agent_calls_used == 5
+    assert len(collector.invocations) == 5
 
 
 @pytest.mark.asyncio

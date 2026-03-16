@@ -118,6 +118,9 @@ class FlakyArtifactStore(ArtifactStore):
     async def get(self, storage_key: str) -> bytes:
         return await self.inner.get(storage_key)
 
+    async def delete(self, storage_key: str) -> None:
+        await self.inner.delete(storage_key)
+
 
 @pytest_asyncio.fixture
 async def make_stage6_client(
@@ -287,71 +290,71 @@ async def test_writer_creates_sandbox_lazily_reuses_it_and_destroys_it_on_delive
             {"task.awaiting_feedback"},
             timeout=2.0,
         )
-        await _close_stream(stream_context, response)
-
-    db_session.expire_all()
-    revision = db_session.get(TaskRevisionRecord, create_body["snapshot"]["active_revision_id"])
-    artifacts = list(
-        db_session.scalars(
-            select(ArtifactRecord)
-            .where(ArtifactRecord.task_id == create_body["task_id"])
-            .order_by(ArtifactRecord.created_at.asc())
+        db_session.expire_all()
+        revision = db_session.get(TaskRevisionRecord, create_body["snapshot"]["active_revision_id"])
+        artifacts = list(
+            db_session.scalars(
+                select(ArtifactRecord)
+                .where(ArtifactRecord.task_id == create_body["task_id"])
+                .order_by(ArtifactRecord.created_at.asc())
+            )
         )
-    )
 
-    assert revision is not None
-    assert revision.revision_status == "completed"
-    assert len(scenario.created_ids) == 1
-    assert len(scenario.executed_calls) == 2
-    assert len({sandbox_id for sandbox_id, _ in scenario.executed_calls}) == 1
-    assert scenario.destroyed_ids == scenario.created_ids
+        assert revision is not None
+        assert revision.revision_status == "completed"
+        assert len(scenario.created_ids) == 1
+        assert len(scenario.executed_calls) == 2
+        assert len({sandbox_id for sandbox_id, _ in scenario.executed_calls}) == 1
+        assert scenario.destroyed_ids == scenario.created_ids
 
-    assert len(artifacts) == 4
-    assert {
-        artifact.resource_type for artifact in artifacts
-    } == {
-        AccessTokenResourceType.ARTIFACT.value,
-        AccessTokenResourceType.MARKDOWN_DOWNLOAD.value,
-        AccessTokenResourceType.PDF_DOWNLOAD.value,
-    }
-    assert phase_changed_name == "phase.changed"
-    assert phase_changed_payload["payload"]["to_phase"] == "delivered"
-    assert phase_changed_payload["payload"]["status"] == "awaiting_feedback"
-    assert report_completed_name == "report.completed"
-    assert report_completed_payload["payload"]["delivery"]["artifact_count"] == 2
-    assert awaiting_feedback_name == "task.awaiting_feedback"
-    assert awaiting_feedback_payload["payload"]["available_actions"] == [
-        "submit_feedback",
-        "download_markdown",
-        "download_pdf",
-    ]
-    assert awaiting_feedback_payload["payload"]["expires_at"]
-    assert int(phase_changed_payload["seq"]) < int(report_completed_payload["seq"])
-    assert int(report_completed_payload["seq"]) < int(awaiting_feedback_payload["seq"])
-
-    zip_artifact = next(
-        artifact
-        for artifact in artifacts
-        if artifact.resource_type == AccessTokenResourceType.MARKDOWN_DOWNLOAD.value
-    )
-    pdf_artifact = next(
-        artifact
-        for artifact in artifacts
-        if artifact.resource_type == AccessTokenResourceType.PDF_DOWNLOAD.value
-    )
-
-    zip_path = temp_artifact_dir / zip_artifact.storage_key
-    pdf_path = temp_artifact_dir / pdf_artifact.storage_key
-    assert zip_path.exists()
-    assert pdf_path.exists()
-    assert pdf_path.read_bytes().startswith(b"%PDF-1.4")
-
-    with zipfile.ZipFile(BytesIO(zip_path.read_bytes())) as archive:
-        assert sorted(archive.namelist()) == [
-            "artifacts/chart_growth.png",
-            "artifacts/chart_market_share.png",
-            "report.md",
+        assert len(artifacts) == 4
+        assert {
+            artifact.resource_type for artifact in artifacts
+        } == {
+            AccessTokenResourceType.ARTIFACT.value,
+            AccessTokenResourceType.MARKDOWN_DOWNLOAD.value,
+            AccessTokenResourceType.PDF_DOWNLOAD.value,
+        }
+        assert phase_changed_name == "phase.changed"
+        assert phase_changed_payload["payload"]["to_phase"] == "delivered"
+        assert phase_changed_payload["payload"]["status"] == "awaiting_feedback"
+        assert report_completed_name == "report.completed"
+        assert report_completed_payload["payload"]["delivery"]["artifact_count"] == 2
+        assert awaiting_feedback_name == "task.awaiting_feedback"
+        assert awaiting_feedback_payload["payload"]["available_actions"] == [
+            "submit_feedback",
+            "download_markdown",
+            "download_pdf",
         ]
+        assert awaiting_feedback_payload["payload"]["expires_at"]
+        assert int(phase_changed_payload["seq"]) < int(report_completed_payload["seq"])
+        assert int(report_completed_payload["seq"]) < int(awaiting_feedback_payload["seq"])
+
+        zip_artifact = next(
+            artifact
+            for artifact in artifacts
+            if artifact.resource_type == AccessTokenResourceType.MARKDOWN_DOWNLOAD.value
+        )
+        pdf_artifact = next(
+            artifact
+            for artifact in artifacts
+            if artifact.resource_type == AccessTokenResourceType.PDF_DOWNLOAD.value
+        )
+
+        zip_path = temp_artifact_dir / zip_artifact.storage_key
+        pdf_path = temp_artifact_dir / pdf_artifact.storage_key
+        assert zip_path.exists()
+        assert pdf_path.exists()
+        assert pdf_path.read_bytes().startswith(b"%PDF-1.4")
+
+        with zipfile.ZipFile(BytesIO(zip_path.read_bytes())) as archive:
+            assert sorted(archive.namelist()) == [
+                "artifacts/chart_growth.png",
+                "artifacts/chart_market_share.png",
+                "report.md",
+            ]
+
+        await _close_stream(stream_context, response)
 
 
 @pytest.mark.asyncio

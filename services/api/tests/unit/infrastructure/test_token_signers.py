@@ -12,7 +12,10 @@ from app.infrastructure.security.hmac_signers import (
 
 
 def test_task_token_signer_round_trips_payload() -> None:
-    signer = HMACTaskTokenSigner(secret="task-secret")
+    signer = HMACTaskTokenSigner(
+        secret="task-secret",
+        clock=lambda: datetime(2026, 3, 15, 13, 0, tzinfo=UTC),
+    )
     payload = TaskTokenPayload(
         task_id="tsk_01JABC",
         issued_at=datetime(2026, 3, 15, 12, 0, tzinfo=UTC),

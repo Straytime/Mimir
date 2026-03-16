@@ -99,6 +99,19 @@ class LocalArtifactStore:
     async def get(self, storage_key: str) -> bytes:
         return (self.root_dir / storage_key).read_bytes()
 
+    async def delete(self, storage_key: str) -> None:
+        path = self.root_dir / storage_key
+        if not path.exists():
+            return
+        path.unlink()
+        parent = path.parent
+        while parent != self.root_dir and parent.exists():
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+
 
 class LocalReportExportService:
     async def build_markdown_zip(

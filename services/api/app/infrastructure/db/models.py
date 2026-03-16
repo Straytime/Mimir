@@ -35,6 +35,7 @@ class ResearchTaskRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleanup_pending: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     connect_deadline_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -59,6 +60,7 @@ class TaskRevisionRecord(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     requirement_detail_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     collect_agent_calls_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sandbox_id: Mapped[str | None] = mapped_column(String(128))
 
 
 class SystemLockRecord(Base):
@@ -193,6 +195,7 @@ class ArtifactRecord(Base):
 
 
 Index("ix_ip_usage_counters_ip_hash_created_at", IPUsageCounterRecord.ip_hash, IPUsageCounterRecord.created_at)
+Index("ix_research_tasks_cleanup_pending_updated_at", ResearchTaskRecord.cleanup_pending, ResearchTaskRecord.updated_at)
 Index("ix_task_events_task_id_seq", TaskEventRecord.task_id, TaskEventRecord.seq)
 Index("ix_task_tool_calls_revision_id_created_at", TaskToolCallRecord.revision_id, TaskToolCallRecord.created_at)
 Index("ix_collected_sources_revision_id_created_at", CollectedSourceRecord.revision_id, CollectedSourceRecord.created_at)

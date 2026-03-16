@@ -27,6 +27,7 @@ class Settings:
     subtask_tool_call_limit: int = 10
     collect_risk_block_threshold: int = 2
     fetched_content_limit: int = 10000
+    cleanup_scan_interval_seconds: float = 60.0
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -99,5 +100,8 @@ class Settings:
             ),
             fetched_content_limit=int(
                 os.getenv("MIMIR_FETCHED_CONTENT_LIMIT", "10000")
+            ),
+            cleanup_scan_interval_seconds=float(
+                os.getenv("MIMIR_CLEANUP_SCAN_INTERVAL_SECONDS", "60.0")
             ),
         )

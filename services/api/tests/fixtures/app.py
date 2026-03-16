@@ -187,6 +187,7 @@ def settings(
         task_token_secret="task-secret",
         access_token_secret="access-secret",
         lifecycle_poll_interval_seconds=0.02,
+        cleanup_scan_interval_seconds=0.02,
     )
 
 

@@ -32,3 +32,22 @@ class LocalStubRequirementAnalyzer:
             }
             """,
         )
+
+
+class LocalStubFeedbackAnalyzer:
+    async def analyze(self, prompt: str) -> TextGeneration:
+        return TextGeneration(
+            deltas=(
+                '{\n  "research_goal": "补充 B 端落地分析",',
+            ),
+            full_text="""
+            {
+              "research_goal": "补充 B 端落地分析",
+              "domain": "互联网 / AI 产品",
+              "requirement_details": "补充比较各家产品在 B 端场景的落地情况，并删掉不确定推测。",
+              "output_format": "business_report",
+              "freshness_requirement": "high",
+              "language": "zh-CN"
+            }
+            """,
+        )

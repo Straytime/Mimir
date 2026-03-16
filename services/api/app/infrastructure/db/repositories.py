@@ -114,6 +114,20 @@ class TaskRepository:
     ) -> TaskRevisionRecord | None:
         return session.get(TaskRevisionRecord, revision_id)
 
+    def list_revisions_for_task(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+    ) -> list[TaskRevisionRecord]:
+        return list(
+            session.scalars(
+                select(TaskRevisionRecord)
+                .where(TaskRevisionRecord.task_id == task_id)
+                .order_by(TaskRevisionRecord.revision_number.asc())
+            )
+        )
+
     def release_lock(self, *, session: Session, task_id: str) -> None:
         session.execute(
             delete(SystemLockRecord).where(SystemLockRecord.task_id == task_id)
@@ -134,6 +148,32 @@ class TaskRepository:
         if task is None:
             return None
 
+        task.status = status
+        task.phase = phase
+        task.updated_at = updated_at
+        if expires_at is not _UNSET:
+            task.expires_at = expires_at
+        session.flush()
+        return task
+
+    def activate_revision(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        revision_id: str,
+        revision_number: int,
+        status: str,
+        phase: str,
+        updated_at: datetime,
+        expires_at: datetime | None | object = _UNSET,
+    ) -> ResearchTaskRecord | None:
+        task = self.get_task(session=session, task_id=task_id, for_update=True)
+        if task is None:
+            return None
+
+        task.active_revision_id = revision_id
+        task.active_revision_number = revision_number
         task.status = status
         task.phase = phase
         task.updated_at = updated_at
@@ -175,6 +215,16 @@ class TaskRepository:
         session.flush()
         return revision
 
+    def create_revision(
+        self,
+        *,
+        session: Session,
+        revision: TaskRevisionRecord,
+    ) -> TaskRevisionRecord:
+        session.add(revision)
+        session.flush()
+        return revision
+
     def update_revision_requirement_detail(
         self,
         *,
@@ -187,6 +237,21 @@ class TaskRepository:
             return None
 
         revision.requirement_detail_json = requirement_detail_json
+        session.flush()
+        return revision
+
+    def update_revision_sandbox_id(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+        sandbox_id: str | None,
+    ) -> TaskRevisionRecord | None:
+        revision = self.get_revision(session=session, revision_id=revision_id)
+        if revision is None:
+            return None
+
+        revision.sandbox_id = sandbox_id
         session.flush()
         return revision
 
@@ -411,6 +476,40 @@ class TaskRepository:
             if record.refer is not None
         )
 
+    def copy_collected_sources(
+        self,
+        *,
+        session: Session,
+        from_revision_id: str,
+        to_task_id: str,
+        to_revision_id: str,
+        created_at: datetime,
+    ) -> None:
+        source_records = list(
+            session.scalars(
+                select(CollectedSourceRecord)
+                .where(CollectedSourceRecord.revision_id == from_revision_id)
+                .order_by(CollectedSourceRecord.id.asc())
+            )
+        )
+        for record in source_records:
+            session.add(
+                CollectedSourceRecord(
+                    task_id=to_task_id,
+                    revision_id=to_revision_id,
+                    subtask_id=record.subtask_id,
+                    tool_call_id=record.tool_call_id,
+                    title=record.title,
+                    link=record.link,
+                    info=record.info,
+                    source_key=record.source_key,
+                    refer=record.refer,
+                    is_merged=record.is_merged,
+                    created_at=created_at,
+                )
+            )
+        session.flush()
+
     def persist_merged_sources(
         self,
         *,
@@ -500,6 +599,20 @@ class TaskRepository:
         statement = statement.order_by(ArtifactRecord.created_at.asc(), ArtifactRecord.artifact_id.asc())
         return list(session.scalars(statement))
 
+    def list_task_artifacts(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+    ) -> list[ArtifactRecord]:
+        return list(
+            session.scalars(
+                select(ArtifactRecord)
+                .where(ArtifactRecord.task_id == task_id)
+                .order_by(ArtifactRecord.created_at.asc(), ArtifactRecord.artifact_id.asc())
+            )
+        )
+
     def get_artifact(
         self,
         *,
@@ -520,6 +633,75 @@ class TaskRepository:
             .where(ArtifactRecord.revision_id == revision_id)
             .where(ArtifactRecord.resource_type == resource_type.value)
         )
+
+    def mark_cleanup_pending(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        updated_at: datetime,
+    ) -> ResearchTaskRecord | None:
+        task = self.get_task(session=session, task_id=task_id, for_update=True)
+        if task is None:
+            return None
+
+        task.cleanup_pending = True
+        task.updated_at = updated_at
+        session.flush()
+        return task
+
+    def list_cleanup_pending_tasks(
+        self,
+        *,
+        session: Session,
+    ) -> list[ResearchTaskRecord]:
+        return list(
+            session.scalars(
+                select(ResearchTaskRecord)
+                .where(ResearchTaskRecord.cleanup_pending.is_(True))
+                .order_by(ResearchTaskRecord.updated_at.asc())
+            )
+        )
+
+    def list_expired_feedback_tasks(
+        self,
+        *,
+        session: Session,
+        now: datetime,
+    ) -> list[ResearchTaskRecord]:
+        return list(
+            session.scalars(
+                select(ResearchTaskRecord)
+                .where(ResearchTaskRecord.status == TaskStatus.AWAITING_FEEDBACK.value)
+                .where(ResearchTaskRecord.phase == TaskPhase.DELIVERED.value)
+                .where(ResearchTaskRecord.expires_at.is_not(None))
+                .where(ResearchTaskRecord.expires_at <= now)
+                .order_by(ResearchTaskRecord.updated_at.asc())
+            )
+        )
+
+    def delete_task(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+    ) -> None:
+        task = self.get_task(session=session, task_id=task_id, for_update=True)
+        if task is None:
+            return
+        session.delete(task)
+        session.flush()
+
+    def prune_ip_usage_before(
+        self,
+        *,
+        session: Session,
+        cutoff: datetime,
+    ) -> None:
+        session.execute(
+            delete(IPUsageCounterRecord).where(IPUsageCounterRecord.created_at < cutoff)
+        )
+        session.flush()
 
     def build_task_detail_response(
         self,

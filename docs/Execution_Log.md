@@ -875,3 +875,60 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Frontend Stage 7 任务包，实现 feedback composer、revision 切换、旧报告 overlay 与移动端 hardening，不要在当前 Stage 6 基线上继续混入反馈提交逻辑
   - 后续如需接真实下载服务或对象存储，优先补 `access_token_invalid -> refresh delivery -> single retry` 的跨浏览器回归测试，保持当前契约不漂移
+
+## M4-003 Backend Stage 7 Feedback + Cleanup + Hardening
+
+- 日期时间: 2026-03-16 22:12:22 CST (+0800)
+- 任务包编号: M4-003
+- session 标识: codex-20260316-m4-003-backend-stage7-feedback-cleanup
+- 目标摘要: 按 `docs/Backend_TDD_Plan.md` Stage 7 在 `services/api` 打通 `POST /feedback -> processing_feedback -> planning_collection` 的 revision rollover 闭环，并补齐 `cleanup_pending`、artifact / sandbox 删除补偿、过期扫描与终态立即清理；严格停在后端 Stage 7，不进入前端 Stage 7。
+- 修改文件:
+  - `services/api/app/api/v1/tasks.py`
+  - `services/api/app/application/dto/feedback.py`
+  - `services/api/app/application/ports/delivery.py`
+  - `services/api/app/application/ports/llm.py`
+  - `services/api/app/application/prompts/__init__.py`
+  - `services/api/app/application/prompts/feedback.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/application/services/feedback.py`
+  - `services/api/app/application/services/tasks.py`
+  - `services/api/app/core/config.py`
+  - `services/api/app/infrastructure/db/models.py`
+  - `services/api/app/infrastructure/db/repositories.py`
+  - `services/api/app/infrastructure/db/migrations/versions/20260316_0005_stage7_feedback_cleanup.py`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/app/infrastructure/llm/local_stub.py`
+  - `services/api/app/infrastructure/streaming/broker.py`
+  - `services/api/app/main.py`
+  - `services/api/tests/fixtures/app.py`
+  - `services/api/tests/fixtures/tasks.py`
+  - `services/api/tests/unit/application/test_feedback_prompts.py`
+  - `services/api/tests/unit/infrastructure/test_token_signers.py`
+  - `services/api/tests/contract/rest/test_downloads.py`
+  - `services/api/tests/contract/rest/test_feedback.py`
+  - `services/api/tests/integration/cleanup/test_cleanup_worker.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+  - `services/api/tests/integration/db/test_migrations.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `services/api/tests/integration/feedback/test_feedback_revision.py`
+  - `services/api/tests/integration/lifecycle/test_task_stream_lifecycle.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_feedback_prompts.py tests/contract/rest/test_feedback.py tests/integration/feedback/test_feedback_revision.py tests/integration/cleanup/test_cleanup_worker.py tests/integration/db/test_migrations.py -x`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_token_signers.py tests/contract/rest/test_downloads.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py tests/integration/lifecycle/test_task_stream_lifecycle.py -x`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+  - 调试过程:
+    - Stage 7 red tests 先暴露缺失的 feedback DTO / prompt / orchestrator / route，以及 `cleanup_pending` / `sandbox_id` 持久化字段；已补齐 port / adapter / migration 后进入真实行为调试
+    - `POST /feedback` 采用“立即创建并激活新 revision，先进入 `processing_feedback`，待 feedback analyzer 成功后再切到 `planning_collection`”的实现，确保失败、断连、cleanup 都落到新 revision，而不会污染上一轮已完成 revision
+    - `collected_sources` 在 feedback 提交时复制到新 revision，`collect_agent_calls_used` 重置为 0；新的 Stage 7 integration 覆盖了 source reuse、counter reset 和新 revision 上的 5 次 collect 上限
+    - cleanup 按补偿一致性落地为：终态后先标记 `cleanup_pending`，再删除 artifact / sandbox，最后级联删库；`TaskLifecycleManager` 增加周期补偿扫描，并在 `POST /tasks` 前主动执行一次 cleanup sweep
+    - 全量回归时暴露几条旧测试仍假设“终态后任务/下载仍保留”；已把这些测试收敛到 Stage 7 新契约：downloads contract 改为 seed 已交付任务，Stage 5 / Stage 6 的 DB 断言改到 cleanup 前读取，connect deadline 改为验证任务已被立即清理
+  - 未运行: `ruff check`、`mypy`；本任务包验收聚焦 Backend Stage 7 的 unit / contract / integration 闭环
+- 验收结论: accepted；`POST /api/v1/tasks/{task_id}/feedback` 已可在 `awaiting_feedback + delivered` 组合下返回 `202` 与新的 `revision_id / revision_number`，随后进入 `processing_feedback`，由 feedback analyzer 经统一 `RetryPolicy` 生成新的 `RequirementDetail`，切到下一轮 `planning_collection`；新 revision 会复制旧搜集结果、重置 `collect_agent_calls_used`，并继续受每 revision 5 次 collect_agent 上限约束；`cleanup_pending`、artifact 删除、sandbox 删除与级联删库已按补偿一致性方案落地，`expired`、`failed`、`terminated` 都会进入清理通道，周期性 cleanup worker 能重试残留任务；Stage 7 migration 已新增 `research_tasks.cleanup_pending` 与 `task_revisions.sandbox_id`，正反迁移通过；全量后端回归 `93 passed`。
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前 cleanup 补偿仍建立在单进程 runtime + 周期扫描之上，符合 v1 架构约束；若未来进入多实例部署，需要独立任务包补跨实例 cleanup 协调
+  - feedback 提交后当前 active revision 会立即切到新 revision，以保证失败 / 断连 / cleanup 语义绑定到正确 revision；这与 Stage 7 契约兼容，但前端 Stage 7 需要按新的 `revision_id / revision_number` 响应和后续 `phase.changed(processing_feedback -> planning_collection)` 事件驱动 UI
+- 下一步建议:
+  - 可以进入 Frontend Stage 7，围绕 `POST /feedback`、revision 切换、processing_feedback / planning_collection 时间线和 cleanup 后的 404 语义补前端 contract / integration
+  - 若后续接真实 LLM / E2B / 对象存储 provider，应继续沿用当前 `FeedbackAnalyzer` / `ArtifactStore` / `E2BSandboxClient` 边界和 cleanup_pending 补偿顺序，不要回退为伪事务删除

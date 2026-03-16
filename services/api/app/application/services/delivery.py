@@ -40,6 +40,7 @@ from app.domain.schemas import RequirementDetail
 class DeliveryRuntime:
     loop_task: asyncio.Task[None] | None = None
     sandbox_id: str | None = None
+    revision_id: str | None = None
     cancelled: bool = False
 
 
@@ -116,6 +117,7 @@ class DeliveryOrchestrator:
                 )
                 if not formatted_sources:
                     return
+                runtime.revision_id = revision.revision_id
 
             if task.phase == TaskPhase.MERGING_SOURCES.value:
                 await self._transition_phase(
@@ -599,6 +601,14 @@ class DeliveryOrchestrator:
     async def _ensure_sandbox(self, *, runtime: DeliveryRuntime) -> str:
         if runtime.sandbox_id is None:
             runtime.sandbox_id = await self._invoke_operation(self._sandbox_client.create)
+            if runtime.revision_id is not None:
+                with self._session_factory() as session:
+                    self._task_service.repository.update_revision_sandbox_id(
+                        session=session,
+                        revision_id=runtime.revision_id,
+                        sandbox_id=runtime.sandbox_id,
+                    )
+                    session.commit()
         return runtime.sandbox_id
 
     async def _destroy_sandbox(self, *, runtime: DeliveryRuntime) -> None:
@@ -607,6 +617,14 @@ class DeliveryOrchestrator:
         sandbox_id = runtime.sandbox_id
         runtime.sandbox_id = None
         await self._invoke_operation(lambda: self._sandbox_client.destroy(sandbox_id))
+        if runtime.revision_id is not None:
+            with self._session_factory() as session:
+                self._task_service.repository.update_revision_sandbox_id(
+                    session=session,
+                    revision_id=runtime.revision_id,
+                    sandbox_id=None,
+                )
+                session.commit()
 
     async def _append_event(
         self,

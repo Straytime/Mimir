@@ -32,6 +32,13 @@ def test_stage_two_migrations_upgrade_and_downgrade(
         for column in inspect(upgraded_engine).get_columns("task_revisions")
     }
     assert "collect_agent_calls_used" in task_revision_columns
+    assert "sandbox_id" in task_revision_columns
+
+    research_task_columns = {
+        column["name"]
+        for column in inspect(upgraded_engine).get_columns("research_tasks")
+    }
+    assert "cleanup_pending" in research_task_columns
 
     command.downgrade(alembic_config, "base")
 

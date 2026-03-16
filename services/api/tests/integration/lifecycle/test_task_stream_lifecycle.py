@@ -67,12 +67,9 @@ async def test_connect_deadline_without_first_sse_connection_terminates_task(
     lock = db_session.get(SystemLockRecord, "global_active_task")
     task = db_session.get(ResearchTaskRecord, create_body["task_id"])
 
-    assert [event.event for event in events] == ["task.terminated"]
-    assert events[0].seq == 1
-    assert events[0].payload_json == {"reason": "sse_connect_timeout"}
+    assert events == []
     assert lock is None
-    assert task is not None
-    assert task.status == "terminated"
+    assert task is None
 
 
 @pytest.mark.asyncio

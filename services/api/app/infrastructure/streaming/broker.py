@@ -7,12 +7,15 @@ from datetime import UTC, datetime, timedelta
 from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.ports.delivery import ArtifactStore, E2BSandboxClient
 from app.application.services.collection import CollectionOrchestrator
 from app.application.services.clarification import ClarificationOrchestrator
 from app.application.services.delivery import DeliveryOrchestrator
+from app.application.services.feedback import FeedbackOrchestrator
+from app.application.services.invocation import RetryingOperationInvoker
 from app.application.services.tasks import TaskService
 from app.core.config import Settings
-from app.domain.enums import TaskPhase, TaskStatus
+from app.domain.enums import TaskStatus
 from app.domain.schemas import EventEnvelope
 
 
@@ -46,6 +49,10 @@ class TaskLifecycleManager:
         clarification_orchestrator: ClarificationOrchestrator,
         collection_orchestrator: CollectionOrchestrator,
         delivery_orchestrator: DeliveryOrchestrator,
+        feedback_orchestrator: FeedbackOrchestrator,
+        artifact_store: ArtifactStore,
+        sandbox_client: E2BSandboxClient,
+        operation_invoker: RetryingOperationInvoker[object],
         settings: Settings,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -54,9 +61,15 @@ class TaskLifecycleManager:
         self._clarification_orchestrator = clarification_orchestrator
         self._collection_orchestrator = collection_orchestrator
         self._delivery_orchestrator = delivery_orchestrator
+        self._feedback_orchestrator = feedback_orchestrator
+        self._artifact_store = artifact_store
+        self._sandbox_client = sandbox_client
+        self._operation_invoker = operation_invoker
         self._settings = settings
         self._clock = clock or (lambda: datetime.now(UTC))
         self._runtimes: dict[str, TaskRuntime] = {}
+        self._cleanup_task: asyncio.Task[None] | None = None
+        self._cleanup_lock = asyncio.Lock()
 
     async def register_task(
         self,
@@ -64,6 +77,7 @@ class TaskLifecycleManager:
         task_id: str,
         connect_deadline_at: datetime,
     ) -> None:
+        self._ensure_cleanup_loop()
         runtime = self._runtimes.get(task_id)
         if runtime is None:
             runtime = TaskRuntime(connect_deadline_at=connect_deadline_at)
@@ -79,6 +93,7 @@ class TaskLifecycleManager:
         task_id: str,
         token: str,
     ) -> str:
+        self._ensure_cleanup_loop()
         with self._session_factory() as session:
             task = self._task_service.get_task_for_token(
                 session,
@@ -154,6 +169,7 @@ class TaskLifecycleManager:
         task_id: str,
         token: str,
     ) -> str:
+        self._ensure_cleanup_loop()
         with self._session_factory() as session:
             trace_id = self._task_service.accept_client_heartbeat(
                 session,
@@ -172,6 +188,7 @@ class TaskLifecycleManager:
         task_id: str,
         token: str,
     ) -> str:
+        self._ensure_cleanup_loop()
         with self._session_factory() as session:
             trace_id, _ = self._task_service.disconnect_task(
                 session,
@@ -179,9 +196,9 @@ class TaskLifecycleManager:
                 token=token,
             )
             session.commit()
-        await self._clarification_orchestrator.cancel(task_id=task_id)
-        await self._collection_orchestrator.cancel(task_id=task_id)
-        await self._delivery_orchestrator.cancel(task_id=task_id)
+        await self._cancel_all_orchestrators(task_id=task_id)
+        await self._mark_cleanup_pending(task_id=task_id)
+        await self._maybe_cleanup_task(task_id=task_id)
         return trace_id
 
     async def submit_clarification(
@@ -191,7 +208,22 @@ class TaskLifecycleManager:
         token: str,
         payload,
     ) -> tuple[str, object]:
+        self._ensure_cleanup_loop()
         return await self._clarification_orchestrator.submit(
+            task_id=task_id,
+            token=token,
+            payload=payload,
+        )
+
+    async def submit_feedback(
+        self,
+        *,
+        task_id: str,
+        token: str,
+        payload,
+    ) -> tuple[str, object]:
+        self._ensure_cleanup_loop()
+        return await self._feedback_orchestrator.submit(
             task_id=task_id,
             token=token,
             payload=payload,
@@ -227,9 +259,46 @@ class TaskLifecycleManager:
                 message=message,
             )
             session.commit()
-            return event
+        await self._mark_cleanup_pending(task_id=task_id)
+        await self._maybe_cleanup_task(task_id=task_id)
+        return event
+
+    async def run_cleanup_compensation(self) -> None:
+        self._ensure_cleanup_loop()
+        async with self._cleanup_lock:
+            now = self._clock()
+            with self._session_factory() as session:
+                expired_tasks = self._task_service.repository.list_expired_feedback_tasks(
+                    session=session,
+                    now=now,
+                )
+
+            for task in expired_tasks:
+                with self._session_factory() as session:
+                    self._task_service.expire_task(session, task_id=task.task_id)
+                    session.commit()
+                await self._cancel_all_orchestrators(task_id=task.task_id)
+                await self._mark_cleanup_pending(task_id=task.task_id)
+                await self._maybe_cleanup_task(task_id=task.task_id)
+
+            with self._session_factory() as session:
+                pending_tasks = self._task_service.repository.list_cleanup_pending_tasks(
+                    session=session
+                )
+                self._task_service.repository.prune_ip_usage_before(
+                    session=session,
+                    cutoff=now - timedelta(hours=48),
+                )
+                session.commit()
+
+            for task in pending_tasks:
+                await self._maybe_cleanup_task(task_id=task.task_id)
 
     async def shutdown(self) -> None:
+        if self._cleanup_task is not None:
+            self._cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._cleanup_task
         for runtime in list(self._runtimes.values()):
             if runtime.monitor_task is None:
                 continue
@@ -242,10 +311,23 @@ class TaskLifecycleManager:
         await self._clarification_orchestrator.shutdown()
         await self._collection_orchestrator.shutdown()
         await self._delivery_orchestrator.shutdown()
+        await self._feedback_orchestrator.shutdown()
 
     def _ensure_monitor(self, *, task_id: str, runtime: TaskRuntime) -> None:
         if runtime.monitor_task is None or runtime.monitor_task.done():
             runtime.monitor_task = asyncio.create_task(self._monitor_task(task_id))
+
+    def _ensure_cleanup_loop(self) -> None:
+        if self._cleanup_task is None or self._cleanup_task.done():
+            self._cleanup_task = asyncio.create_task(self._monitor_cleanup())
+
+    async def _monitor_cleanup(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(self._settings.cleanup_scan_interval_seconds)
+                await self.run_cleanup_compensation()
+        except asyncio.CancelledError:
+            raise
 
     async def _monitor_task(self, task_id: str) -> None:
         try:
@@ -274,9 +356,9 @@ class TaskLifecycleManager:
                             reason="sse_connect_timeout",
                         )
                         session.commit()
-                        await self._clarification_orchestrator.cancel(task_id=task_id)
-                        await self._collection_orchestrator.cancel(task_id=task_id)
-                        await self._delivery_orchestrator.cancel(task_id=task_id)
+                        await self._cancel_all_orchestrators(task_id=task_id)
+                        await self._mark_cleanup_pending(task_id=task_id)
+                        await self._maybe_cleanup_task(task_id=task_id)
                         if runtime.connection_count == 0:
                             self._runtimes.pop(task_id, None)
                         return
@@ -299,9 +381,9 @@ class TaskLifecycleManager:
                                 reason="heartbeat_timeout",
                             )
                             session.commit()
-                            await self._clarification_orchestrator.cancel(task_id=task_id)
-                            await self._collection_orchestrator.cancel(task_id=task_id)
-                            await self._delivery_orchestrator.cancel(task_id=task_id)
+                            await self._cancel_all_orchestrators(task_id=task_id)
+                            await self._mark_cleanup_pending(task_id=task_id)
+                            await self._maybe_cleanup_task(task_id=task_id)
                             if runtime.connection_count == 0:
                                 self._runtimes.pop(task_id, None)
                             return
@@ -313,32 +395,27 @@ class TaskLifecycleManager:
                     ):
                         self._task_service.expire_task(session, task_id=task_id)
                         session.commit()
-                        await self._clarification_orchestrator.cancel(task_id=task_id)
-                        await self._collection_orchestrator.cancel(task_id=task_id)
-                        await self._delivery_orchestrator.cancel(task_id=task_id)
+                        await self._cancel_all_orchestrators(task_id=task_id)
+                        await self._mark_cleanup_pending(task_id=task_id)
+                        await self._maybe_cleanup_task(task_id=task_id)
+                        if runtime.connection_count == 0:
+                            self._runtimes.pop(task_id, None)
+                        return
+
+                    if status in {
+                        TaskStatus.TERMINATED,
+                        TaskStatus.FAILED,
+                        TaskStatus.EXPIRED,
+                        TaskStatus.PURGED,
+                    }:
+                        session.rollback()
+                        await self._mark_cleanup_pending(task_id=task_id)
+                        await self._maybe_cleanup_task(task_id=task_id)
                         if runtime.connection_count == 0:
                             self._runtimes.pop(task_id, None)
                         return
 
                 await self._clarification_orchestrator.maybe_auto_submit(task_id=task_id)
-
-                with self._session_factory() as session:
-                    current_task = self._task_service.repository.get_task(
-                        session=session,
-                        task_id=task_id,
-                    )
-                    if current_task is None:
-                        self._runtimes.pop(task_id, None)
-                        return
-                    current_status = TaskStatus(current_task.status)
-                    if current_status in {
-                        TaskStatus.TERMINATED,
-                        TaskStatus.FAILED,
-                        TaskStatus.EXPIRED,
-                        TaskStatus.PURGED,
-                    } and runtime.connection_count == 0:
-                        self._runtimes.pop(task_id, None)
-                        return
         except asyncio.CancelledError:
             raise
 
@@ -371,9 +448,8 @@ class TaskLifecycleManager:
                 reason="client_disconnected",
             )
             session.commit()
-        await self._clarification_orchestrator.cancel(task_id=task_id)
-        await self._collection_orchestrator.cancel(task_id=task_id)
-        await self._delivery_orchestrator.cancel(task_id=task_id)
+        await self._cancel_all_orchestrators(task_id=task_id)
+        await self._mark_cleanup_pending(task_id=task_id)
 
     async def _finalize_stream(self, *, task_id: str) -> None:
         runtime = self._runtimes.get(task_id)
@@ -393,7 +469,8 @@ class TaskLifecycleManager:
                 self._runtimes.pop(task_id, None)
                 return
 
-            if TaskStatus(task.status) in {
+            status = TaskStatus(task.status)
+            if status in {
                 TaskStatus.RUNNING,
                 TaskStatus.AWAITING_USER_INPUT,
                 TaskStatus.AWAITING_FEEDBACK,
@@ -404,8 +481,83 @@ class TaskLifecycleManager:
                     reason="client_disconnected",
                 )
                 session.commit()
-                await self._clarification_orchestrator.cancel(task_id=task_id)
-                await self._collection_orchestrator.cancel(task_id=task_id)
-                await self._delivery_orchestrator.cancel(task_id=task_id)
+                await self._cancel_all_orchestrators(task_id=task_id)
+                await self._mark_cleanup_pending(task_id=task_id)
             else:
                 session.rollback()
+
+        await self._maybe_cleanup_task(task_id=task_id)
+
+    async def _cancel_all_orchestrators(self, *, task_id: str) -> None:
+        await self._clarification_orchestrator.cancel(task_id=task_id)
+        await self._collection_orchestrator.cancel(task_id=task_id)
+        await self._delivery_orchestrator.cancel(task_id=task_id)
+        await self._feedback_orchestrator.cancel(task_id=task_id)
+
+    async def _mark_cleanup_pending(self, *, task_id: str) -> None:
+        with self._session_factory() as session:
+            task = self._task_service.repository.get_task(session=session, task_id=task_id)
+            if task is None:
+                return
+            if not task.cleanup_pending:
+                self._task_service.repository.mark_cleanup_pending(
+                    session=session,
+                    task_id=task_id,
+                    updated_at=self._clock(),
+                )
+                session.commit()
+            else:
+                session.rollback()
+
+    async def _maybe_cleanup_task(self, *, task_id: str) -> bool:
+        runtime = self._runtimes.get(task_id)
+        if runtime is not None and runtime.connection_count > 0:
+            return False
+        return await self._cleanup_task_records(task_id=task_id)
+
+    async def _cleanup_task_records(self, *, task_id: str) -> bool:
+        with self._session_factory() as session:
+            task = self._task_service.repository.get_task(session=session, task_id=task_id)
+            if task is None:
+                self._runtimes.pop(task_id, None)
+                return True
+            artifacts = self._task_service.repository.list_task_artifacts(
+                session=session,
+                task_id=task_id,
+            )
+            revisions = self._task_service.repository.list_revisions_for_task(
+                session=session,
+                task_id=task_id,
+            )
+
+        try:
+            for revision in revisions:
+                if revision.sandbox_id is None:
+                    continue
+                sandbox_id = revision.sandbox_id
+                await self._operation_invoker.invoke(
+                    lambda sandbox_id=sandbox_id: self._sandbox_client.destroy(sandbox_id)
+                )
+                with self._session_factory() as session:
+                    self._task_service.repository.update_revision_sandbox_id(
+                        session=session,
+                        revision_id=revision.revision_id,
+                        sandbox_id=None,
+                    )
+                    session.commit()
+
+            for artifact in artifacts:
+                await self._operation_invoker.invoke(
+                    lambda storage_key=artifact.storage_key: self._artifact_store.delete(
+                        storage_key
+                    )
+                )
+        except Exception:
+            return False
+
+        with self._session_factory() as session:
+            self._task_service.repository.delete_task(session=session, task_id=task_id)
+            session.commit()
+
+        self._runtimes.pop(task_id, None)
+        return True
