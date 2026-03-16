@@ -17,6 +17,8 @@ import type {
 } from "./research-session-store.types";
 import { createResearchSessionState } from "./research-session-store.types";
 
+const TERMINAL_STATUS_SET = new Set<string>(["terminated", "failed", "expired"]);
+
 function mergeTaskDetailIntoState(
   state: ResearchSessionState,
   detail: TaskDetailResponse,
@@ -78,6 +80,77 @@ function bootstrapCreateTaskIntoState(
     ui: {
       ...state.ui,
       createTask: clearCreateTaskUiStateInState(state),
+    },
+  };
+}
+
+function setTerminalStateInState(
+  state: ResearchSessionState,
+  args: {
+    terminalReason: Exclude<ResearchSessionState["ui"]["terminalReason"], null>;
+    timestamp: string;
+    expiresAt?: string | null;
+    sseState?: ResearchSessionState["session"]["sseState"];
+  },
+): ResearchSessionState {
+  const currentTerminalReason = state.ui.terminalReason;
+  const snapshot = state.remote.snapshot;
+
+  if (currentTerminalReason !== null) {
+    return {
+      ...state,
+      session: {
+        ...state.session,
+        sseState: args.sseState ?? state.session.sseState,
+      },
+    };
+  }
+
+  if (snapshot === null) {
+    return {
+      ...state,
+      session: {
+        ...state.session,
+        sseState: args.sseState ?? state.session.sseState,
+      },
+      ui: {
+        ...state.ui,
+        terminalReason: args.terminalReason,
+      },
+    };
+  }
+
+  const nextStatus =
+    args.terminalReason === "failed"
+      ? "failed"
+      : args.terminalReason === "expired"
+        ? "expired"
+        : "terminated";
+
+  return {
+    ...state,
+    session: {
+      ...state.session,
+      sseState: args.sseState ?? state.session.sseState,
+    },
+    remote: {
+      ...state.remote,
+      snapshot: TERMINAL_STATUS_SET.has(snapshot.status)
+        ? snapshot
+        : {
+            ...snapshot,
+            status: nextStatus,
+            updated_at: args.timestamp,
+            expires_at:
+              args.terminalReason === "expired"
+                ? args.expiresAt ?? args.timestamp
+                : snapshot.expires_at,
+            available_actions: [],
+          },
+    },
+    ui: {
+      ...state.ui,
+      terminalReason: args.terminalReason,
     },
   };
 }
@@ -149,6 +222,9 @@ export function createResearchSessionStore(
           ...sessionPatch,
         },
       }));
+    },
+    setTerminalState: (args) => {
+      set((state) => setTerminalStateInState(state, args));
     },
     bootstrapCreateTask: ({ response, requestId }) => {
       set((state) => bootstrapCreateTaskIntoState(state, response, requestId));

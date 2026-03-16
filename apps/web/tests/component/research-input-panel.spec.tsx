@@ -13,15 +13,13 @@ test("ResearchInputPanel enforces the 500-character limit and submits on Enter",
     requestId: "req_stage2",
     traceId: "trc_stage2",
   });
-  const connect = vi.fn(() => vi.fn());
 
   renderWithStore(<ResearchInputPanel />, {
     runtime: {
       taskApiClient: {
         createTask,
-      },
-      taskEventSource: {
-        connect,
+        sendHeartbeat: vi.fn(),
+        disconnectTask: vi.fn(),
       },
     },
   });
@@ -36,5 +34,4 @@ test("ResearchInputPanel enforces the 500-character limit and submits on Enter",
   await waitFor(() => {
     expect(createTask).toHaveBeenCalledTimes(1);
   });
-  expect(connect).toHaveBeenCalledTimes(1);
 });

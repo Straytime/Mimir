@@ -81,7 +81,7 @@ export function makeCreateTaskResponse(
       heartbeat: "/api/v1/tasks/tsk_stage0/heartbeat",
       disconnect: "/api/v1/tasks/tsk_stage0/disconnect",
     },
-    connect_deadline_at: "2026-03-13T14:30:10+08:00",
+    connect_deadline_at: new Date(Date.now() + 60_000).toISOString(),
     ...overrides,
   };
 }

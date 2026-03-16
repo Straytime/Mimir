@@ -29,8 +29,8 @@ function ResearchPageContent() {
           AI 研究工作台
         </h1>
         <p className="max-w-2xl text-base leading-7 text-slate-700">
-          当前阶段只打通首页空态、研究输入、配置面板、创建任务提交和工作台切换，
-          不进入 Stage 3 的 SSE 生命周期消费。
+          当前阶段已接入 SSE 生命周期、connect deadline、heartbeat、disconnect 与最小终态
+          UI；仍保持 v1 不恢复、不重连的约束。
         </p>
       </div>
 
@@ -50,7 +50,8 @@ function ResearchPageContent() {
               </h2>
               <p className="mt-3 text-sm leading-7 text-slate-700">
                 创建成功后，前端会立即把 `task_id`、`task_token`、`urls` 与初始
-                snapshot 写入 store，并请求开始建立 SSE 连接。
+                snapshot 写入 store，并在工作台内接管后续 SSE、heartbeat 与 disconnect
+                生命周期。
               </p>
             </article>
           </div>
