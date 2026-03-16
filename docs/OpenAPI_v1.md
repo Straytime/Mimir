@@ -1331,7 +1331,7 @@ client_disconnected | heartbeat_timeout | sendbeacon_received | risk_control_lim
 
 统一规则：
 
-1. 正常流转到 `delivered` 时，先发送 `phase.changed`，再发送 `task.awaiting_feedback`
+1. 正常流转到 `delivered` 时，固定顺序为 `phase.changed` -> `report.completed` -> `task.awaiting_feedback`
 2. 发生 `failed` / `terminated` / `expired` 时，对应终态事件始终是该 Task 生命周期内的最后一个业务事件
 3. `task.failed`、`task.terminated`、`task.expired` 不再额外重复发送同一次终态对应的 `phase.changed`
 
