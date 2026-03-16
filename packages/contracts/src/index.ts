@@ -64,6 +64,13 @@ export const TERMINATION_REASONS = [
   "server_shutdown",
 ] as const;
 
+export const DISCONNECT_REQUEST_REASONS = [
+  "pagehide",
+  "beforeunload",
+  "client_manual_abort",
+  "network_lost",
+] as const;
+
 export type IsoDateTimeString = string;
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -75,6 +82,8 @@ export type AvailableAction = (typeof AVAILABLE_ACTIONS)[number];
 export type RevisionStatus = (typeof REVISION_STATUSES)[number];
 export type TerminalTaskStatus = (typeof TERMINAL_TASK_STATUSES)[number];
 export type TerminationReason = (typeof TERMINATION_REASONS)[number];
+export type DisconnectRequestReason =
+  (typeof DISCONNECT_REQUEST_REASONS)[number];
 
 export type RequirementDetail = {
   research_goal: string;
@@ -176,6 +185,19 @@ export type CreateTaskResponse = {
   snapshot: TaskSnapshot;
   urls: TaskUrls;
   connect_deadline_at: IsoDateTimeString;
+};
+
+export type HeartbeatRequest = {
+  client_time: IsoDateTimeString;
+};
+
+export type DisconnectRequest = {
+  reason: DisconnectRequestReason;
+  task_token?: string;
+};
+
+export type AcceptedResponse = {
+  accepted: true;
 };
 
 export type ApiError = {

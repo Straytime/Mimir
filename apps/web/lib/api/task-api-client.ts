@@ -1,7 +1,10 @@
 import type {
+  AcceptedResponse,
   CreateTaskRequest,
   CreateTaskResponse,
+  DisconnectRequestReason,
   ErrorResponse,
+  HeartbeatRequest,
   ValidationErrorItem,
 } from "@/lib/contracts";
 
@@ -11,8 +14,23 @@ export type CreateTaskResult = {
   traceId: string | null;
 };
 
+export type RequestMetadata = {
+  requestId: string | null;
+  traceId: string | null;
+};
+
 export type TaskApiClient = {
   createTask: (request: CreateTaskRequest) => Promise<CreateTaskResult>;
+  sendHeartbeat: (args: {
+    url: string;
+    token: string;
+    request: HeartbeatRequest;
+  }) => Promise<RequestMetadata>;
+  disconnectTask: (args: {
+    url: string;
+    token: string;
+    reason: DisconnectRequestReason;
+  }) => Promise<AcceptedResponse & RequestMetadata>;
 };
 
 type TaskApiClientErrorArgs = {
@@ -50,6 +68,12 @@ type FetchTaskApiClientOptions = {
   fetchImpl?: typeof fetch;
 };
 
+type ParsedResponse = {
+  requestId: string | null;
+  traceId: string | null;
+  responseJson: unknown;
+};
+
 function resolveBaseUrl(baseUrl: string) {
   if (baseUrl.length > 0) {
     return baseUrl;
@@ -62,8 +86,20 @@ function resolveBaseUrl(baseUrl: string) {
   return "http://localhost";
 }
 
-function parseJsonResponse<T>(value: unknown): T {
-  return value as T;
+function resolveRequestUrl(baseUrl: string, url: string) {
+  return new URL(url, baseUrl).toString();
+}
+
+async function parseResponse(response: Response): Promise<ParsedResponse> {
+  const requestId = response.headers.get("x-request-id");
+  const traceId = response.headers.get("x-trace-id");
+  const responseText = await response.text();
+
+  return {
+    requestId,
+    traceId,
+    responseJson: responseText.length > 0 ? JSON.parse(responseText) : null,
+  };
 }
 
 function parseRetryAfterSeconds(headerValue: string | null): number | null {
@@ -84,6 +120,39 @@ function isErrorResponse(value: unknown): value is ErrorResponse {
   return "error" in value;
 }
 
+function ensureOkResponse(
+  response: Response,
+  parsedResponse: ParsedResponse,
+): ParsedResponse {
+  if (response.ok) {
+    return parsedResponse;
+  }
+
+  const errorResponse = isErrorResponse(parsedResponse.responseJson)
+    ? parsedResponse.responseJson
+    : {
+        error: {
+          code: "unknown",
+          message: "请求失败。",
+          detail: {},
+          request_id: parsedResponse.requestId,
+          trace_id: parsedResponse.traceId,
+        },
+      };
+
+  throw new TaskApiClientError({
+    status: response.status,
+    code: errorResponse.error.code,
+    message: errorResponse.error.message,
+    detail: errorResponse.error.detail,
+    requestId: errorResponse.error.request_id,
+    traceId: errorResponse.error.trace_id,
+    retryAfterSeconds: parseRetryAfterSeconds(
+      response.headers.get("retry-after"),
+    ),
+  });
+}
+
 export function isValidationErrorItemArray(
   value: unknown,
 ): value is ValidationErrorItem[] {
@@ -98,7 +167,7 @@ export function createFetchTaskApiClient(
 
   return {
     async createTask(request: CreateTaskRequest) {
-      const response = await fetchImpl(`${baseUrl}/api/v1/tasks`, {
+      const response = await fetchImpl(resolveRequestUrl(baseUrl, "/api/v1/tasks"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -106,43 +175,51 @@ export function createFetchTaskApiClient(
         },
         body: JSON.stringify(request),
       });
-
-      const responseJson = parseJsonResponse<unknown>(await response.json());
-      const requestId = response.headers.get("x-request-id");
-      const traceIdHeader = response.headers.get("x-trace-id");
-
-      if (!response.ok) {
-        const errorResponse = isErrorResponse(responseJson)
-          ? responseJson
-          : {
-              error: {
-                code: "unknown",
-                message: "请求失败。",
-                detail: {},
-                request_id: requestId,
-                trace_id: traceIdHeader,
-              },
-            };
-
-        throw new TaskApiClientError({
-          status: response.status,
-          code: errorResponse.error.code,
-          message: errorResponse.error.message,
-          detail: errorResponse.error.detail,
-          requestId: errorResponse.error.request_id,
-          traceId: errorResponse.error.trace_id,
-          retryAfterSeconds: parseRetryAfterSeconds(
-            response.headers.get("retry-after"),
-          ),
-        });
-      }
-
-      const successResponse = parseJsonResponse<CreateTaskResponse>(responseJson);
+      const parsedResponse = ensureOkResponse(response, await parseResponse(response));
+      const successResponse = parsedResponse.responseJson as CreateTaskResponse;
 
       return {
         response: successResponse,
-        requestId,
-        traceId: traceIdHeader,
+        requestId: parsedResponse.requestId,
+        traceId: parsedResponse.traceId,
+      };
+    },
+
+    async sendHeartbeat({ url, token, request }) {
+      const response = await fetchImpl(resolveRequestUrl(baseUrl, url), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+      });
+      const parsedResponse = ensureOkResponse(response, await parseResponse(response));
+
+      return {
+        requestId: parsedResponse.requestId,
+        traceId: parsedResponse.traceId,
+      };
+    },
+
+    async disconnectTask({ url, token, reason }) {
+      const response = await fetchImpl(resolveRequestUrl(baseUrl, url), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          reason,
+        }),
+      });
+      const parsedResponse = ensureOkResponse(response, await parseResponse(response));
+
+      return {
+        accepted: (parsedResponse.responseJson as AcceptedResponse | null)?.accepted ?? true,
+        requestId: parsedResponse.requestId,
+        traceId: parsedResponse.traceId,
       };
     },
   };

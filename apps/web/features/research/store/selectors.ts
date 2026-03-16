@@ -34,6 +34,10 @@ function isTerminalState(state: ResearchSessionState) {
   return snapshot !== null && TERMINAL_STATUS_SET.has(snapshot.status);
 }
 
+export function selectIsTerminalState(state: ResearchSessionState) {
+  return isTerminalState(state);
+}
+
 function hasAvailableAction(
   state: ResearchSessionState,
   action: AvailableAction,
@@ -59,4 +63,12 @@ export function selectCanDownloadMarkdown(state: ResearchSessionState) {
 
 export function selectCanDownloadPdf(state: ResearchSessionState) {
   return hasAvailableAction(state, "download_pdf");
+}
+
+export function selectCanDisconnectTask(state: ResearchSessionState) {
+  return (
+    state.remote.snapshot !== null &&
+    !isTerminalState(state) &&
+    state.ui.pendingAction !== "disconnecting"
+  );
 }

@@ -65,7 +65,7 @@ export function useCreateTask() {
   const bootstrapCreateTask = useResearchSessionStore(
     (state) => state.bootstrapCreateTask,
   );
-  const { taskApiClient, taskEventSource } = useResearchRuntime();
+  const { taskApiClient } = useResearchRuntime();
 
   return async function createTask() {
     const trimmedPrompt = initialPromptDraft.trim();
@@ -105,14 +105,6 @@ export function useCreateTask() {
       bootstrapCreateTask({
         response: result.response,
         requestId: result.requestId,
-      });
-      taskEventSource.connect({
-        url: result.response.urls.events,
-        token: result.response.task_token,
-        onOpen: () => {},
-        onEvent: () => {},
-        onError: () => {},
-        onClose: () => {},
       });
     } catch (error) {
       if (error instanceof TaskApiClientError) {

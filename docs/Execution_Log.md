@@ -434,3 +434,45 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Backend Stage 4 任务包，实现 clarification 与需求分析链路，并复用当前 Stage 3 的 SSE / 生命周期底座
   - 在后续阶段继续沿用真实 PostgreSQL 路径，为 orchestrator、event producer 和 feedback / artifact 生命周期补更多 integration tests
+
+## M1-004 Frontend Stage 3 SSE Lifecycle + Heartbeat + Disconnect
+
+- 日期时间: 2026-03-16 11:24:02 CST (+0800)
+- 任务包编号: M1-004
+- session 标识: codex-20260316-m1-004-frontend-stage3-lifecycle
+- 目标摘要: 按 `docs/Frontend_TDD_Plan.md` Stage 3 在 `apps/web` 打通前端最关键的任务生命周期：`use-task-stream`、`use-heartbeat-loop`、`use-disconnect-guard`、顶栏连接状态和 `TerminalBanner`，覆盖 SSE 建连、connect deadline、heartbeat、`beforeunload` / `pagehide` / `sendBeacon`、手动 disconnect 与最小终态 UI；严格维持 v1 “不恢复、不重连”的约束，不进入 clarification、timeline、report、delivery、feedback 或任何 Frontend Stage 4 内容。
+- 修改文件:
+  - `packages/contracts/src/index.ts`
+  - `apps/web/lib/api/task-api-client.ts`
+  - `apps/web/features/research/store/research-session-store.types.ts`
+  - `apps/web/features/research/store/research-session-store.ts`
+  - `apps/web/features/research/store/selectors.ts`
+  - `apps/web/features/research/hooks/use-create-task.ts`
+  - `apps/web/features/research/hooks/use-task-stream.ts`
+  - `apps/web/features/research/hooks/use-heartbeat-loop.ts`
+  - `apps/web/features/research/hooks/use-disconnect-guard.ts`
+  - `apps/web/features/research/components/research-input-panel.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/features/research/components/terminal-banner.tsx`
+  - `apps/web/tests/fixtures/builders.ts`
+  - `apps/web/tests/component/research-input-panel.spec.tsx`
+  - `apps/web/tests/integration/task-stream-lifecycle.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm typecheck`；`cd apps/web && pnpm lint`；`cd apps/web && pnpm test:unit`；`cd apps/web && pnpm test:contract`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:integration`
+  - 调试过程:
+    - 新增 Stage 3 integration tests 后，初始失败集中在三类：全局 fake timers 让 `waitFor/findBy*` 整体挂起、`use-task-stream` 为规避 open 后 cleanup 暂时移除了依赖导致 lint 失败、以及 `sendBeacon` 在 jsdom 下对 `Blob` 读取不稳定
+    - 已将 lifecycle tests 改为“仅时间相关用例启用 fake timers”，并将 `use-task-stream` 重构为 ref 持有订阅与 deadline timer 的方式，在满足 `react-hooks/exhaustive-deps` 的同时避免 open 后被 effect cleanup 误断开
+    - `connect_deadline_at` 的测试 builder 由固定远未来时间改为动态 `Date.now() + 60s`，避免 Node `TimeoutOverflowWarning` 与旧 Stage 2 integration tests 被立即 timeout 破坏
+    - `pagehide` beacon 改为发送 JSON 字符串 body，继续满足“body 中携带 `task_token`”的 Stage 3 契约要求，同时让测试环境可稳定断言内容
+  - 未运行: `pnpm test:e2e`；本任务包验收标准聚焦 unit / contract / component / integration，不扩张到 Playwright 回归
+- 验收结论: accepted；前端已具备 `task.created` 覆盖初始化 snapshot、connect deadline 客户端超时、heartbeat loop 启停与 `409/404` 终止、SSE 中断即终态、不自动重连、活跃任务 `beforeunload` 注册与终态移除、`pagehide` 触发 `sendBeacon`、手动 `POST /disconnect`、`disconnecting` pendingAction 生命周期，以及 `task.failed / task.terminated / task.expired` 禁用旧操作的完整 Stage 3 生命周期能力；断连、终止、过期三条路径均有 integration tests，且实现边界停留在 Frontend Stage 3，没有越界进入 Stage 4。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过，且按本任务包约束未处理配置迁移
+  - `pagehide` beacon 当前使用 JSON 字符串 body；这仍满足 `task_token` 随 body 发送的 Stage 3 契约，但如果后续要严格对齐文档中的 `Blob(application/json)` 推荐写法，应在独立任务包中结合真实浏览器环境再收敛
+- 下一步建议:
+  - 进入独立的 Frontend Stage 4 任务包，实现 clarification 事件消费、表单提交与倒计时
+  - 在后续阶段继续沿用当前 Stage 3 生命周期底座，为 timeline、report、delivery 和 feedback UI 增加渐进式集成测试

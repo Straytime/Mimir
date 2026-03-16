@@ -127,6 +127,12 @@ export type ResearchSessionStoreActions = {
   setSessionContext: (
     sessionPatch: Partial<ResearchSessionState["session"]>,
   ) => void;
+  setTerminalState: (args: {
+    terminalReason: Exclude<TerminalReason, null>;
+    timestamp: string;
+    expiresAt?: string | null;
+    sseState?: SseState;
+  }) => void;
   bootstrapCreateTask: (args: {
     response: CreateTaskResponse;
     requestId: string | null;
