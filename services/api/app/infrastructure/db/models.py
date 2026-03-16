@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,6 +34,9 @@ class ResearchTaskRecord(Base):
 
 class TaskRevisionRecord(Base):
     __tablename__ = "task_revisions"
+    __table_args__ = (
+        UniqueConstraint("task_id", "revision_number", name="uq_task_revision_number"),
+    )
 
     revision_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     task_id: Mapped[str] = mapped_column(
@@ -64,4 +67,21 @@ class IPUsageCounterRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class TaskEventRecord(Base):
+    __tablename__ = "task_events"
+
+    task_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("research_tasks.task_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event: Mapped[str] = mapped_column(String(128), nullable=False)
+    revision_id: Mapped[str | None] = mapped_column(String(64))
+    phase: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 Index("ix_ip_usage_counters_ip_hash_created_at", IPUsageCounterRecord.ip_hash, IPUsageCounterRecord.created_at)
+Index("ix_task_events_task_id_seq", TaskEventRecord.task_id, TaskEventRecord.seq)

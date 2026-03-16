@@ -1,4 +1,5 @@
 from base64 import urlsafe_b64decode, urlsafe_b64encode
+from collections.abc import Callable
 from datetime import UTC, datetime
 import hashlib
 import hmac
@@ -18,9 +19,16 @@ class TokenVerificationError(Exception):
 
 
 class _HMACSigner(Generic[PayloadT]):
-    def __init__(self, *, secret: str, payload_model: type[PayloadT]) -> None:
+    def __init__(
+        self,
+        *,
+        secret: str,
+        payload_model: type[PayloadT],
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
         self.secret = secret.encode("utf-8")
         self.payload_model = payload_model
+        self.clock = clock or (lambda: datetime.now(UTC))
 
     def sign(self, payload: PayloadT) -> str:
         raw_payload = json.dumps(
@@ -61,7 +69,7 @@ class _HMACSigner(Generic[PayloadT]):
         except ValidationError as exc:
             raise TokenVerificationError("Token payload is invalid") from exc
 
-        if payload.expires_at <= datetime.now(UTC):
+        if payload.expires_at <= self.clock():
             raise TokenVerificationError("Token expired")
 
         return payload
@@ -77,10 +85,15 @@ class _HMACSigner(Generic[PayloadT]):
 
 
 class HMACTaskTokenSigner(_HMACSigner[TaskTokenPayload]):
-    def __init__(self, *, secret: str) -> None:
-        super().__init__(secret=secret, payload_model=TaskTokenPayload)
+    def __init__(self, *, secret: str, clock: Callable[[], datetime] | None = None) -> None:
+        super().__init__(secret=secret, payload_model=TaskTokenPayload, clock=clock)
 
 
 class HMACAccessTokenSigner(_HMACSigner[AccessTokenPayload]):
-    def __init__(self, *, secret: str) -> None:
-        super().__init__(secret=secret, payload_model=AccessTokenPayload)
+    def __init__(
+        self,
+        *,
+        secret: str,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        super().__init__(secret=secret, payload_model=AccessTokenPayload, clock=clock)

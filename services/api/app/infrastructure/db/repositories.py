@@ -1,17 +1,28 @@
 from datetime import UTC, datetime
+from typing import Final
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.application.dto.tasks import TaskDetailResponse
-from app.domain.enums import ClarificationMode, RevisionStatus, TaskPhase, TaskStatus
-from app.domain.schemas import RevisionSummary, TaskSnapshot
+from app.domain.enums import (
+    AvailableAction,
+    ClarificationMode,
+    RevisionStatus,
+    TaskPhase,
+    TaskStatus,
+)
+from app.domain.schemas import EventEnvelope, RevisionSummary, TaskSnapshot
 from app.infrastructure.db.models import (
     IPUsageCounterRecord,
     ResearchTaskRecord,
     SystemLockRecord,
+    TaskEventRecord,
     TaskRevisionRecord,
 )
+
+
+_UNSET: Final = object()
 
 
 class TaskRepository:
@@ -75,10 +86,33 @@ class TaskRepository:
 
         return task, revision
 
-    def get_task(self, *, session: Session, task_id: str) -> ResearchTaskRecord | None:
-        return session.get(ResearchTaskRecord, task_id)
+    def get_task(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        for_update: bool = False,
+    ) -> ResearchTaskRecord | None:
+        statement = select(ResearchTaskRecord).where(ResearchTaskRecord.task_id == task_id)
+        if for_update:
+            statement = statement.with_for_update()
+        return session.scalar(statement)
 
-    def terminate_task(
+    def get_revision(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+    ) -> TaskRevisionRecord | None:
+        return session.get(TaskRevisionRecord, revision_id)
+
+    def release_lock(self, *, session: Session, task_id: str) -> None:
+        session.execute(
+            delete(SystemLockRecord).where(SystemLockRecord.task_id == task_id)
+        )
+        session.flush()
+
+    def update_task_state(
         self,
         *,
         session: Session,
@@ -86,18 +120,100 @@ class TaskRepository:
         status: str,
         phase: str,
         updated_at: datetime,
-    ) -> None:
-        task = session.get(ResearchTaskRecord, task_id)
+        expires_at: datetime | None | object = _UNSET,
+    ) -> ResearchTaskRecord | None:
+        task = self.get_task(session=session, task_id=task_id, for_update=True)
         if task is None:
-            return
+            return None
 
         task.status = status
         task.phase = phase
         task.updated_at = updated_at
-        session.execute(
-            delete(SystemLockRecord).where(SystemLockRecord.task_id == task_id)
-        )
+        if expires_at is not _UNSET:
+            task.expires_at = expires_at
         session.flush()
+        return task
+
+    def update_revision_status(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+        revision_status: str,
+        finished_at: datetime | None | object = _UNSET,
+    ) -> TaskRevisionRecord | None:
+        revision = self.get_revision(session=session, revision_id=revision_id)
+        if revision is None:
+            return None
+
+        revision.revision_status = revision_status
+        if finished_at is not _UNSET:
+            revision.finished_at = finished_at
+        session.flush()
+        return revision
+
+    def list_events_after(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        after_seq: int,
+    ) -> list[EventEnvelope]:
+        records = list(
+            session.scalars(
+                select(TaskEventRecord)
+                .where(TaskEventRecord.task_id == task_id)
+                .where(TaskEventRecord.seq > after_seq)
+                .order_by(TaskEventRecord.seq.asc())
+            )
+        )
+        return [self.build_event_envelope(record=record) for record in records]
+
+    def has_events(self, *, session: Session, task_id: str) -> bool:
+        return (
+            session.scalar(
+                select(func.count())
+                .select_from(TaskEventRecord)
+                .where(TaskEventRecord.task_id == task_id)
+            )
+            or 0
+        ) > 0
+
+    def append_event(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        revision_id: str | None,
+        event: str,
+        phase: str,
+        payload: dict[str, object],
+        created_at: datetime,
+    ) -> EventEnvelope:
+        task = self.get_task(session=session, task_id=task_id, for_update=True)
+        if task is None:
+            raise LookupError(f"Task {task_id} not found")
+
+        next_seq = (
+            session.scalar(
+                select(func.coalesce(func.max(TaskEventRecord.seq), 0) + 1).where(
+                    TaskEventRecord.task_id == task_id
+                )
+            )
+            or 1
+        )
+        record = TaskEventRecord(
+            task_id=task_id,
+            seq=int(next_seq),
+            event=event,
+            revision_id=revision_id,
+            phase=phase,
+            payload_json=payload,
+            created_at=created_at,
+        )
+        session.add(record)
+        session.flush()
+        return self.build_event_envelope(record=record)
 
     def build_task_detail_response(
         self,
@@ -111,18 +227,7 @@ class TaskRepository:
 
         return TaskDetailResponse(
             task_id=task.task_id,
-            snapshot=TaskSnapshot(
-                task_id=task.task_id,
-                status=TaskStatus(task.status),
-                phase=TaskPhase(task.phase),
-                active_revision_id=task.active_revision_id,
-                active_revision_number=task.active_revision_number,
-                clarification_mode=ClarificationMode(task.clarification_mode),
-                created_at=_as_utc(task.created_at),
-                updated_at=_as_utc(task.updated_at),
-                expires_at=_as_utc(task.expires_at),
-                available_actions=[],
-            ),
+            snapshot=self.build_snapshot(task=task),
             current_revision=RevisionSummary(
                 revision_id=revision.revision_id,
                 revision_number=revision.revision_number,
@@ -134,8 +239,53 @@ class TaskRepository:
             delivery=None,
         )
 
+    def build_snapshot(self, *, task: ResearchTaskRecord) -> TaskSnapshot:
+        status = TaskStatus(task.status)
+        phase = TaskPhase(task.phase)
+        return TaskSnapshot(
+            task_id=task.task_id,
+            status=status,
+            phase=phase,
+            active_revision_id=task.active_revision_id,
+            active_revision_number=task.active_revision_number,
+            clarification_mode=ClarificationMode(task.clarification_mode),
+            created_at=_as_utc(task.created_at),
+            updated_at=_as_utc(task.updated_at),
+            expires_at=_as_utc(task.expires_at),
+            available_actions=_available_actions_for(status=status, phase=phase),
+        )
+
+    def build_event_envelope(self, *, record: TaskEventRecord) -> EventEnvelope:
+        return EventEnvelope(
+            seq=record.seq,
+            event=record.event,
+            task_id=record.task_id,
+            revision_id=record.revision_id,
+            phase=TaskPhase(record.phase),
+            timestamp=_as_utc(record.created_at),
+            payload=record.payload_json,
+        )
+
 
 def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     return value.astimezone(UTC)
+
+
+def _available_actions_for(
+    *,
+    status: TaskStatus,
+    phase: TaskPhase,
+) -> list[AvailableAction]:
+    if status is TaskStatus.AWAITING_USER_INPUT and phase is TaskPhase.CLARIFYING:
+        return [AvailableAction.SUBMIT_CLARIFICATION]
+
+    if status is TaskStatus.AWAITING_FEEDBACK and phase is TaskPhase.DELIVERED:
+        return [
+            AvailableAction.SUBMIT_FEEDBACK,
+            AvailableAction.DOWNLOAD_MARKDOWN,
+            AvailableAction.DOWNLOAD_PDF,
+        ]
+
+    return []

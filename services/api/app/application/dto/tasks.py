@@ -72,3 +72,7 @@ class DisconnectRequestBody(ApiDto):
 
 class AcceptedResponse(ApiDto):
     accepted: bool
+
+
+class HeartbeatRequest(ApiDto):
+    client_time: datetime

@@ -1,18 +1,21 @@
 import json
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_session, get_task_service
+from app.api.deps import get_db_session, get_task_lifecycle, get_task_service
 from app.api.errors import ApiError
 from app.application.dto.tasks import (
     AcceptedResponse,
     CreateTaskRequest,
     CreateTaskResponse,
     DisconnectRequestBody,
+    HeartbeatRequest,
     TaskDetailResponse,
 )
 from app.application.services.tasks import TaskService
+from app.infrastructure.streaming.broker import TaskLifecycleManager
 
 router = APIRouter(tags=["tasks"])
 
@@ -42,11 +45,12 @@ async def _extract_disconnect_body(request: Request) -> DisconnectRequestBody | 
 
 
 @router.post("/tasks", response_model=CreateTaskResponse, status_code=201)
-def post_tasks(
+async def post_tasks(
     request: Request,
     payload: CreateTaskRequest,
     session: Session = Depends(get_db_session),
     service: TaskService = Depends(get_task_service),
+    lifecycle: TaskLifecycleManager = Depends(get_task_lifecycle),
 ) -> CreateTaskResponse:
     client_ip = request.headers.get("X-Forwarded-For")
     if client_ip:
@@ -59,12 +63,16 @@ def post_tasks(
         payload=payload,
         client_ip=client_ip,
     )
+    await lifecycle.register_task(
+        task_id=response.task_id,
+        connect_deadline_at=response.connect_deadline_at,
+    )
     request.state.trace_id = response.trace_id
     return response
 
 
 @router.get("/tasks/{task_id}", response_model=TaskDetailResponse)
-def get_task(
+async def get_task(
     task_id: str,
     request: Request,
     session: Session = Depends(get_db_session),
@@ -83,22 +91,69 @@ def get_task(
     return response
 
 
+@router.get("/tasks/{task_id}/events")
+async def get_task_events(
+    task_id: str,
+    request: Request,
+    lifecycle: TaskLifecycleManager = Depends(get_task_lifecycle),
+) -> StreamingResponse:
+    token = _extract_bearer_token(request.headers.get("Authorization"))
+    if token is None:
+        raise ApiError(
+            status_code=401,
+            code="task_token_invalid",
+            message="任务 token 无效或不匹配。",
+        )
+
+    trace_id = await lifecycle.prepare_event_stream(task_id=task_id, token=token)
+    request.state.trace_id = trace_id
+    return StreamingResponse(
+        lifecycle.stream_events(request=request, task_id=task_id),
+        media_type="text/event-stream",
+        headers={
+            "Connection": "keep-alive",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.post("/tasks/{task_id}/heartbeat", status_code=204)
+async def post_heartbeat(
+    task_id: str,
+    payload: HeartbeatRequest,
+    request: Request,
+    lifecycle: TaskLifecycleManager = Depends(get_task_lifecycle),
+) -> Response:
+    token = _extract_bearer_token(request.headers.get("Authorization"))
+    if token is None:
+        raise ApiError(
+            status_code=401,
+            code="task_token_invalid",
+            message="任务 token 无效或不匹配。",
+        )
+
+    trace_id = await lifecycle.record_client_heartbeat(
+        task_id=task_id,
+        token=token,
+    )
+    request.state.trace_id = trace_id
+    return Response(status_code=204)
+
+
 @router.post("/tasks/{task_id}/disconnect", response_model=AcceptedResponse, status_code=202)
 async def post_disconnect(
     task_id: str,
     request: Request,
-    session: Session = Depends(get_db_session),
-    service: TaskService = Depends(get_task_service),
+    lifecycle: TaskLifecycleManager = Depends(get_task_lifecycle),
 ) -> AcceptedResponse:
     header_token = _extract_bearer_token(request.headers.get("Authorization"))
     if header_token is not None:
-        trace_id, response = service.disconnect_task(
-            session,
+        trace_id = await lifecycle.disconnect_task(
             task_id=task_id,
             token=header_token,
         )
         request.state.trace_id = trace_id
-        return response
+        return AcceptedResponse(accepted=True)
 
     body = await _extract_disconnect_body(request)
     if body is None or body.task_token is None:
@@ -108,10 +163,9 @@ async def post_disconnect(
             message="任务 token 无效或不匹配。",
         )
 
-    trace_id, response = service.disconnect_task(
-        session,
+    trace_id = await lifecycle.disconnect_task(
         task_id=task_id,
         token=body.task_token,
     )
     request.state.trace_id = trace_id
-    return response
+    return AcceptedResponse(accepted=True)

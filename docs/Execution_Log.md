@@ -392,3 +392,45 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Frontend Stage 3 任务包，实现 SSE 生命周期消费、heartbeat / disconnect 与终态处理
   - 在后续前端任务中再接入 clarification / timeline / report 等业务 UI，继续保持 contract-first 与阶段边界
+
+## M1-003 Backend Stage 3 SSE Broker + Lifecycle
+
+- 日期时间: 2026-03-16 10:32:17 CST (+0800)
+- 任务包编号: M1-003
+- session 标识: codex-20260316-m1-003-backend-stage3-sse
+- 目标摘要: 按 `docs/Backend_TDD_Plan.md` Stage 3 在 `services/api` 打通任务级 SSE 流、`task_events` 持久化、event serialization、首个 SSE 连接门控、connect deadline、heartbeat / disconnect / expiry 生命周期，并以最小框架级 orchestrator 语义保证“先连 SSE 再启动任务流”；严格停留在任务框架级流式编排，不接入 clarification、LLM、collector、writer、feedback 提交或任何 Stage 4 内容。
+- 修改文件:
+  - `services/api/app/api/deps.py`
+  - `services/api/app/api/v1/tasks.py`
+  - `services/api/app/application/dto/tasks.py`
+  - `services/api/app/application/services/tasks.py`
+  - `services/api/app/core/config.py`
+  - `services/api/app/infrastructure/db/models.py`
+  - `services/api/app/infrastructure/db/repositories.py`
+  - `services/api/app/infrastructure/db/migrations/versions/20260316_0002_stage3_sse_lifecycle.py`
+  - `services/api/app/infrastructure/security/hmac_signers.py`
+  - `services/api/app/infrastructure/streaming/__init__.py`
+  - `services/api/app/infrastructure/streaming/broker.py`
+  - `services/api/app/main.py`
+  - `services/api/tests/conftest.py`
+  - `services/api/tests/fixtures/app.py`
+  - `services/api/tests/contract/rest/test_task_events.py`
+  - `services/api/tests/integration/db/test_migrations.py`
+  - `services/api/tests/integration/lifecycle/test_task_stream_lifecycle.py`
+  - `services/api/tests/unit/infrastructure/test_streaming.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_task_events.py tests/integration/lifecycle/test_task_stream_lifecycle.py`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+  - 调试过程:
+    - 初始 red tests 暴露缺少 `task_events` 模型、SSE 路由与生命周期实现
+    - 引入 fake clock 后，`task_token` 校验仍使用真实系统时间导致 `/events` 返回 `401 task_token_invalid`；已将 HMAC signer 接入同一时钟源
+    - `httpx.ASGITransport` 会缓冲响应直至 body 完整结束，无法真实验证长连接 SSE；已在测试夹具中补一个 streaming-capable in-process transport，用于 Stage 3 contract / integration tests 增量消费事件帧
+  - 未运行: `ruff check`、`mypy`；本任务包验收标准聚焦 Stage 3 的 unit / contract / integration 与 migration 正反向验证
+- 验收结论: accepted；`GET /api/v1/tasks/{task_id}/events`、`POST /api/v1/tasks/{task_id}/heartbeat`、增强后的 `POST /api/v1/tasks/{task_id}/disconnect`、`task_events` 持久化、统一 SSE envelope、`task.created` / `heartbeat` / `phase.changed` / `task.failed` / `task.terminated` / `task.expired`、首连后才启动任务流、10 秒 connect deadline 清理、heartbeat timeout、awaiting_feedback 保持 SSE 打开且仍允许 heartbeat / disconnect、以及终态事件顺序均已落地并被 tests 覆盖；实现边界停留在 Backend Stage 3，没有进入 clarification、feedback、downloads 或 Stage 4。
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前 Stage 3 的“orchestrator 启动”仍是最小任务框架语义: 首连后落 `task.created` 并进入可流式生命周期，真实 clarification / LLM / collector / writer 编排留给后续阶段
+  - 生命周期 runtime 依赖进程内 broker 状态管理活动连接与客户端心跳；这符合 v1 单进程 / 不支持刷新恢复的设计，但若后续部署拓扑变化，需要在独立任务包里重新评估跨实例一致性
+- 下一步建议:
+  - 进入独立的 Backend Stage 4 任务包，实现 clarification 与需求分析链路，并复用当前 Stage 3 的 SSE / 生命周期底座
+  - 在后续阶段继续沿用真实 PostgreSQL 路径，为 orchestrator、event producer 和 feedback / artifact 生命周期补更多 integration tests
