@@ -711,3 +711,29 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Frontend Stage 6 任务包，实现 outline completed、writer 流、artifact gallery 与 delivery actions，不要在当前 Stage 5 基线上混入下载与报告正文逻辑
   - Stage 6 若继续扩前端契约，应延续当前 contract-first 方式，优先在 `packages/contracts` 与 builder / contract tests 中固化后再进 reducer 与 UI
+
+## M3-003 Collection Engine Integration + Final Closure
+
+- 日期时间: 2026-03-16 16:41:54 CST (+0800)
+- 任务包编号: M3-003
+- session 标识: codex-20260316-m3-003-final-closure
+- 目标摘要: 核对 `M3-001` 与 `M3-002` 是否已经进入同一统一基线，确认当前 `main` 同时包含 Backend Stage 5、Frontend Stage 5 与既有 M2 / M1 生命周期能力，检查 shared contracts、后端事件契约与前端消费代码没有真实字段漂移，并完成完整的 M3 基线验证，作为进入 M4 前的唯一开发基线。
+- 修改文件:
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `git status --short`；`git branch --all --verbose --no-abbrev`；`git log --oneline --decorate --graph --all --max-count=40`；`rg -n "^## M3-|Stage 5|Final Closure" docs/Execution_Log.md`；`sed -n '760,980p' docs/Execution_Log.md`
+  - 已运行: `sed -n '1,320p' packages/contracts/src/index.ts`；`sed -n '1,260p' apps/web/features/research/reducers/event-reducer.ts`；`sed -n '1,260p' apps/web/features/research/mappers/timeline-mapper.ts`；`sed -n '1,260p' apps/web/features/research/components/timeline-panel.tsx`；`sed -n '1,260p' apps/web/features/research/components/requirement-summary-card.tsx`；`sed -n '1,260p' services/api/app/application/services/collection.py`；`sed -n '1,260p' services/api/app/application/services/merge.py`；`sed -n '1,260p' services/api/app/infrastructure/streaming/broker.py`；`sed -n '1,260p' services/api/app/infrastructure/db/migrations/versions/20260316_0003_stage5_collection_engine.py`
+  - 已运行: `pnpm --version`；`uv --version`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`；`cd apps/web && pnpm typecheck`；`cd apps/web && pnpm lint`；`cd apps/web && pnpm test:contract`；`cd apps/web && pnpm test:unit`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:integration`；`cd apps/web && pnpm test:e2e`
+  - 调试过程:
+    - 当前 `main` 已通过 PR #14 与 PR #15 吸收 `M3-001` 和 `M3-002`，本次不需要再做新的 merge
+    - 后端 Stage 5 全量测试在当前环境直接通过，`75 passed`
+    - 前端 `typecheck / lint / contract / unit / component / integration / e2e` 全部通过；`pnpm lint` 仍只打印 ESLint 9 legacy warning，`pnpm test:e2e` 本次在当前环境无需额外提权
+  - 未运行: 无
+- 验收结论: accepted；统一基线已同时包含 Backend Stage 5、Frontend Stage 5 与既有 M2 / M1 能力，`analysis.completed -> planning_collection`、`planner.reasoning.delta / planner.tool_call.requested`、`collector.search.* / collector.fetch.* / collector.completed`、`summary.completed`、`sources.merged` 均通过验证；same-source merge 后 `refer` 稳定重编，并发 sub-agent 时间线不会串线，`risk_blocked` 路径可见；natural / options 澄清链路以及创建任务、立即建连、heartbeat / disconnect、终态等既有生命周期均未回归，M3 可明确宣布完成。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过，且按任务约束本次未处理
+  - 当前 collection engine 仍建立在单实例 runtime / broker 协调与 local stub research adapters 上；这与现阶段架构约束一致，但后续进入真实 provider 或多实例部署时仍需保持同一契约边界
+- 下一步建议:
+  - 后续任务包可以正式进入 M4，但应继续保持单线程串行开发与 `docs/Execution_Log.md` 追加维护
+  - M4 应聚焦 outline / writer / artifact / delivery 最小闭环，不回退扩张 Stage 5 的 collection 范围
