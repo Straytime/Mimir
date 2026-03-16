@@ -46,6 +46,10 @@ function hasAvailableAction(
     return false;
   }
 
+  if (state.ui.revisionTransition.status !== "idle") {
+    return false;
+  }
+
   return selectAvailableActions(state).includes(action);
 }
 

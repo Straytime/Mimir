@@ -16,6 +16,7 @@ import {
   makeOutlineDeltaEvent,
   makePlannerReasoningDeltaEvent,
   makePlannerToolCallRequestedEvent,
+  makePhaseChangedEvent,
   makeReportCompletedEvent,
   makeSourcesMergedEvent,
   makeSummaryCompletedEvent,
@@ -230,6 +231,48 @@ describe("reduceTimelineStream", () => {
         kind: "system",
         label: "报告已完成",
         status: "completed",
+      }),
+    ]);
+  });
+
+  test("maps feedback-processing and new-round phase changes into explicit timeline items", () => {
+    const result = reduceEvents([
+      makePhaseChangedEvent({
+        seq: 60,
+        revision_id: "rev_stage1",
+        phase: "processing_feedback",
+        payload: {
+          from_phase: "delivered",
+          to_phase: "processing_feedback",
+          status: "running",
+        },
+      }),
+      makePhaseChangedEvent({
+        seq: 61,
+        revision_id: "rev_stage1",
+        phase: "planning_collection",
+        payload: {
+          from_phase: "processing_feedback",
+          to_phase: "planning_collection",
+          status: "running",
+        },
+      }),
+    ]);
+
+    expect(result.timeline).toEqual([
+      expect.objectContaining({
+        id: "phase:60",
+        kind: "phase",
+        revisionId: "rev_stage1",
+        label: "正在处理反馈",
+        status: "running",
+      }),
+      expect.objectContaining({
+        id: "phase:61",
+        kind: "phase",
+        revisionId: "rev_stage1",
+        label: "新一轮研究已进入规划阶段",
+        status: "running",
       }),
     ]);
   });

@@ -8,6 +8,7 @@ import {
 } from "./clarification-panels";
 import { ArtifactGallery } from "./artifact-gallery";
 import { DeliveryActions } from "./delivery-actions";
+import { FeedbackComposer } from "./feedback-composer";
 import { RequirementSummaryCard } from "./requirement-summary-card";
 import { ReportCanvas } from "./report-canvas";
 import { useClarificationCountdown } from "../hooks/use-clarification-countdown";
@@ -15,7 +16,10 @@ import { useDisconnectGuard } from "../hooks/use-disconnect-guard";
 import { useHeartbeatLoop } from "../hooks/use-heartbeat-loop";
 import { useTaskStream } from "../hooks/use-task-stream";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
-import { selectCanDisconnectTask } from "../store/selectors";
+import {
+  selectCanDisconnectTask,
+  selectIsAwaitingFeedback,
+} from "../store/selectors";
 import { SessionStatusBar } from "./session-status-bar";
 import { TerminalBanner } from "./terminal-banner";
 import { TimelinePanel } from "./timeline-panel";
@@ -73,12 +77,19 @@ function getStageStatusCopy(phase: string) {
         description:
           "正文会由 writer.delta 持续追加，writer.reasoning 只进入时间线，配图生成状态也会同步展示。",
       };
+    case "processing_feedback":
+      return {
+        eyebrow: "Feedback Processing",
+        title: "正在处理反馈",
+        description:
+          "系统正在根据本轮反馈重写需求范围。下一轮 revision 的首个 SSE 事件会接管工作台，并清空旧的正文与交付缓存。",
+      };
     case "delivered":
       return {
         eyebrow: "Delivery",
         title: "报告已完成并进入交付阶段",
         description:
-          "下载区会先被 report.completed 更新；真正开放下载与反馈仍要等 task.awaiting_feedback。",
+          "下载区会先被 report.completed 更新；真正开放下载与 feedback 仍要等 task.awaiting_feedback。",
       };
     default:
       return {
@@ -140,6 +151,10 @@ export function ResearchWorkspaceShell() {
     (state) => state.remote.snapshot?.available_actions ?? [],
   );
   const canDisconnectTask = useResearchSessionStore(selectCanDisconnectTask);
+  const isAwaitingFeedback = useResearchSessionStore(selectIsAwaitingFeedback);
+  const revisionTransition = useResearchSessionStore(
+    (state) => state.ui.revisionTransition,
+  );
   const disconnectTask = useDisconnectGuard();
   const isMobileLayout = useIsMobileLayout();
   const [mobileSegment, setMobileSegment] = useState<MobileSegment>("control");
@@ -151,9 +166,15 @@ export function ResearchWorkspaceShell() {
   const stageStatusCopy = getStageStatusCopy(snapshot.phase);
   const detailSegmentLabel =
     snapshot.phase === "clarifying" ? "澄清详情" : "报告";
+  const analysisPrefix =
+    snapshot.phase === "processing_feedback" ? "正在处理反馈：" : "正在分析需求：";
+  const isRevisionTransitioning = revisionTransition.status !== "idle";
 
   const controlRail = (
-    <article className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur">
+    <article
+      className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur"
+      id="workspace-control-panel"
+    >
       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
         Control Rail
       </p>
@@ -163,7 +184,7 @@ export function ResearchWorkspaceShell() {
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {snapshot.phase === "clarifying"
               ? "当前处于澄清阶段，提交成功后将立即切到需求分析。"
-              : "当前工作台已接入透明度时间线、报告正文、图片制品与交付下载区；feedback 仍保留到下一阶段。"}
+              : "当前工作台已接入透明度时间线、报告正文、图片制品、交付下载与 feedback revision 切换。"}
           </p>
         </div>
         <button
@@ -214,14 +235,17 @@ export function ResearchWorkspaceShell() {
       <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/85 p-5">
         <p className="text-sm font-semibold text-slate-950">v1 约束</p>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          不支持断线恢复、自动重连或跨刷新保留 task_token；报告与交付只覆盖 Stage 6，不提前进入 feedback revision。
+          不支持断线恢复、自动重连或跨刷新保留 task_token；feedback 进入新 revision 时也只按当前流式事件切换，不做刷新恢复。
         </p>
       </div>
     </article>
   );
 
   const detailPanel = (
-    <article className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur">
+    <article
+      className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur"
+      id="workspace-detail-panel"
+    >
       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
         {snapshot.phase === "clarifying"
           ? "Clarification Detail"
@@ -231,7 +255,7 @@ export function ResearchWorkspaceShell() {
         {snapshot.phase === "clarifying" ? (
           <ClarificationDetailPanel compact={isMobileLayout} />
         ) : (
-          <div className="space-y-5">
+          <div className="relative space-y-5">
             <div className="rounded-3xl border border-sky-200 bg-sky-50 px-5 py-5">
               <h3 className="text-xl font-semibold text-slate-950">
                 {stageStatusCopy.title}
@@ -241,7 +265,8 @@ export function ResearchWorkspaceShell() {
               </p>
               {analysisText.length > 0 ? (
                 <p className="mt-4 whitespace-pre-line text-sm leading-7 text-sky-900">
-                  正在分析需求：{analysisText}
+                  {analysisPrefix}
+                  {analysisText}
                 </p>
               ) : null}
             </div>
@@ -250,13 +275,40 @@ export function ResearchWorkspaceShell() {
             <ReportCanvas />
             <ArtifactGallery />
             <DeliveryActions />
+            {isAwaitingFeedback ? <FeedbackComposer /> : null}
+
+            {isRevisionTransitioning ? (
+              <div
+                aria-live="polite"
+                className="absolute inset-0 flex items-center justify-center rounded-[2rem] bg-white/72 p-6 text-center backdrop-blur-sm"
+                role="status"
+              >
+                <div className="max-w-md rounded-3xl border border-slate-200 bg-white/92 px-6 py-5 shadow-sm">
+                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Revision Transition
+                  </p>
+                  <p className="mt-3 text-lg font-semibold text-slate-950">
+                    正在处理反馈并准备新一轮研究...
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    {revisionTransition.status === "waiting_next_revision"
+                      ? `旧报告会继续可见，直到第 ${revisionTransition.pendingRevisionNumber ?? "?"} 轮的首个 SSE 事件到达。`
+                      : `第 ${revisionTransition.pendingRevisionNumber ?? "?"} 轮已接管工作台，旧正文与交付缓存已被清空。`}
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </div>
     </article>
   );
 
-  const progressPanel = <TimelinePanel items={timelineItems} />;
+  const progressPanel = (
+    <div id="workspace-progress-panel">
+      <TimelinePanel items={timelineItems} />
+    </div>
+  );
 
   return (
     <section className="space-y-6">
@@ -267,6 +319,8 @@ export function ResearchWorkspaceShell() {
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-2">
             <button
+              aria-controls="workspace-control-panel"
+              aria-pressed={mobileSegment === "control"}
               className={`rounded-full px-4 py-3 text-sm font-semibold ${
                 mobileSegment === "control"
                   ? "bg-slate-950 text-white"
@@ -278,6 +332,8 @@ export function ResearchWorkspaceShell() {
               操作
             </button>
             <button
+              aria-controls="workspace-detail-panel"
+              aria-pressed={mobileSegment === "detail"}
               className={`rounded-full px-4 py-3 text-sm font-semibold ${
                 mobileSegment === "detail"
                   ? "bg-slate-950 text-white"
@@ -289,6 +345,8 @@ export function ResearchWorkspaceShell() {
               {detailSegmentLabel}
             </button>
             <button
+              aria-controls="workspace-progress-panel"
+              aria-pressed={mobileSegment === "progress"}
               className={`rounded-full px-4 py-3 text-sm font-semibold ${
                 mobileSegment === "progress"
                   ? "bg-slate-950 text-white"

@@ -19,6 +19,7 @@ import type {
   DeliverySummary,
   ErrorResponse,
   EventEnvelope,
+  FeedbackAcceptedResponse,
   HeartbeatEventEnvelope,
   OutlineCompletedEventEnvelope,
   OutlineDeltaEventEnvelope,
@@ -898,6 +899,17 @@ export function makeClarificationAcceptedResponse(
       updated_at: "2026-03-13T14:31:10+08:00",
       available_actions: [],
     }),
+    ...overrides,
+  };
+}
+
+export function makeFeedbackAcceptedResponse(
+  overrides: Partial<FeedbackAcceptedResponse> = {},
+): FeedbackAcceptedResponse {
+  return {
+    accepted: true,
+    revision_id: "rev_stage1",
+    revision_number: 2,
     ...overrides,
   };
 }

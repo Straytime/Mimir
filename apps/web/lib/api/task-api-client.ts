@@ -6,6 +6,8 @@ import type {
   CreateTaskResponse,
   DisconnectRequestReason,
   ErrorResponse,
+  FeedbackAcceptedResponse,
+  FeedbackRequest,
   HeartbeatRequest,
   TaskDetailResponse,
   ValidationErrorItem,
@@ -35,6 +37,11 @@ export type TaskApiClient = {
     token: string;
     request: ClarificationSubmission;
   }) => Promise<ClarificationAcceptedResponse & RequestMetadata>;
+  submitFeedback: (args: {
+    taskId: string;
+    token: string;
+    request: FeedbackRequest;
+  }) => Promise<FeedbackAcceptedResponse & RequestMetadata>;
   sendHeartbeat: (args: {
     url: string;
     token: string;
@@ -236,6 +243,29 @@ export function createFetchTaskApiClient(
       const parsedResponse = ensureOkResponse(response, await parseResponse(response));
       const successResponse =
         parsedResponse.responseJson as ClarificationAcceptedResponse;
+
+      return {
+        ...successResponse,
+        requestId: parsedResponse.requestId,
+        traceId: parsedResponse.traceId,
+      };
+    },
+
+    async submitFeedback({ taskId, token, request }) {
+      const response = await fetchImpl(
+        resolveRequestUrl(baseUrl, `/api/v1/tasks/${taskId}/feedback`),
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(request),
+        },
+      );
+      const parsedResponse = ensureOkResponse(response, await parseResponse(response));
+      const successResponse = parsedResponse.responseJson as FeedbackAcceptedResponse;
 
       return {
         ...successResponse,

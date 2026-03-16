@@ -58,6 +58,27 @@ test("disables download buttons while delivery refresh is in progress", () => {
   expect(screen.getByRole("button", { name: "下载 PDF" })).toBeDisabled();
 });
 
+test("disables download buttons while waiting for the next revision after feedback submission", () => {
+  const store = createDeliveryStore();
+
+  store.setState((state) => ({
+    ...state,
+    ui: {
+      ...state.ui,
+      revisionTransition: {
+        status: "waiting_next_revision",
+        pendingRevisionId: "rev_stage1",
+        pendingRevisionNumber: 2,
+      },
+    },
+  }));
+
+  renderWithStore(<DeliveryActions />, { store });
+
+  expect(screen.getByRole("button", { name: "下载 Markdown Zip" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "下载 PDF" })).toBeDisabled();
+});
+
 test("shows independent loading state for markdown zip and pdf downloads", async () => {
   const user = userEvent.setup();
   const store = createDeliveryStore();
