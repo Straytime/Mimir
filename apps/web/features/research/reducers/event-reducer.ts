@@ -322,6 +322,85 @@ export function reduceResearchSessionEvent(
           },
         };
       }
+    case "outline.delta":
+    case "outline.completed":
+    case "writer.reasoning.delta":
+    case "writer.tool_call.requested":
+    case "writer.tool_call.completed":
+      if (event.event === "outline.completed") {
+        return {
+          ...stateWithLastEventSeq,
+          stream: {
+            ...stateWithLastEventSeq.stream,
+            ...reduceStreamTimeline(stateWithLastEventSeq, event),
+            outline: event.payload.outline,
+          },
+        };
+      }
+
+      return {
+        ...stateWithLastEventSeq,
+        stream: {
+          ...stateWithLastEventSeq.stream,
+          ...reduceStreamTimeline(stateWithLastEventSeq, event),
+        },
+      };
+    case "writer.delta":
+      return {
+        ...stateWithLastEventSeq,
+        stream: {
+          ...stateWithLastEventSeq.stream,
+          reportMarkdown: `${state.stream.reportMarkdown}${event.payload.delta}`,
+        },
+      };
+    case "artifact.ready":
+      return {
+        ...stateWithLastEventSeq,
+        stream: {
+          ...stateWithLastEventSeq.stream,
+          ...reduceStreamTimeline(stateWithLastEventSeq, event),
+          artifacts: state.stream.artifacts.some(
+            (artifact) =>
+              artifact.artifact_id === event.payload.artifact.artifact_id,
+          )
+            ? state.stream.artifacts.map((artifact) =>
+                artifact.artifact_id === event.payload.artifact.artifact_id
+                  ? event.payload.artifact
+                  : artifact,
+              )
+            : [...state.stream.artifacts, event.payload.artifact],
+        },
+      };
+    case "report.completed":
+      return {
+        ...stateWithLastEventSeq,
+        remote: {
+          ...state.remote,
+          delivery: event.payload.delivery,
+        },
+        stream: {
+          ...stateWithLastEventSeq.stream,
+          ...reduceStreamTimeline(stateWithLastEventSeq, event),
+        },
+      };
+    case "task.awaiting_feedback":
+      return {
+        ...stateWithLastEventSeq,
+        remote: {
+          ...state.remote,
+          snapshot:
+            state.remote.snapshot === null
+              ? null
+              : {
+                  ...state.remote.snapshot,
+                  status: "awaiting_feedback",
+                  phase: "delivered",
+                  expires_at: event.payload.expires_at,
+                  available_actions: event.payload.available_actions,
+                  updated_at: event.timestamp,
+                },
+        },
+      };
     case "planner.reasoning.delta":
     case "planner.tool_call.requested":
     case "collector.reasoning.delta":
@@ -332,7 +411,6 @@ export function reduceResearchSessionEvent(
     case "collector.completed":
     case "summary.completed":
     case "sources.merged":
-    case "outline.delta":
       return {
         ...stateWithLastEventSeq,
         stream: {

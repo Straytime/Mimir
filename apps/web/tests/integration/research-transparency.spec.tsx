@@ -54,6 +54,7 @@ class ControlledTaskEventSource<TEvent = unknown> implements TaskEventSource<TEv
 function createMockRuntime(taskEventSource: TaskEventSource<EventEnvelope>) {
   const taskApiClient: TaskApiClient = {
     createTask: vi.fn(),
+    getTaskDetail: vi.fn(),
     submitClarification: vi.fn(),
     sendHeartbeat: vi.fn().mockResolvedValue({
       requestId: "req_heartbeat",

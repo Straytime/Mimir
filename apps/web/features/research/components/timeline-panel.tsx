@@ -47,7 +47,11 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
   }, [items]);
 
   return (
-    <article className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur">
+    <section
+      aria-label="时间线"
+      className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur"
+      role="region"
+    >
       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
         Live Timeline
       </p>
@@ -102,6 +106,6 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
 
         <div ref={bottomAnchorRef} />
       </div>
-    </article>
+    </section>
   );
 }

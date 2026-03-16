@@ -5,17 +5,23 @@ import { createResearchSessionState } from "@/features/research/store/research-s
 import {
   makeAnalysisCompletedEvent,
   makeAnalysisDeltaEvent,
+  makeArtifactReadyEvent,
   makeCollectorCompletedEvent,
   makeCollectorFetchCompletedEvent,
   makeCollectorFetchStartedEvent,
   makeCollectorReasoningDeltaEvent,
   makeCollectorSearchCompletedEvent,
   makeCollectorSearchStartedEvent,
+  makeOutlineCompletedEvent,
   makeOutlineDeltaEvent,
   makePlannerReasoningDeltaEvent,
   makePlannerToolCallRequestedEvent,
+  makeReportCompletedEvent,
   makeSourcesMergedEvent,
   makeSummaryCompletedEvent,
+  makeWriterReasoningDeltaEvent,
+  makeWriterToolCallCompletedEvent,
+  makeWriterToolCallRequestedEvent,
 } from "@/tests/fixtures/builders";
 
 function reduceEvents(
@@ -178,5 +184,53 @@ describe("reduceTimelineStream", () => {
     expect(result.timeline[1]?.detail).toContain("先查财报与业绩会。");
     expect(result.timeline[1]?.detail).toContain("搜索： AI 搜索 商业化 收入 2025");
     expect(result.timeline[1]?.detail).not.toContain("AI 搜索 厂商 2025");
+  });
+
+  test("maps outline completion, writer progress, artifact generation, and report completion into readable timeline items", () => {
+    const result = reduceEvents([
+      makeOutlineDeltaEvent(),
+      makeOutlineCompletedEvent(),
+      makeWriterReasoningDeltaEvent(),
+      makeWriterToolCallRequestedEvent(),
+      makeWriterToolCallCompletedEvent(),
+      makeArtifactReadyEvent(),
+      makeReportCompletedEvent(),
+    ]);
+
+    expect(result.outlineReady).toBe(true);
+    expect(result.timeline).toEqual([
+      expect.objectContaining({
+        id: "outline:rev_stage0",
+        kind: "system",
+        label: "章节概览已生成",
+        status: "completed",
+      }),
+      expect.objectContaining({
+        id: "writer:rev_stage0",
+        kind: "reasoning",
+        label: "正在撰写报告",
+        detail: "先完成市场格局章节，再决定是否需要图表支撑。",
+        status: "running",
+      }),
+      expect.objectContaining({
+        id: "writer-tool:call_writer_figure",
+        kind: "tool_call",
+        label: "正在生成配图",
+        toolCallId: "call_writer_figure",
+        status: "completed",
+      }),
+      expect.objectContaining({
+        id: "artifact:art_stage0_chart",
+        kind: "system",
+        label: "已生成配图",
+        status: "completed",
+      }),
+      expect.objectContaining({
+        id: "report:rev_stage0",
+        kind: "system",
+        label: "报告已完成",
+        status: "completed",
+      }),
+    ]);
   });
 });

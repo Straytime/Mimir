@@ -4,6 +4,7 @@ import type { EventEnvelope } from "@/lib/contracts";
 import {
   makeAnalysisCompletedEvent,
   makeAnalysisDeltaEvent,
+  makeArtifactReadyEvent,
   makeClarificationDeltaEvent,
   makeClarificationFallbackToNaturalEvent,
   makeClarificationNaturalReadyEvent,
@@ -16,16 +17,23 @@ import {
   makeCollectorSearchCompletedEvent,
   makeCollectorSearchStartedEvent,
   makeHeartbeatEvent,
+  makeOutlineCompletedEvent,
   makeOutlineDeltaEvent,
   makePlannerReasoningDeltaEvent,
   makePlannerToolCallRequestedEvent,
   makePhaseChangedEvent,
+  makeReportCompletedEvent,
   makeSourcesMergedEvent,
   makeSummaryCompletedEvent,
+  makeTaskAwaitingFeedbackEvent,
   makeTaskCreatedEvent,
   makeTaskExpiredEvent,
   makeTaskFailedEvent,
   makeTaskTerminatedEvent,
+  makeWriterDeltaEvent,
+  makeWriterReasoningDeltaEvent,
+  makeWriterToolCallCompletedEvent,
+  makeWriterToolCallRequestedEvent,
 } from "@/tests/fixtures/builders";
 
 test("EventEnvelope fixtures stay aligned with the current event union", () => {
@@ -54,6 +62,14 @@ test("EventEnvelope fixtures stay aligned with the current event union", () => {
     makeSummaryCompletedEvent(),
     makeSourcesMergedEvent(),
     makeOutlineDeltaEvent(),
+    makeOutlineCompletedEvent(),
+    makeWriterReasoningDeltaEvent(),
+    makeWriterToolCallRequestedEvent(),
+    makeWriterToolCallCompletedEvent(),
+    makeWriterDeltaEvent(),
+    makeArtifactReadyEvent(),
+    makeReportCompletedEvent(),
+    makeTaskAwaitingFeedbackEvent(),
   ];
 
   expect(fixtures.map((fixture) => fixture.event)).toEqual([
@@ -81,6 +97,14 @@ test("EventEnvelope fixtures stay aligned with the current event union", () => {
     "summary.completed",
     "sources.merged",
     "outline.delta",
+    "outline.completed",
+    "writer.reasoning.delta",
+    "writer.tool_call.requested",
+    "writer.tool_call.completed",
+    "writer.delta",
+    "artifact.ready",
+    "report.completed",
+    "task.awaiting_feedback",
   ]);
 
   expect(fixtures[0]?.payload).toHaveProperty("snapshot");
@@ -104,4 +128,12 @@ test("EventEnvelope fixtures stay aligned with the current event union", () => {
   expect(fixtures[20]?.payload).toHaveProperty("status");
   expect(fixtures[21]?.payload).toHaveProperty("key_findings_markdown");
   expect(fixtures[22]?.payload).toHaveProperty("reference_count");
+  expect(fixtures[24]?.payload).toHaveProperty("outline.sections");
+  expect(fixtures[25]?.payload).toHaveProperty("delta");
+  expect(fixtures[26]?.payload).toHaveProperty("tool_name");
+  expect(fixtures[27]?.payload).toHaveProperty("success");
+  expect(fixtures[28]?.payload).toHaveProperty("delta");
+  expect(fixtures[29]?.payload).toHaveProperty("artifact.url");
+  expect(fixtures[30]?.payload).toHaveProperty("delivery.pdf_url");
+  expect(fixtures[31]?.payload).toHaveProperty("expires_at");
 });
