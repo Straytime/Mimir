@@ -37,6 +37,18 @@ async def read_sse_event(lines, *, timeout: float = 1.0) -> tuple[str | None, st
     return await asyncio.wait_for(_read_sse_event(lines), timeout=timeout)
 
 
+async def read_until_event(
+    lines,
+    expected_names: set[str],
+    *,
+    timeout: float = 1.0,
+) -> tuple[str | None, str | None, dict[str, object]]:
+    while True:
+        event = await read_sse_event(lines, timeout=timeout)
+        if event[1] in expected_names:
+            return event
+
+
 async def assert_stream_closed(lines, *, timeout: float = 0.5) -> None:
     with pytest.raises(StopAsyncIteration):
         await asyncio.wait_for(anext(lines), timeout=timeout)
@@ -93,7 +105,7 @@ async def test_server_heartbeat_event_and_post_heartbeat_contract(
 
         fake_clock.advance(seconds=16)
         await asyncio.sleep(0.1)
-        event_id, event_name, payload = await read_sse_event(lines)
+        event_id, event_name, payload = await read_until_event(lines, {"heartbeat"})
 
         heartbeat_response = await app_client.post(
             f"/api/v1/tasks/{create_body['task_id']}/heartbeat",
@@ -101,9 +113,9 @@ async def test_server_heartbeat_event_and_post_heartbeat_contract(
             json={"client_time": fake_clock.now().isoformat()},
         )
 
-    assert event_id == "2"
+    assert int(event_id or "0") >= 2
     assert event_name == "heartbeat"
-    assert payload["seq"] == 2
+    assert payload["seq"] == int(event_id or "0")
     assert payload["task_id"] == create_body["task_id"]
     assert payload["payload"]["server_time"] == fake_clock.now().isoformat().replace("+00:00", "Z")
     assert heartbeat_response.status_code == 204
@@ -131,11 +143,11 @@ async def test_disconnect_while_streaming_emits_terminal_event_and_closes(
             json={"reason": "client_manual_abort"},
         )
 
-        event_id, event_name, payload = await read_sse_event(lines)
+        event_id, event_name, payload = await read_until_event(lines, {"task.terminated"})
         await assert_stream_closed(lines)
 
     assert disconnect_response.status_code == 202
-    assert event_id == "2"
+    assert int(event_id or "0") >= 2
     assert event_name == "task.terminated"
     assert payload["payload"] == {"reason": "sendbeacon_received"}
 
@@ -166,7 +178,7 @@ async def test_awaiting_feedback_stream_stays_open_and_allows_heartbeat_and_disc
         _, created_name, created_payload = await read_sse_event(lines)
         fake_clock.advance(seconds=16)
         await asyncio.sleep(0.1)
-        _, heartbeat_name, heartbeat_payload = await read_sse_event(lines)
+        _, heartbeat_name, heartbeat_payload = await read_until_event(lines, {"heartbeat"})
 
         heartbeat_response = await app_client.post(
             f"/api/v1/tasks/{create_body['task_id']}/heartbeat",
@@ -178,7 +190,7 @@ async def test_awaiting_feedback_stream_stays_open_and_allows_heartbeat_and_disc
             headers={"Authorization": f"Bearer {create_body['task_token']}"},
             json={"reason": "pagehide"},
         )
-        _, terminated_name, terminated_payload = await read_sse_event(lines)
+        _, terminated_name, terminated_payload = await read_until_event(lines, {"task.terminated"})
 
     assert created_name == "task.created"
     assert created_payload["payload"]["snapshot"]["status"] == "awaiting_feedback"

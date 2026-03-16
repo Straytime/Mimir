@@ -12,7 +12,7 @@ from app.domain.enums import (
     TaskPhase,
     TaskStatus,
 )
-from app.domain.schemas import EventEnvelope, RevisionSummary, TaskSnapshot
+from app.domain.schemas import EventEnvelope, RequirementDetail, RevisionSummary, TaskSnapshot
 from app.infrastructure.db.models import (
     IPUsageCounterRecord,
     ResearchTaskRecord,
@@ -134,6 +134,21 @@ class TaskRepository:
         session.flush()
         return task
 
+    def update_task_clarification_mode(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        clarification_mode: str,
+    ) -> ResearchTaskRecord | None:
+        task = self.get_task(session=session, task_id=task_id, for_update=True)
+        if task is None:
+            return None
+
+        task.clarification_mode = clarification_mode
+        session.flush()
+        return task
+
     def update_revision_status(
         self,
         *,
@@ -149,6 +164,21 @@ class TaskRepository:
         revision.revision_status = revision_status
         if finished_at is not _UNSET:
             revision.finished_at = finished_at
+        session.flush()
+        return revision
+
+    def update_revision_requirement_detail(
+        self,
+        *,
+        session: Session,
+        revision_id: str,
+        requirement_detail_json: dict[str, object],
+    ) -> TaskRevisionRecord | None:
+        revision = self.get_revision(session=session, revision_id=revision_id)
+        if revision is None:
+            return None
+
+        revision.requirement_detail_json = requirement_detail_json
         session.flush()
         return revision
 
@@ -223,7 +253,12 @@ class TaskRepository:
     ) -> TaskDetailResponse:
         requirement_detail = None
         if revision.requirement_detail_json is not None:
-            requirement_detail = revision.requirement_detail_json
+            requirement_detail = RequirementDetail.model_validate(
+                revision.requirement_detail_json
+            ).model_dump(
+                mode="json",
+                exclude={"raw_llm_output"},
+            )
 
         return TaskDetailResponse(
             task_id=task.task_id,
