@@ -232,6 +232,10 @@ export type ClarificationSubmission =
   | NaturalClarificationSubmission
   | OptionsClarificationSubmission;
 
+export type FeedbackRequest = {
+  feedback_text: string;
+};
+
 export type DisconnectRequest = {
   reason: DisconnectRequestReason;
   task_token?: string;
@@ -243,6 +247,11 @@ export type AcceptedResponse = {
 
 export type ClarificationAcceptedResponse = AcceptedResponse & {
   snapshot: TaskSnapshot;
+};
+
+export type FeedbackAcceptedResponse = AcceptedResponse & {
+  revision_id: string;
+  revision_number: number;
 };
 
 export type ApiError = {

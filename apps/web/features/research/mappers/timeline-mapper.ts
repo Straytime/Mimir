@@ -157,11 +157,55 @@ function buildSummaryDetail(
   return event.payload.key_findings_markdown ?? undefined;
 }
 
+function getAnalysisLabel(phase: EventEnvelope["phase"]) {
+  if (phase === "processing_feedback") {
+    return "正在处理反馈并重新分析需求";
+  }
+
+  return "正在分析你的研究需求";
+}
+
 export function reduceTimelineStream(
   stream: TimelineStreamState,
   event: EventEnvelope,
 ): TimelineStreamState {
   switch (event.event) {
+    case "phase.changed":
+      if (event.payload.to_phase === "processing_feedback") {
+        return {
+          ...stream,
+          timeline: [
+            ...stream.timeline,
+            {
+              id: `phase:${event.seq}`,
+              revisionId: event.revision_id,
+              kind: "phase",
+              label: "正在处理反馈",
+              status: "running",
+              occurredAt: event.timestamp,
+            },
+          ],
+        };
+      }
+
+      if (event.payload.to_phase === "planning_collection") {
+        return {
+          ...stream,
+          timeline: [
+            ...stream.timeline,
+            {
+              id: `phase:${event.seq}`,
+              revisionId: event.revision_id,
+              kind: "phase",
+              label: "新一轮研究已进入规划阶段",
+              status: "running",
+              occurredAt: event.timestamp,
+            },
+          ],
+        };
+      }
+
+      return stream;
     case "analysis.delta":
       return {
         ...stream,
@@ -172,13 +216,13 @@ export function reduceTimelineStream(
             id: `analysis:${event.revision_id ?? "unknown"}`,
             revisionId: event.revision_id,
             kind: "system",
-            label: "正在分析你的研究需求",
+            label: getAnalysisLabel(event.phase),
             status: "running",
             occurredAt: event.timestamp,
           }),
           (item) => ({
             ...item,
-            label: "正在分析你的研究需求",
+            label: getAnalysisLabel(event.phase),
             status: "running",
             occurredAt: event.timestamp,
           }),

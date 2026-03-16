@@ -29,8 +29,9 @@ function ResearchPageContent() {
           AI 研究工作台
         </h1>
         <p className="max-w-2xl text-base leading-7 text-slate-700">
-          当前阶段已接上需求分析、搜集透明度、报告正文、图片制品与 delivery
-          刷新链路；仍保持 v1 不恢复、不重连，也不提前进入 feedback revision。
+          当前阶段已接上需求分析、搜集透明度、报告正文、图片制品、delivery
+          刷新与 feedback revision 切换；仍保持 v1 不恢复、不重连，也不持久化
+          task_token。
         </p>
       </div>
 

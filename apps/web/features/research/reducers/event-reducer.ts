@@ -71,6 +71,12 @@ function applyTerminalEvent(
     ui: {
       ...state.ui,
       terminalReason,
+      pendingAction: null,
+      revisionTransition: {
+        status: "idle",
+        pendingRevisionId: null,
+        pendingRevisionNumber: null,
+      },
     },
   };
 }
@@ -159,20 +165,35 @@ export function reduceResearchSessionEvent(
         return state;
       }
 
-      return {
-        ...stateWithLastEventSeq,
-        remote: {
-          ...state.remote,
-          snapshot: {
-            ...state.remote.snapshot,
-            phase: event.payload.to_phase,
-            status: event.payload.status,
-            active_revision_id:
-              event.revision_id ?? state.remote.snapshot.active_revision_id,
-            updated_at: event.timestamp,
+      {
+        const nextTimelineStream = reduceStreamTimeline(
+          stateWithLastEventSeq,
+          event,
+        );
+
+        return {
+          ...stateWithLastEventSeq,
+          remote: {
+            ...state.remote,
+            snapshot: {
+              ...state.remote.snapshot,
+              phase: event.payload.to_phase,
+              status: event.payload.status,
+              active_revision_id:
+                event.revision_id ?? state.remote.snapshot.active_revision_id,
+              active_revision_number:
+                event.revision_id === state.remote.snapshot.active_revision_id
+                  ? state.remote.snapshot.active_revision_number
+                  : state.remote.snapshot.active_revision_number,
+              updated_at: event.timestamp,
+            },
           },
-        },
-      };
+          stream: {
+            ...stateWithLastEventSeq.stream,
+            ...nextTimelineStream,
+          },
+        };
+      }
     case "heartbeat":
       return {
         ...stateWithLastEventSeq,

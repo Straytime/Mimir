@@ -96,6 +96,8 @@ export type ResearchSessionState = {
     clarificationCountdownDurationSeconds: number | null;
     clarificationFieldError: string | null;
     clarificationSubmitError: string | null;
+    feedbackFieldError: string | null;
+    feedbackSubmitError: string | null;
     pendingAction: PendingAction;
     revisionTransition: RevisionTransitionState;
     reportAutoScrollEnabled: boolean;
@@ -119,6 +121,14 @@ export type ResearchSessionStoreActions = {
   setClarificationFieldError: (message: string | null) => void;
   setClarificationSubmitError: (message: string | null) => void;
   clearClarificationUiState: () => void;
+  setFeedbackDraft: (draft: string) => void;
+  setFeedbackFieldError: (message: string | null) => void;
+  setFeedbackSubmitError: (message: string | null) => void;
+  clearFeedbackUiState: () => void;
+  startRevisionTransition: (args: {
+    pendingRevisionId: string;
+    pendingRevisionNumber: number;
+  }) => void;
   setOptionAnswer: (args: {
     questionId: string;
     optionId: string;
@@ -202,6 +212,8 @@ export function createResearchSessionState(): ResearchSessionState {
       clarificationCountdownDurationSeconds: null,
       clarificationFieldError: null,
       clarificationSubmitError: null,
+      feedbackFieldError: null,
+      feedbackSubmitError: null,
       pendingAction: null,
       revisionTransition: {
         status: "idle",

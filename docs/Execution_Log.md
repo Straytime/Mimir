@@ -932,3 +932,61 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 可以进入 Frontend Stage 7，围绕 `POST /feedback`、revision 切换、processing_feedback / planning_collection 时间线和 cleanup 后的 404 语义补前端 contract / integration
   - 若后续接真实 LLM / E2B / 对象存储 provider，应继续沿用当前 `FeedbackAnalyzer` / `ArtifactStore` / `E2BSandboxClient` 边界和 cleanup_pending 补偿顺序，不要回退为伪事务删除
+
+## M4-004 Frontend Stage 7 Feedback + Revision Transition + Hardening
+
+- 日期时间: 2026-03-16 23:02:44 CST (+0800)
+- 任务包编号: M4-004
+- session 标识: codex-20260316-m4-004-frontend-stage7-feedback-revision
+- 目标摘要: 按 `docs/Frontend_TDD_Plan.md` Stage 7 打通 `task.awaiting_feedback -> POST /feedback -> waiting_next_revision -> switching -> planning_collection` 的前端闭环，补齐 feedback composer、revision 切换 overlay、旧报告保留策略、移动端 shell hardening、基础 a11y 断言与最小 Playwright 主链路；严格停在前端 Stage 7，不新增刷新恢复、自动重连或持久化 `task_token`。
+- 修改文件:
+  - `packages/contracts/src/index.ts`
+  - `apps/web/lib/api/task-api-client.ts`
+  - `apps/web/features/research/store/research-session-store.types.ts`
+  - `apps/web/features/research/store/research-session-store.ts`
+  - `apps/web/features/research/store/selectors.ts`
+  - `apps/web/features/research/reducers/event-reducer.ts`
+  - `apps/web/features/research/mappers/timeline-mapper.ts`
+  - `apps/web/features/research/providers/research-workspace-providers.tsx`
+  - `apps/web/features/research/hooks/use-feedback-submit.ts`
+  - `apps/web/features/research/hooks/use-clarification-countdown.ts`
+  - `apps/web/features/research/components/feedback-composer.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/features/research/components/delivery-actions.tsx`
+  - `apps/web/types/global.d.ts`
+  - `apps/web/tests/fixtures/builders.ts`
+  - `apps/web/tests/contract/feedback-contract.spec.ts`
+  - `apps/web/tests/unit/selectors/available-actions.spec.ts`
+  - `apps/web/tests/unit/mappers/timeline-mapper.spec.ts`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/component/delivery-actions.spec.tsx`
+  - `apps/web/tests/integration/feedback-revision-flow.spec.tsx`
+  - `apps/web/tests/integration/report-delivery-flow.spec.tsx`
+  - `apps/web/tests/component/research-input-panel.spec.tsx`
+  - `apps/web/tests/integration/clarification-flow.spec.tsx`
+  - `apps/web/tests/integration/research-transparency.spec.tsx`
+  - `apps/web/tests/e2e/specs/feedback-mainline.spec.ts`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 已运行: `cd apps/web && pnpm lint`
+  - 已运行: `cd apps/web && pnpm test:contract`
+  - 已运行: `cd apps/web && pnpm test:unit`
+  - 已运行: `cd apps/web && pnpm test:component`
+  - 已运行: `cd apps/web && pnpm test:integration`
+  - 已运行: `cd apps/web && pnpm test:e2e`
+  - 调试过程:
+    - Stage 7 red tests 先暴露出 contracts 缺失 `FeedbackRequest / FeedbackAcceptedResponse`、store 缺失 feedback error / revision transition 状态，以及 timeline 没有 `processing_feedback` / 新一轮规划阶段的显式文案；已先补 contracts、fixtures 与 selectors，再把 `applyEvent` 收敛为 revision-aware 入口
+    - `POST /feedback` 成功后采用 `waiting_next_revision -> switching -> idle` 三段式前端状态机；只有收到新 `revision_id` 的首个 SSE 事件时才清空旧 `analysisText / reportMarkdown / outline / artifacts / delivery`，并插入“第 N 轮研究开始”分隔项，确保等待阶段旧报告仍可见
+    - Playwright 首轮调试发现浏览器真实运行时不支持当前代码里的 `useEffectEvent` 调用；已把 `use-clarification-countdown` 改成 ref 驱动的等价实现，避免 Next dev + React 运行时在 e2e 中直接崩溃
+    - 浏览器侧 scripted SSE 回调在 Playwright 环境下不稳定，已按 test-only 方式暴露 `__MIMIR_TEST_STORE__`，让最小主链路 e2e 直接驱动 store 事件和 UI 断言，不扩张到生产能力
+- 验收结论: accepted；`task.awaiting_feedback` 才会显示 feedback 输入区；`POST /feedback` 成功后会进入 overlay 等待态并写入 `revisionTransition.status = waiting_next_revision`；首个新 `revision_id` 事件会切到 `switching`、插入 revision 分隔项、清空旧正文/outline/artifact/delivery，并在 `phase.changed(to_phase = planning_collection)` 后回到稳定态；`processing_feedback` 的 `analysis.delta / analysis.completed` 会进入阶段文案与时间线，并更新新 revision 的 `requirement_detail`；`task.failed / task.expired` 会禁用旧交互；移动端 `操作 / 报告 / 进度` 分段可用，关键交互具备语义 role / aria 断言；最小 Playwright 主链路已覆盖 create -> awaiting_feedback -> submit feedback -> overlay -> next revision planning 的浏览器路径。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint legacy `.eslintrc` deprecation warning，但 lint 已通过；本任务包未扩张到 ESLint 配置迁移
+  - Stage 7 为了稳定 e2e 暴露了 `window.__MIMIR_TEST_RUNTIME__ / __MIMIR_TEST_STORE__` 这两个 test-only hook；它们只在浏览器测试注入时使用，后续如做生产构建硬化，可在独立任务包里再统一收敛测试注入策略
+- 下一步建议:
+  - 可以进入最终收口任务，按真实部署环境再做一轮 smoke / visual / BDD 级别验证，但不要在当前 Stage 7 基线上继续加新功能
+  - 若后续要压缩 test-only surface，优先把 Playwright 的 scripted runtime / store 驱动统一沉到专用 e2e harness 层，而不是回退为真实后端联调

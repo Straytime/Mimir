@@ -44,16 +44,30 @@ export function ResearchWorkspaceProviders({
   runtime,
   store,
 }: ResearchWorkspaceProvidersProps) {
+  const windowRuntimeOverride =
+    typeof window === "undefined" ? null : window.__MIMIR_TEST_RUNTIME__;
   const storeRef = useRef(store ?? createResearchSessionStore());
+  const runtimeRef = useRef<ResearchRuntime | null>(null);
+
+  if (runtimeRef.current === null) {
+    runtimeRef.current = {
+      taskApiClient:
+        runtime?.taskApiClient ??
+        windowRuntimeOverride?.taskApiClient ??
+        defaultRuntime.taskApiClient,
+      taskEventSource:
+        runtime?.taskEventSource ??
+        windowRuntimeOverride?.taskEventSource ??
+        defaultRuntime.taskEventSource,
+    };
+  }
+
+  if (windowRuntimeOverride !== null && typeof window !== "undefined") {
+    Reflect.set(window, "__MIMIR_TEST_STORE__", storeRef.current);
+  }
 
   return (
-    <ResearchRuntimeContext.Provider
-      value={{
-        taskApiClient: runtime?.taskApiClient ?? defaultRuntime.taskApiClient,
-        taskEventSource:
-          runtime?.taskEventSource ?? defaultRuntime.taskEventSource,
-      }}
-    >
+    <ResearchRuntimeContext.Provider value={runtimeRef.current}>
       <ResearchSessionStoreContext.Provider value={storeRef.current}>
         {children}
       </ResearchSessionStoreContext.Provider>

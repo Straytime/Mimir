@@ -55,4 +55,32 @@ describe("available action selectors", () => {
     expect(selectCanDownloadMarkdown(state)).toBe(false);
     expect(selectCanDownloadPdf(state)).toBe(false);
   });
+
+  test("disable feedback and downloads while waiting for the next revision", () => {
+    const state = makeResearchSessionState({
+      remote: {
+        snapshot: {
+          ...makeResearchSessionState().remote.snapshot!,
+          status: "awaiting_feedback",
+          phase: "delivered",
+          available_actions: [
+            "submit_feedback",
+            "download_markdown",
+            "download_pdf",
+          ],
+        },
+      },
+      ui: {
+        revisionTransition: {
+          status: "waiting_next_revision",
+          pendingRevisionId: "rev_stage1",
+          pendingRevisionNumber: 2,
+        },
+      },
+    });
+
+    expect(selectCanSubmitFeedback(state)).toBe(false);
+    expect(selectCanDownloadMarkdown(state)).toBe(false);
+    expect(selectCanDownloadPdf(state)).toBe(false);
+  });
 });

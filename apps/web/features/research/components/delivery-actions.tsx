@@ -41,6 +41,9 @@ export function DeliveryActions() {
   const setDownloadState = useResearchSessionStore(
     (state) => state.setDownloadState,
   );
+  const revisionTransition = useResearchSessionStore(
+    (state) => state.ui.revisionTransition,
+  );
   const canDownloadMarkdown = useResearchSessionStore(selectCanDownloadMarkdown);
   const canDownloadPdf = useResearchSessionStore(selectCanDownloadPdf);
   const refreshDelivery = useDeliveryRefresh();
@@ -170,7 +173,9 @@ export function DeliveryActions() {
 
       {!canDownloadMarkdown || !canDownloadPdf ? (
         <p className="mt-4 text-sm leading-6 text-slate-600">
-          报告已生成，但下载能力需要等待任务进入 `task.awaiting_feedback` 后开放。
+          {revisionTransition.status !== "idle"
+            ? "新 revision 正在接管工作台，当前交付链接已锁定，待新一轮研究稳定后再恢复。"
+            : "报告已生成，但下载能力需要等待任务进入 `task.awaiting_feedback` 后开放。"}
         </p>
       ) : null}
 

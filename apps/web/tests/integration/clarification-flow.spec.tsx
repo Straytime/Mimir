@@ -74,6 +74,7 @@ function createMockRuntime(
       createTask: vi.fn(),
       getTaskDetail: vi.fn(),
       submitClarification: vi.fn(),
+      submitFeedback: vi.fn(),
       sendHeartbeat: vi.fn().mockResolvedValue({
         requestId: "req_heartbeat",
         traceId: "trc_heartbeat",

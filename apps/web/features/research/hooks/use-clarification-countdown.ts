@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useRef } from "react";
 
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { selectCanSubmitClarification } from "../store/selectors";
@@ -17,11 +17,11 @@ export function useClarificationCountdown() {
     selectCanSubmitClarification,
   );
   const submitClarification = useClarificationSubmit();
-  const handleTimeout = useEffectEvent(() => {
-    void submitClarification({
-      submittedByTimeout: true,
-    });
-  });
+  const submitClarificationRef = useRef(submitClarification);
+
+  useEffect(() => {
+    submitClarificationRef.current = submitClarification;
+  }, [submitClarification]);
 
   useEffect(() => {
     if (
@@ -39,12 +39,16 @@ export function useClarificationCountdown() {
     const timeoutMs = new Date(deadlineAt).getTime() - Date.now();
 
     if (timeoutMs <= 0) {
-      handleTimeout();
+      void submitClarificationRef.current({
+        submittedByTimeout: true,
+      });
       return;
     }
 
     const timer = setTimeout(() => {
-      handleTimeout();
+      void submitClarificationRef.current({
+        submittedByTimeout: true,
+      });
     }, timeoutMs);
 
     return () => {
@@ -56,6 +60,5 @@ export function useClarificationCountdown() {
     pendingAction,
     questionSet,
     snapshot,
-    handleTimeout,
   ]);
 }

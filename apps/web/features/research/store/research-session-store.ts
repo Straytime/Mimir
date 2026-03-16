@@ -15,6 +15,7 @@ import type {
   PendingAction,
   ResearchSessionState,
   ResearchSessionStore,
+  TimelineItem,
 } from "./research-session-store.types";
 import { createResearchSessionState } from "./research-session-store.types";
 
@@ -64,6 +65,159 @@ function clearClarificationUiStateInState(
     clarificationSubmitError: null,
     clarificationCountdownDeadlineAt: null,
     clarificationCountdownDurationSeconds: null,
+  };
+}
+
+function clearFeedbackUiStateInState(): Pick<
+  ResearchSessionState["ui"],
+  "feedbackFieldError" | "feedbackSubmitError"
+> {
+  return {
+    feedbackFieldError: null,
+    feedbackSubmitError: null,
+  };
+}
+
+function createRevisionDividerTimelineItem(
+  args: {
+    revisionId: string;
+    revisionNumber: number;
+    occurredAt: string;
+  },
+): TimelineItem {
+  return {
+    id: `revision-divider:${args.revisionId}`,
+    revisionId: args.revisionId,
+    kind: "phase",
+    label: `第 ${args.revisionNumber} 轮研究开始`,
+    status: "completed",
+    occurredAt: args.occurredAt,
+  };
+}
+
+function startRevisionTransitionInState(
+  state: ResearchSessionState,
+  args: {
+    pendingRevisionId: string;
+    pendingRevisionNumber: number;
+  },
+): ResearchSessionState {
+  return {
+    ...state,
+    ui: {
+      ...state.ui,
+      ...clearFeedbackUiStateInState(),
+      revisionTransition: {
+        status: "waiting_next_revision",
+        pendingRevisionId: args.pendingRevisionId,
+        pendingRevisionNumber: args.pendingRevisionNumber,
+      },
+    },
+  };
+}
+
+function enterRevisionSwitchingInState(
+  state: ResearchSessionState,
+  event: EventEnvelope,
+): ResearchSessionState {
+  const pendingRevisionId =
+    state.ui.revisionTransition.pendingRevisionId ?? event.revision_id ?? "rev_unknown";
+  const pendingRevisionNumber =
+    state.ui.revisionTransition.pendingRevisionNumber ??
+    state.remote.snapshot?.active_revision_number ??
+    1;
+  const nextSnapshot =
+    state.remote.snapshot === null
+      ? null
+      : {
+          ...state.remote.snapshot,
+          active_revision_id: pendingRevisionId,
+          active_revision_number: pendingRevisionNumber,
+          phase: event.phase,
+          status:
+            state.remote.snapshot.status === "awaiting_feedback"
+              ? "running"
+              : state.remote.snapshot.status,
+          updated_at: event.timestamp,
+          available_actions: [],
+        };
+  const hasDivider = state.stream.timeline.some((item) => {
+    return item.id === `revision-divider:${pendingRevisionId}`;
+  });
+
+  return {
+    ...state,
+    remote: {
+      ...state.remote,
+      snapshot: nextSnapshot,
+      currentRevision: {
+        revision_id: pendingRevisionId,
+        revision_number: pendingRevisionNumber,
+        revision_status: "in_progress",
+        started_at: event.timestamp,
+        finished_at: null,
+        requirement_detail: null,
+      },
+      delivery: null,
+    },
+    stream: {
+      ...state.stream,
+      analysisText: "",
+      clarificationText: "",
+      questionSet: null,
+      reportMarkdown: "",
+      outline: null,
+      outlineReady: false,
+      timeline: hasDivider
+        ? state.stream.timeline
+        : [
+            ...state.stream.timeline,
+            createRevisionDividerTimelineItem({
+              revisionId: pendingRevisionId,
+              revisionNumber: pendingRevisionNumber,
+              occurredAt: event.timestamp,
+            }),
+          ],
+      artifacts: [],
+    },
+    ui: {
+      ...state.ui,
+      clarificationDraft: "",
+      optionAnswers: {},
+      clarificationCountdownDeadlineAt: null,
+      clarificationCountdownDurationSeconds: null,
+      clarificationFieldError: null,
+      clarificationSubmitError: null,
+      ...clearFeedbackUiStateInState(),
+      revisionTransition: {
+        status: "switching",
+        pendingRevisionId,
+        pendingRevisionNumber,
+      },
+      reportAutoScrollEnabled: true,
+    },
+    deliveryUi: {
+      ...state.deliveryUi,
+      refreshingDelivery: false,
+      markdownDownloadState: "idle",
+      pdfDownloadState: "idle",
+    },
+  };
+}
+
+function finishRevisionTransitionInState(
+  state: ResearchSessionState,
+): ResearchSessionState {
+  return {
+    ...state,
+    ui: {
+      ...state.ui,
+      revisionTransition: {
+        status: "idle",
+        pendingRevisionId: null,
+        pendingRevisionNumber: null,
+      },
+    },
   };
 }
 
@@ -150,6 +304,12 @@ function setTerminalStateInState(
       ui: {
         ...state.ui,
         terminalReason: args.terminalReason,
+        pendingAction: null,
+        revisionTransition: {
+          status: "idle",
+          pendingRevisionId: null,
+          pendingRevisionNumber: null,
+        },
       },
     };
   }
@@ -185,6 +345,12 @@ function setTerminalStateInState(
     ui: {
       ...state.ui,
       terminalReason: args.terminalReason,
+      pendingAction: null,
+      revisionTransition: {
+        status: "idle",
+        pendingRevisionId: null,
+        pendingRevisionNumber: null,
+      },
     },
   };
 }
@@ -285,6 +451,51 @@ export function createResearchSessionStore(
           ...clearClarificationUiStateInState(),
         },
       }));
+    },
+    setFeedbackDraft: (draft) => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          feedbackDraft: draft,
+          ...clearFeedbackUiStateInState(),
+        },
+      }));
+    },
+    setFeedbackFieldError: (message) => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          feedbackFieldError: message,
+        },
+      }));
+    },
+    setFeedbackSubmitError: (message) => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          feedbackSubmitError: message,
+        },
+      }));
+    },
+    clearFeedbackUiState: () => {
+      set((state) => ({
+        ...state,
+        ui: {
+          ...state.ui,
+          ...clearFeedbackUiStateInState(),
+        },
+      }));
+    },
+    startRevisionTransition: ({ pendingRevisionId, pendingRevisionNumber }) => {
+      set((state) =>
+        startRevisionTransitionInState(state, {
+          pendingRevisionId,
+          pendingRevisionNumber,
+        }),
+      );
     },
     setOptionAnswer: ({ questionId, optionId }) => {
       set((state) => ({
@@ -388,7 +599,34 @@ export function createResearchSessionStore(
       set((state) => mergeTaskDetailIntoState(state, detail));
     },
     applyEvent: (event: EventEnvelope) => {
-      set((state) => reduceResearchSessionEvent(state, event));
+      set((state) => {
+        let nextState: ResearchSessionState = state;
+
+        if (
+          nextState.ui.revisionTransition.status === "waiting_next_revision" &&
+          nextState.ui.revisionTransition.pendingRevisionId !== null &&
+          event.revision_id === nextState.ui.revisionTransition.pendingRevisionId
+        ) {
+          nextState = enterRevisionSwitchingInState(nextState, event);
+        }
+
+        nextState = reduceResearchSessionEvent(nextState, event);
+
+        if (
+          nextState.ui.revisionTransition.status === "switching" &&
+          nextState.ui.revisionTransition.pendingRevisionId !== null &&
+          event.event === "phase.changed" &&
+          event.revision_id === nextState.ui.revisionTransition.pendingRevisionId &&
+          event.payload.to_phase === "planning_collection"
+        ) {
+          nextState = finishRevisionTransitionInState(nextState);
+        }
+
+        return {
+          ...state,
+          ...nextState,
+        };
+      });
     },
   }));
 }

@@ -316,6 +316,7 @@ describe("Stage 6 report canvas and delivery flow", () => {
       screen.getByRole("button", { name: "下载 Markdown Zip" }),
     ).toBeEnabled();
     expect(screen.getByRole("button", { name: "下载 PDF" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "提交反馈" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "反馈意见" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "提交反馈" })).toBeDisabled();
   });
 });
