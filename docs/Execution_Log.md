@@ -476,3 +476,27 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入独立的 Frontend Stage 4 任务包，实现 clarification 事件消费、表单提交与倒计时
   - 在后续阶段继续沿用当前 Stage 3 生命周期底座，为 timeline、report、delivery 和 feedback UI 增加渐进式集成测试
+
+## M1-005 Task Framework Integration + Final Closure
+
+- 日期时间: 2026-03-16 11:42:14 CST (+0800)
+- 任务包编号: M1-005
+- session 标识: codex-20260316-m1-005-final-closure
+- 目标摘要: 核对 `M1-001` 至 `M1-004` 是否已进入同一工作基线，确认当前 `main` 同时包含 Backend Stage 2+3 与 Frontend Stage 2+3，检查 shared contracts、后端 API 契约与前端消费代码没有真实字段漂移，并完成完整的 M1 基线验证；仅当验证暴露整合层问题时做最小修补，为 M2 建立唯一开发基线。
+- 修改文件:
+  - `apps/web/tests/e2e/specs/harness.spec.ts`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `git status --short`；`git branch --all --verbose --no-abbrev`；`git log --oneline --decorate --graph --all --max-count=80`；`sed -n '1,260p' packages/contracts/src/index.ts`；`sed -n '1,260p' apps/web/lib/api/task-api-client.ts`；`sed -n '1,260p' apps/web/lib/sse/task-event-source.ts`；`find apps/web/features/research/store -maxdepth 3 -type f | sort`；`sed -n '1,260p' services/api/app/api/v1/tasks.py`；`sed -n '1,320p' services/api/app/application/services/tasks.py`；`sed -n '1,360p' services/api/app/infrastructure/streaming/broker.py`；`sed -n '1,320p' apps/web/features/research/hooks/use-task-stream.ts`；`sed -n '1,320p' apps/web/features/research/hooks/use-heartbeat-loop.ts`；`sed -n '1,320p' apps/web/features/research/hooks/use-disconnect-guard.ts`；`pnpm --version`；`uv --version`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`；`cd apps/web && pnpm typecheck`；`cd apps/web && pnpm lint`；`cd apps/web && pnpm test:contract`；`cd apps/web && pnpm test:unit`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:integration`；`cd apps/web && pnpm test:e2e`
+  - 调试过程:
+    - 后端 `pytest tests/unit tests/contract tests/integration` 首次在沙箱内失败，原因不是代码回归，而是 PostgreSQL 夹具创建 shared memory segment 被受限环境拦截；提权重跑后 `42 passed`
+    - 前端 `pnpm test:e2e` 首次在提权环境下失败，定位为遗留 Stage 0 Playwright 断言仍在查找旧标题 `Mimir Frontend Stage 0 Harness`；已最小更新 spec，使其对齐当前 Stage 3 页面壳文案后重跑通过
+  - 未运行: 无
+- 验收结论: accepted；`main` 已通过 PR #6、#7、#8、#9 吸收 `M1-001` 至 `M1-004`，Backend Stage 2+3 与 Frontend Stage 2+3 基线验证通过，且统一基线上已满足“创建任务后立即建连、10 秒 connect deadline、SSE 中断即终止、`sendBeacon` 与普通 disconnect 都能工作”的 M1 闭环，M1 可明确宣布完成。
+- blocker / 风险:
+  - 无当前 blocker
+  - `pnpm lint` 仍会打印 ESLint 9 legacy config warning，但 lint 已通过，且按任务约束本次未处理
+  - 后端 integration tests 依赖真实 PostgreSQL 夹具，在受限沙箱里需要提权运行；前端 e2e 同样需要提权以启动本地 web server
+- 下一步建议:
+  - 后续任务包可以正式进入 M2，但应继续保持单线程串行开发与 `docs/Execution_Log.md` 追加维护
+  - M2 应从 clarification / requirement analysis 的最小闭环开始，不回退扩张 M1 范围
