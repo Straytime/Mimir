@@ -1,51 +1,53 @@
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from fastapi import FastAPI
 from httpx import AsyncClient
+from sqlalchemy.orm import Session
 
-from tests.contract.rest.test_task_events import read_until_event
-from tests.contract.rest.test_tasks import build_create_task_payload
 from tests.fixtures.runtime import FakeClock
+from tests.fixtures.tasks import seed_delivered_task
 
 
-async def _complete_delivery(app_client: AsyncClient) -> tuple[dict[str, object], dict[str, object]]:
-    create_response = await app_client.post(
-        "/api/v1/tasks",
-        json=build_create_task_payload(clarification_mode="natural"),
+async def _complete_delivery(
+    app_client: AsyncClient,
+    app_instance: FastAPI,
+    db_session: Session,
+    fake_clock: FakeClock,
+    *,
+    suffix: str,
+) -> tuple[dict[str, object], dict[str, object]]:
+    seeded = await seed_delivered_task(
+        session=db_session,
+        task_service=app_instance.state.task_service,
+        artifact_store=app_instance.state.artifact_store,
+        now=fake_clock.now(),
+        suffix=suffix,
     )
-    create_body = create_response.json()
-
-    async with app_client.stream(
-        "GET",
-        f"/api/v1/tasks/{create_body['task_id']}/events",
-        headers={"Authorization": f"Bearer {create_body['task_token']}"},
-    ) as response:
-        lines = response.aiter_lines()
-        await read_until_event(lines, {"clarification.natural.ready"})
-        clarification_response = await app_client.post(
-            f"/api/v1/tasks/{create_body['task_id']}/clarification",
-            headers={"Authorization": f"Bearer {create_body['task_token']}"},
-            json={
-                "mode": "natural",
-                "answer_text": "重点看中国市场，偏商业分析，覆盖近两年变化。",
-            },
-        )
-        assert clarification_response.status_code == 202
-        _, _, report_completed_payload = await read_until_event(
-            lines,
-            {"report.completed"},
-            timeout=2.0,
-        )
-
-    return create_body, report_completed_payload["payload"]["delivery"]
+    task_response = await app_client.get(
+        f"/api/v1/tasks/{seeded.task_id}",
+        headers={"Authorization": f"Bearer {seeded.task_token}"},
+    )
+    return {
+        "task_id": seeded.task_id,
+        "task_token": seeded.task_token,
+    }, task_response.json()["delivery"]
 
 
 @pytest.mark.asyncio
 async def test_download_and_artifact_endpoints_accept_refreshed_access_tokens(
     app_client: AsyncClient,
+    app_instance: FastAPI,
+    db_session: Session,
     fake_clock: FakeClock,
 ) -> None:
-    create_body, delivery = await _complete_delivery(app_client)
+    create_body, delivery = await _complete_delivery(
+        app_client,
+        app_instance,
+        db_session,
+        fake_clock,
+        suffix="downloads_refresh",
+    )
 
     markdown_response = await app_client.get(delivery["markdown_zip_url"])
     pdf_response = await app_client.get(delivery["pdf_url"])
@@ -97,8 +99,17 @@ async def test_download_and_artifact_endpoints_accept_refreshed_access_tokens(
 @pytest.mark.asyncio
 async def test_download_endpoints_reject_invalid_access_tokens_with_contract_error_code(
     app_client: AsyncClient,
+    app_instance: FastAPI,
+    db_session: Session,
+    fake_clock: FakeClock,
 ) -> None:
-    create_body, delivery = await _complete_delivery(app_client)
+    create_body, delivery = await _complete_delivery(
+        app_client,
+        app_instance,
+        db_session,
+        fake_clock,
+        suffix="downloads_invalid",
+    )
 
     artifact_id = delivery["artifacts"][0]["artifact_id"]
     invalid_markdown = await app_client.get(

@@ -8,10 +8,12 @@ from app.application.prompts.collection import (
     build_summary_prompt,
 )
 from app.application.prompts.delivery import build_outline_prompt, build_writer_prompt
+from app.application.prompts.feedback import build_feedback_analysis_prompt
 from app.application.prompts.requirement import build_requirement_analysis_prompt
 
 __all__ = [
     "build_collector_prompt",
+    "build_feedback_analysis_prompt",
     "build_outline_prompt",
     "build_natural_clarification_prompt",
     "build_planner_prompt",

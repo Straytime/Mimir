@@ -11,3 +11,7 @@ class ClarificationGenerator(Protocol):
 
 class RequirementAnalyzer(Protocol):
     async def analyze(self, prompt: str) -> TextGeneration: ...
+
+
+class FeedbackAnalyzer(Protocol):
+    async def analyze(self, prompt: str) -> TextGeneration: ...

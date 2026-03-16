@@ -31,6 +31,8 @@ class ArtifactStore(Protocol):
 
     async def get(self, storage_key: str) -> bytes: ...
 
+    async def delete(self, storage_key: str) -> None: ...
+
 
 class ReportExportService(Protocol):
     async def build_markdown_zip(

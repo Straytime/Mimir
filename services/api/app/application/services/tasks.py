@@ -16,6 +16,7 @@ from app.application.dto.tasks import (
     TaskDetailResponse,
     TaskUrls,
 )
+from app.application.dto.feedback import FeedbackAcceptedResponse
 from app.application.policies.activity_lock import ActivityLockPolicy
 from app.application.policies.ip_quota import IPQuotaPolicy
 from app.application.ports.security import AccessTokenSigner, TaskTokenSigner
@@ -365,6 +366,90 @@ class TaskService:
         )
         return self.repository.build_snapshot(task=updated_task)
 
+    def begin_feedback_processing(
+        self,
+        session: Session,
+        *,
+        task: ResearchTaskRecord,
+        revision: TaskRevisionRecord,
+        feedback_text: str,
+    ) -> FeedbackAcceptedResponse:
+        current_state = TaskLifecycleState(
+            status=TaskStatus(task.status),
+            phase=TaskPhase(task.phase),
+        )
+        if current_state != TaskLifecycleState(
+            status=TaskStatus.AWAITING_FEEDBACK,
+            phase=TaskPhase.DELIVERED,
+        ):
+            raise ApiError(
+                status_code=409,
+                code="invalid_task_state",
+                message="当前任务状态不允许提交反馈。",
+                trace_id=task.trace_id,
+            )
+
+        target_state = TaskStateMachine.transition(
+            current=current_state,
+            target=TaskLifecycleState(
+                status=TaskStatus.RUNNING,
+                phase=TaskPhase.PROCESSING_FEEDBACK,
+            ),
+        )
+        now = self.clock()
+        next_revision_id = generate_id("rev")
+        next_revision_number = task.active_revision_number + 1
+        self.repository.create_revision(
+            session=session,
+            revision=TaskRevisionRecord(
+                revision_id=next_revision_id,
+                task_id=task.task_id,
+                revision_number=next_revision_number,
+                revision_status=RevisionStatus.IN_PROGRESS.value,
+                started_at=now,
+                finished_at=None,
+                requirement_detail_json=None,
+                collect_agent_calls_used=0,
+                sandbox_id=None,
+            ),
+        )
+        self.repository.copy_collected_sources(
+            session=session,
+            from_revision_id=revision.revision_id,
+            to_task_id=task.task_id,
+            to_revision_id=next_revision_id,
+            created_at=now,
+        )
+        updated_task = self.repository.activate_revision(
+            session=session,
+            task_id=task.task_id,
+            revision_id=next_revision_id,
+            revision_number=next_revision_number,
+            status=target_state.status.value,
+            phase=target_state.phase.value,
+            updated_at=now,
+            expires_at=None,
+        )
+        assert updated_task is not None
+        self.repository.append_event(
+            session=session,
+            task_id=task.task_id,
+            revision_id=next_revision_id,
+            event="phase.changed",
+            phase=target_state.phase.value,
+            payload={
+                "from_phase": current_state.phase.value,
+                "to_phase": target_state.phase.value,
+                "status": target_state.status.value,
+            },
+            created_at=now,
+        )
+        return FeedbackAcceptedResponse(
+            accepted=True,
+            revision_id=next_revision_id,
+            revision_number=next_revision_number,
+        )
+
     def update_clarification_mode(
         self,
         session: Session,
@@ -511,6 +596,63 @@ class TaskService:
                 )
             },
             created_at=now,
+        )
+
+    def complete_feedback_processing(
+        self,
+        session: Session,
+        *,
+        task_id: str,
+        revision_id: str,
+        detail: RequirementDetail,
+    ) -> EventEnvelope:
+        task_with_revision = self.repository.get_task_with_revision(
+            session=session,
+            task_id=task_id,
+        )
+        if task_with_revision is None:
+            raise ApiError(
+                status_code=404,
+                code="task_not_found",
+                message="任务不存在或已清理。",
+            )
+
+        task, revision = task_with_revision
+        if revision.revision_id != revision_id:
+            raise ApiError(
+                status_code=409,
+                code="invalid_task_state",
+                message="当前任务状态不允许提交反馈。",
+                trace_id=task.trace_id,
+            )
+
+        now = self.clock()
+        self.repository.update_revision_requirement_detail(
+            session=session,
+            revision_id=revision.revision_id,
+            requirement_detail_json=detail.model_dump(
+                mode="json",
+                exclude_none=True,
+            ),
+        )
+        self.repository.append_event(
+            session=session,
+            task_id=task.task_id,
+            revision_id=revision.revision_id,
+            event="analysis.completed",
+            phase=task.phase,
+            payload={
+                "requirement_detail": detail.model_dump(
+                    mode="json",
+                    exclude={"raw_llm_output"},
+                )
+            },
+            created_at=now,
+        )
+        return self.transition_phase(
+            session,
+            task_id=task_id,
+            target_phase=TaskPhase.PLANNING_COLLECTION,
         )
 
     def complete_delivery(

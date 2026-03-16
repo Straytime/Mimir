@@ -16,6 +16,10 @@ from app.application.dto.clarification import (
     ClarificationSubmission,
 )
 from app.application.ports.delivery import ArtifactStore
+from app.application.dto.feedback import (
+    FeedbackAcceptedResponse,
+    FeedbackSubmission,
+)
 from app.application.dto.tasks import (
     AcceptedResponse,
     CreateTaskRequest,
@@ -63,6 +67,7 @@ async def post_tasks(
     service: TaskService = Depends(get_task_service),
     lifecycle: TaskLifecycleManager = Depends(get_task_lifecycle),
 ) -> CreateTaskResponse:
+    await lifecycle.run_cleanup_compensation()
     client_ip = request.headers.get("X-Forwarded-For")
     if client_ip:
         client_ip = client_ip.split(",", maxsplit=1)[0].strip()
@@ -171,6 +176,34 @@ async def post_clarification(
         )
 
     trace_id, response = await lifecycle.submit_clarification(
+        task_id=task_id,
+        token=token,
+        payload=payload,
+    )
+    request.state.trace_id = trace_id
+    return response
+
+
+@router.post(
+    "/tasks/{task_id}/feedback",
+    response_model=FeedbackAcceptedResponse,
+    status_code=202,
+)
+async def post_feedback(
+    task_id: str,
+    payload: FeedbackSubmission,
+    request: Request,
+    lifecycle: TaskLifecycleManager = Depends(get_task_lifecycle),
+) -> FeedbackAcceptedResponse:
+    token = _extract_bearer_token(request.headers.get("Authorization"))
+    if token is None:
+        raise ApiError(
+            status_code=401,
+            code="task_token_invalid",
+            message="任务 token 无效或不匹配。",
+        )
+
+    trace_id, response = await lifecycle.submit_feedback(
         task_id=task_id,
         token=token,
         payload=payload,

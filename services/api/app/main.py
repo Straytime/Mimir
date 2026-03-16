@@ -16,7 +16,11 @@ from app.application.ports.delivery import (
     ReportExportService,
     WriterAgent,
 )
-from app.application.ports.llm import ClarificationGenerator, RequirementAnalyzer
+from app.application.ports.llm import (
+    ClarificationGenerator,
+    FeedbackAnalyzer,
+    RequirementAnalyzer,
+)
 from app.application.ports.research import (
     CollectorAgent,
     PlannerAgent,
@@ -27,6 +31,7 @@ from app.application.ports.research import (
 from app.application.services.collection import CollectionOrchestrator
 from app.application.services.clarification import ClarificationOrchestrator
 from app.application.services.delivery import DeliveryOrchestrator
+from app.application.services.feedback import FeedbackOrchestrator
 from app.application.services.invocation import RetryingOperationInvoker
 from app.application.services.llm import RetryingLLMInvoker
 from app.application.services.merge import SourceMergeService
@@ -44,6 +49,7 @@ from app.infrastructure.delivery.local import (
 )
 from app.infrastructure.llm.local_stub import (
     LocalStubClarificationGenerator,
+    LocalStubFeedbackAnalyzer,
     LocalStubRequirementAnalyzer,
 )
 from app.infrastructure.research.local_stub import (
@@ -66,6 +72,7 @@ def create_app(
     clock: Callable[[], datetime] | None = None,
     clarification_generator: ClarificationGenerator | None = None,
     requirement_analyzer: RequirementAnalyzer | None = None,
+    feedback_analyzer: FeedbackAnalyzer | None = None,
     planner_agent: PlannerAgent | None = None,
     collector_agent: CollectorAgent | None = None,
     summary_agent: SummaryAgent | None = None,
@@ -158,6 +165,17 @@ def create_app(
         clock=resolved_clock,
     )
     application.state.collection_orchestrator = collection_orchestrator
+    feedback_orchestrator = FeedbackOrchestrator(
+        session_factory=session_factory,
+        task_service=application.state.task_service,
+        feedback_analyzer=feedback_analyzer or LocalStubFeedbackAnalyzer(),
+        llm_invoker=llm_invoker,
+        on_feedback_completed=lambda task_id: collection_orchestrator.ensure_started(
+            task_id=task_id
+        ),
+        clock=resolved_clock,
+    )
+    application.state.feedback_orchestrator = feedback_orchestrator
     clarification_orchestrator = ClarificationOrchestrator(
         session_factory=session_factory,
         task_service=application.state.task_service,
@@ -177,6 +195,10 @@ def create_app(
         clarification_orchestrator=clarification_orchestrator,
         collection_orchestrator=collection_orchestrator,
         delivery_orchestrator=delivery_orchestrator,
+        feedback_orchestrator=feedback_orchestrator,
+        artifact_store=application.state.artifact_store,
+        sandbox_client=sandbox_client or LocalStubSandboxClient(),
+        operation_invoker=operation_invoker,
         settings=resolved_settings,
         clock=resolved_clock,
     )
