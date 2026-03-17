@@ -34,4 +34,5 @@ See [`.env.example`](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects
 
 - `ZHIPU_API_KEY` or `MIMIR_ZHIPU_API_KEY` is required when `llm` or `web_search` runs in `real` mode.
 - `JINA_API_KEY` or `MIMIR_JINA_API_KEY` is required when `web_fetch` runs in `real` mode. Jina Reader base URL defaults to `https://r.jina.ai/` and can be overridden via `MIMIR_JINA_BASE_URL`.
-- Model IDs are configurable per agent role; the defaults are separated in config even if you keep them on the same model family at first.
+- Model IDs are configurable per agent role; the current default contract is `glm-5` for all roles unless you explicitly override them in local env.
+- `MIMIR_WEB_SEARCH_ENGINE` defaults to `search_prime`, which matches the current architecture contract for Zhipu `web_search`.

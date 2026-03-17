@@ -1272,3 +1272,42 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 在独立 smoke 任务包里验证智谱 LLM / `web_search` / Jina Reader 的真实联通性与返回形态
   - 若 smoke 暴露 provider 侧字段差异，再回到 adapter contract tests 做最小闭环修补
+
+## R1-004 Real Provider Smoke + Env Contract
+
+- 日期时间: 2026-03-17 18:14:47 CST (+0800)
+- 任务包编号: R1-004
+- session 标识: codex-20260317-r1-004-real-provider-smoke
+- 目标摘要: 在本地真实环境下验证智谱 LLM、智谱 `web_search` 与 Jina Reader `web_fetch` 的最小可运行链路，确认 `R1-003` 对齐后的调用契约在 real mode 下能实际启动并发起真实外部调用；同时收敛本地 env 契约与联调入口行为，但不进入 E2B 真实接线。
+- 修改文件:
+  - `README.md`（补充 `./scripts/dev.sh` 会继承当前 shell 中的 provider mode、`MIMIR_DATABASE_URL` 与密钥）
+  - `services/api/.env.example`（各角色默认模型统一为 `glm-5`，`MIMIR_WEB_SEARCH_ENGINE` 默认更新为 `search_prime`）
+  - `services/api/README.md`（补充 real provider env 约定与默认模型 / 搜索引擎说明）
+  - `scripts/dev.sh`（移除对 `MIMIR_PROVIDER_MODE=stub` 的强制覆盖；启动日志显示当前生效的 provider mode；启动日志改为显示当前生效且脱敏后的数据库 URL）
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `brew services list`，确认 `postgresql@16` 处于 started 状态
+  - 已运行: `/opt/homebrew/opt/postgresql@16/bin/psql -d postgres -c 'select 1'`，确认本地 PostgreSQL 可用
+  - 已运行: 在本地 shell 中以 real mode 导出 `MIMIR_PROVIDER_MODE`、`MIMIR_LLM_PROVIDER_MODE`、`MIMIR_WEB_SEARCH_PROVIDER_MODE`、`MIMIR_WEB_FETCH_PROVIDER_MODE`、各角色 `glm-5` 模型配置、`ZHIPU_API_KEY`、`JINA_API_KEY`，并设置临时 `MIMIR_DATABASE_URL=postgresql+psycopg://postgres@127.0.0.1:5432/mimir_real_smoke`；密钥仅保留在本地 shell env，不写入仓库
+  - 已运行: `./scripts/dev.sh`，确认 real mode 下 API 与 Web 可启动，Alembic 可对临时数据库完成迁移
+  - 已运行: `curl -sS http://127.0.0.1:8000/api/v1/health` — 返回 `{"status":"ok","service":"mimir-api","version":"v1"}`
+  - 已运行: `curl -I -sS http://127.0.0.1:3000` — 返回 `HTTP/1.1 200 OK`
+  - 已运行: `curl -i -sS -X OPTIONS http://127.0.0.1:8000/api/v1/tasks -H 'Origin: http://localhost:3000' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: Authorization,Content-Type'` — 返回 `200 OK`，包含白名单 `access-control-allow-origin` 与 `Authorization`
+  - 已运行: 基于真实 API 的最小 SSE smoke（`POST /tasks -> GET /events -> POST /clarification`）：
+    - 成功事件链: `task.created -> clarification.delta -> clarification.natural.ready -> phase.changed(to_phase=analyzing_requirement) -> analysis.delta`
+    - 最远成功阶段: `analyzing_requirement`
+    - 终止点: `task.failed`
+    - 错误语义: `requirement_parse_failed`
+  - 已运行: 捕获真实 `analysis.delta`，确认 `glm-5` 在 requirement analysis 阶段返回了 fenced JSON（````json ... ```）而非裸 JSON，因此被当前严格 parser 拒绝
+  - 已运行: 在保留同一 real env 的本地 shell 中直接 probe 真实 provider adapter：
+    - 智谱 `web_search` 成功，返回 `10` 条结果
+    - Jina Reader `web_fetch` 成功，`GET https://r.jina.ai/https://open.bigmodel.cn/` 可返回正文内容
+  - 已运行: 清理本次 smoke 使用的临时数据库 `mimir_real_smoke`
+- 验收结论: partial；real mode 下 API/Web 启动、provider 工厂切换、智谱 `web_search` 与 Jina Reader `web_fetch` 都已在本地真实环境中至少成功验证一次，说明 env contract、endpoint 与基本 request construction 可用；但最小主链路在 `analyzing_requirement` 阶段失败，失败原因已准确定界为当前 `glm-5` 返回 fenced JSON，与现有 requirement parser 的“必须是裸 JSON”约束不兼容，因此本轮 smoke 最远只到 `analysis.delta` / `analyzing_requirement`，尚未进入 `planning_collection`。
+- blocker / 风险:
+  - 当前真实 smoke blocker: `glm-5` 的 requirement analysis 输出包含 Markdown code fence，触发 `RequirementDetailParser` 的 `requirement_parse_failed`
+  - 这不是密钥、provider 工厂、endpoint、timeout 或 `web_search` / `web_fetch` 可用性问题，而是当前 prompt / parser 与真实模型输出格式之间的兼容性问题
+  - 按本任务包约束，本轮未修改 prompt / parser 语义，只做了 env contract 与本地入口的最小修补
+- 下一步建议:
+  - 单独开实现任务包，决定是放宽 requirement parser（允许 fenced JSON）还是继续收紧 prompt 约束并验证 `glm-5` 是否能稳定输出裸 JSON
+  - 在 requirement analysis 兼容性修复后，重新执行 real smoke，目标推进到 `planning_collection`、真实 `planner`、真实 `web_search`、真实 `web_fetch` 与 `summary.completed`
