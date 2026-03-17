@@ -13,7 +13,8 @@ from app.application.dto.delivery import (
 )
 from app.application.services.invocation import RetryableOperationError
 from app.application.services.llm import RetryableLLMError
-from app.infrastructure.research.real_http import _coerce_optional_string, _strip_code_fences
+from app.core.json_utils import strip_markdown_code_fence
+from app.infrastructure.research.real_http import _coerce_optional_string
 from app.infrastructure.llm.zhipu import (
     ZhipuChatClient,
     ZhipuClientProtocol,
@@ -137,7 +138,7 @@ async def _complete_json(
     except RetryableLLMError as exc:
         raise RetryableOperationError("zhipu upstream request failed") from exc
     try:
-        payload = json.loads(_strip_code_fences(result.text))
+        payload = json.loads(strip_markdown_code_fence(result.text))
     except json.JSONDecodeError as exc:
         raise RetryableOperationError("zhipu returned invalid JSON") from exc
     if not isinstance(payload, dict):

@@ -1311,3 +1311,54 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 单独开实现任务包，决定是放宽 requirement parser（允许 fenced JSON）还是继续收紧 prompt 约束并验证 `glm-5` 是否能稳定输出裸 JSON
   - 在 requirement analysis 兼容性修复后，重新执行 real smoke，目标推进到 `planning_collection`、真实 `planner`、真实 `web_search`、真实 `web_fetch` 与 `summary.completed`
+
+## R1-004R Requirement Parser Compatibility + Smoke Resume
+
+- 日期时间: 2026-03-17 18:38:57 CST (+0800)
+- 任务包编号: R1-004R
+- session 标识: codex-20260317-r1-004r-requirement-parser-compat
+- 目标摘要: 修补 real `glm-5` 在 requirement / feedback analysis 阶段返回 fenced PRD JSON 时的 parser 兼容性，同时保持真正 malformed JSON 明确失败；在修补后恢复真实 provider smoke，目标至少推进到 collection 阶段且拿到真实 `summary.completed`，不扩展到 writer / E2B。
+- 修改文件:
+  - `services/api/app/core/json_utils.py`（新增：严格的 Markdown JSON code fence strip 工具，只接受独占 fenced block）
+  - `services/api/app/application/parsers/requirement.py`（在 requirement / feedback 共用 parser 中接入 fenced JSON 兼容、PRD 中文键到内部 schema 的归一化、`output_format` / `freshness_requirement` 枚举映射，以及 `language` 的 parser-stage 抽取与默认中文）
+  - `services/api/app/infrastructure/research/real_http.py`（复用共用 code fence 工具）
+  - `services/api/app/infrastructure/delivery/zhipu.py`（复用共用 code fence 工具）
+  - `services/api/tests/unit/application/test_clarification_parsers.py`（新增 requirement / feedback fenced JSON 兼容测试，以及“非 JSON 噪音包装仍失败”的保护测试）
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 红测: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_clarification_parsers.py -q`
+    - 初始结果: `2 failed, 8 passed`
+    - 失败点: fenced PRD JSON 仍被 `RequirementDetailParser` 当作 malformed JSON 拒绝
+  - 绿测: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_clarification_parsers.py -q`
+    - 结果: `10 passed`
+  - 回归: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/integration/lifecycle/test_clarification_lifecycle.py tests/integration/feedback/test_feedback_revision.py tests/unit/infrastructure/test_zhipu_adapters.py -q`
+    - 结果: `15 passed`
+  - stub 模式全量后端回归: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+    - 结果: `121 passed`
+  - real smoke 环境:
+    - 在本地 shell 中导出 `MIMIR_PROVIDER_MODE=real`、各 provider override、各角色 `glm-5`、`ZHIPU_API_KEY`、`JINA_API_KEY`，并使用临时 `MIMIR_DATABASE_URL=postgresql+psycopg://postgres@127.0.0.1:5432/mimir_real_smoke_r1004r`
+    - 使用 `./scripts/dev.sh` 启动本地 PostgreSQL / API / Web
+    - 使用 HTTP + SSE smoke 脚本执行 `POST /tasks -> GET /events -> POST /clarification`
+  - 第一次 smoke:
+    - 已推进到 `collecting`
+    - 已拿到 `analysis.completed`、`phase.changed(to_phase=planning_collection)`、多条 `planner.reasoning.delta`、多条 `planner.tool_call.requested`、至少一条 `collector.search.started`
+    - 最早新 blocker: `task.terminated(reason=heartbeat_timeout)`，说明真实 provider 路径下 collection 耗时已经超过“无客户端 heartbeat”容忍窗口
+  - 第二次 smoke（脚本增加 20s client heartbeat 保活）:
+    - 成功推进到 `planning_collection -> collecting -> summarizing_collection`
+    - 已拿到真实 `planner.reasoning.delta`
+    - 已拿到真实 `planner.tool_call.requested`
+    - 已拿到真实 `collector.search.started/completed`
+    - 已拿到真实 `collector.fetch.started/completed`
+    - 已拿到真实 `summary.completed`
+    - 随后主动调用 `POST /disconnect` 终止任务，未继续进入 writer / E2B
+  - 清理:
+    - 停止本地 `./scripts/dev.sh`
+    - 删除本次 smoke 使用的临时数据库 `mimir_real_smoke_r1004r`
+- 验收结论: accepted；`RequirementDetailParser` 现在兼容 fenced PRD JSON，并能按设计文档把中文键输出归一化为内部 `RequirementDetail` 结构；真正 malformed JSON 与带额外噪音的非独占 fenced 输出仍明确失败。real mode 下最小真实主链路已恢复并推进到 `summary.completed`，满足“至少进入 collection 阶段并完成一轮真实 planner / search / fetch / summary”的 smoke 验收要求。
+- blocker / 风险:
+  - 无当前 blocker
+  - 真实 provider 路径下 collection 明显比 stub 慢；如果后续还做人工 smoke，必须保持客户端 heartbeat，否则会被服务端按 `heartbeat_timeout` 终止
+  - 当前 smoke 在 `summary.completed` 后主动 `disconnect`，因此本轮没有验证 writer / E2B，这符合任务包边界
+- 下一步建议:
+  - 若继续做 real provider smoke，可把 heartbeat 保活逻辑纳入专用 smoke harness，而不是每次手写
+  - 单独开下一任务包时再决定是否推进到 outline / writer，当前不应混入 E2B 真实接线
