@@ -189,6 +189,7 @@ pnpm install
 | [`docs/Frontend_TDD_Plan.md`](docs/Frontend_TDD_Plan.md) | 前端 TDD 分阶段计划 |
 | [`docs/Implementation_Playbook.md`](docs/Implementation_Playbook.md) | 实施总控（任务包规范、并行策略、回报验收） |
 | [`docs/Deploy_Contract.md`](docs/Deploy_Contract.md) | Vercel / Railway 部署合同与 env matrix |
+| [`docs/Release_Readiness_Checklist.md`](docs/Release_Readiness_Checklist.md) | 发布前检查单与待拍板决策 |
 | [`docs/Execution_Log.md`](docs/Execution_Log.md) | 全局实施历史（append-only） |
 
 > `docs/` 是 source of truth。行为变更必须先更新文档，再写测试，再实现。
