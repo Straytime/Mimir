@@ -30,7 +30,9 @@ from app.application.prompts.clarification import (
 )
 from app.application.prompts.requirement import build_requirement_analysis_prompt
 from app.application.services.llm import RetryingLLMInvoker
+from app.application.services.llm import RetryableLLMError
 from app.application.services.tasks import TaskService
+from app.application.services.invocation import RiskControlTriggered
 from app.domain.enums import ClarificationMode, TaskPhase, TaskStatus
 
 
@@ -287,9 +289,24 @@ class ClarificationOrchestrator:
             client_locale=client_locale,
             now=self._clock(),
         )
-        generation = await self._llm_invoker.invoke(
-            lambda: self._clarification_generator.generate_natural(prompt)
-        )
+        try:
+            generation = await self._llm_invoker.invoke(
+                lambda: self._clarification_generator.generate_natural(prompt)
+            )
+        except RiskControlTriggered:
+            await self._fail_task(
+                task_id=task_id,
+                error_code="risk_control_triggered",
+                message="澄清阶段触发风控。",
+            )
+            return
+        except RetryableLLMError:
+            await self._fail_task(
+                task_id=task_id,
+                error_code="upstream_service_error",
+                message="澄清生成失败且重试耗尽。",
+            )
+            return
         await self._emit_deltas(task_id=task_id, event="clarification.delta", deltas=generation.deltas)
 
         with self._session_factory() as session:
@@ -324,9 +341,24 @@ class ClarificationOrchestrator:
             client_locale=client_locale,
             now=self._clock(),
         )
-        generation = await self._llm_invoker.invoke(
-            lambda: self._clarification_generator.generate_options(prompt)
-        )
+        try:
+            generation = await self._llm_invoker.invoke(
+                lambda: self._clarification_generator.generate_options(prompt)
+            )
+        except RiskControlTriggered:
+            await self._fail_task(
+                task_id=task_id,
+                error_code="risk_control_triggered",
+                message="澄清阶段触发风控。",
+            )
+            return
+        except RetryableLLMError:
+            await self._fail_task(
+                task_id=task_id,
+                error_code="upstream_service_error",
+                message="澄清生成失败且重试耗尽。",
+            )
+            return
         await self._emit_deltas(task_id=task_id, event="clarification.delta", deltas=generation.deltas)
 
         parser = ClarificationOptionsParser()
@@ -408,9 +440,24 @@ class ClarificationOrchestrator:
             client_locale=client_locale,
             now=self._clock(),
         )
-        generation = await self._llm_invoker.invoke(
-            lambda: self._requirement_analyzer.analyze(prompt)
-        )
+        try:
+            generation = await self._llm_invoker.invoke(
+                lambda: self._requirement_analyzer.analyze(prompt)
+            )
+        except RiskControlTriggered:
+            await self._fail_task(
+                task_id=task_id,
+                error_code="risk_control_triggered",
+                message="需求分析阶段触发风控。",
+            )
+            return
+        except RetryableLLMError:
+            await self._fail_task(
+                task_id=task_id,
+                error_code="upstream_service_error",
+                message="需求分析调用失败且重试耗尽。",
+            )
+            return
         await self._emit_deltas(task_id=task_id, event="analysis.delta", deltas=generation.deltas)
 
         parser = RequirementDetailParser()

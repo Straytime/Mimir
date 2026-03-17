@@ -17,7 +17,8 @@ from app.application.parsers.requirement import (
 )
 from app.application.ports.llm import FeedbackAnalyzer
 from app.application.prompts.feedback import build_feedback_analysis_prompt
-from app.application.services.llm import RetryingLLMInvoker
+from app.application.services.invocation import RiskControlTriggered
+from app.application.services.llm import RetryingLLMInvoker, RetryableLLMError
 from app.application.services.tasks import TaskService
 from app.domain.enums import TaskPhase, TaskStatus
 from app.domain.schemas import RequirementDetail
@@ -130,9 +131,24 @@ class FeedbackOrchestrator:
             client_locale=client_locale,
             now=self._clock(),
         )
-        generation = await self._llm_invoker.invoke(
-            lambda: self._feedback_analyzer.analyze(prompt)
-        )
+        try:
+            generation = await self._llm_invoker.invoke(
+                lambda: self._feedback_analyzer.analyze(prompt)
+            )
+        except RiskControlTriggered:
+            await self._fail_task(
+                task_id=task_id,
+                error_code="risk_control_triggered",
+                message="feedback analyzer 阶段触发风控。",
+            )
+            return
+        except RetryableLLMError:
+            await self._fail_task(
+                task_id=task_id,
+                error_code="upstream_service_error",
+                message="feedback analyzer 调用失败且重试耗尽。",
+            )
+            return
         await self._emit_deltas(task_id=task_id, revision_id=revision_id, deltas=generation.deltas)
 
         parser = RequirementDetailParser()

@@ -5,6 +5,7 @@ from app.infrastructure.delivery.local import (
     LocalStubSandboxClient,
     LocalStubWriterAgent,
 )
+from app.infrastructure.delivery.zhipu import ZhipuOutlineAgent, ZhipuWriterAgent
 
 __all__ = [
     "LocalArtifactStore",
@@ -12,4 +13,6 @@ __all__ = [
     "LocalStubOutlineAgent",
     "LocalStubSandboxClient",
     "LocalStubWriterAgent",
+    "ZhipuOutlineAgent",
+    "ZhipuWriterAgent",
 ]

@@ -14,6 +14,7 @@ dependencies = [
   "httpx>=0.28,<1.0",
   "psycopg[binary]>=3.2,<4.0",
   "sqlalchemy>=2.0,<3.0",
+  "zai-sdk>=0.0.1,<1.0",
 ]
 
 [dependency-groups]
