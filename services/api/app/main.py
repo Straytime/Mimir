@@ -44,7 +44,6 @@ from app.infrastructure.delivery.local import (
     LocalArtifactStore,
     LocalReportExportService,
     LocalStubOutlineAgent,
-    LocalStubSandboxClient,
     LocalStubWriterAgent,
 )
 from app.infrastructure.llm.local_stub import (
@@ -137,7 +136,7 @@ def create_app(
         task_service=application.state.task_service,
         outline_agent=outline_agent or provider_runtime.outline_agent,
         writer_agent=writer_agent or provider_runtime.writer_agent,
-        sandbox_client=sandbox_client or LocalStubSandboxClient(),
+        sandbox_client=sandbox_client or provider_runtime.sandbox_client,
         artifact_store=application.state.artifact_store,
         report_export_service=report_export_service or LocalReportExportService(),
         operation_invoker=operation_invoker,
@@ -196,7 +195,7 @@ def create_app(
         delivery_orchestrator=delivery_orchestrator,
         feedback_orchestrator=feedback_orchestrator,
         artifact_store=application.state.artifact_store,
-        sandbox_client=sandbox_client or LocalStubSandboxClient(),
+        sandbox_client=sandbox_client or provider_runtime.sandbox_client,
         operation_invoker=operation_invoker,
         settings=resolved_settings,
         clock=resolved_clock,

@@ -2,7 +2,8 @@ import inspect
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
-from app.application.ports.delivery import OutlineAgent, WriterAgent
+from app.application.ports.delivery import E2BSandboxClient, OutlineAgent, WriterAgent
+from app.infrastructure.delivery.e2b import E2BRealSandboxClient
 from app.application.ports.llm import (
     ClarificationGenerator,
     FeedbackAnalyzer,
@@ -16,7 +17,11 @@ from app.application.ports.research import (
     WebSearchClient,
 )
 from app.core.config import Settings
-from app.infrastructure.delivery.local import LocalStubOutlineAgent, LocalStubWriterAgent
+from app.infrastructure.delivery.local import (
+    LocalStubOutlineAgent,
+    LocalStubSandboxClient,
+    LocalStubWriterAgent,
+)
 from app.infrastructure.delivery.zhipu import ZhipuOutlineAgent, ZhipuWriterAgent
 from app.infrastructure.llm.local_stub import (
     LocalStubClarificationGenerator,
@@ -61,6 +66,7 @@ class ProviderRuntime:
     web_fetch_client: WebFetchClient
     outline_agent: OutlineAgent
     writer_agent: WriterAgent
+    sandbox_client: E2BSandboxClient
     _cleanup_callbacks: tuple[CleanupCallback, ...] = ()
 
     async def shutdown(self) -> None:
@@ -76,6 +82,7 @@ def build_provider_runtime(settings: Settings) -> ProviderRuntime:
     llm_mode = settings.resolved_llm_provider_mode()
     web_search_mode = settings.resolved_web_search_provider_mode()
     web_fetch_mode = settings.resolved_web_fetch_provider_mode()
+    e2b_mode = settings.resolved_e2b_provider_mode()
     cleanup_callbacks: list[CleanupCallback] = []
 
     if llm_mode == "real":
@@ -151,6 +158,17 @@ def build_provider_runtime(settings: Settings) -> ProviderRuntime:
     else:
         web_fetch_client = LocalStubWebFetchClient()
 
+    if e2b_mode == "real":
+        sandbox_client = E2BRealSandboxClient(
+            api_key=settings.e2b_api_key or "",
+            request_timeout_seconds=settings.e2b_request_timeout_seconds,
+            execution_timeout_seconds=settings.e2b_execution_timeout_seconds,
+            sandbox_timeout_seconds=settings.e2b_sandbox_timeout_seconds,
+        )
+        cleanup_callbacks.append(sandbox_client.shutdown)
+    else:
+        sandbox_client = LocalStubSandboxClient()
+
     return ProviderRuntime(
         clarification_generator=clarification_generator,
         requirement_analyzer=requirement_analyzer,
@@ -162,5 +180,6 @@ def build_provider_runtime(settings: Settings) -> ProviderRuntime:
         web_fetch_client=web_fetch_client,
         outline_agent=outline_agent,
         writer_agent=writer_agent,
+        sandbox_client=sandbox_client,
         _cleanup_callbacks=tuple(cleanup_callbacks),
     )
