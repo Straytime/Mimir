@@ -1200,3 +1200,26 @@ Copy the template below for each completed session:
   - 真实 Jina Reader provider smoke 验证
   - 清理不再引用的 HttpWebFetchClient 和相关 user_agent 配置
   - E2B 真实 adapter 接线
+
+## R1-DOC-002 External Invocation Contract Reconciliation
+
+- 日期时间: 2026-03-17 16:47:32 CST (+0800)
+- 任务包编号: R1-DOC-002
+- session 标识: codex-20260317-r1-doc-002-contract-reconciliation
+- 目标摘要: 对照 `docs/Mimir_v1.0.0_prd_0.3.md` 与现有设计文档，正式收敛外部模型与工具调用契约。将各阶段 LLM profile、prompt source-of-truth 规则、`collect_agent / web_search / web_fetch / python_interpreter` schema、智谱 `web_search` 请求体、Jina Reader `web_fetch` 正式请求形态、adapter / port 责任边界，以及后续 prompt/tool contract tests 的锁定粒度写入设计文档；本轮只更新 docs，不改实现代码。
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: 逐项比对 `docs/Mimir_v1.0.0_prd_0.3.md` 中 `func_4`、`func_5`、`func_6`、`func_7`、`func_8`、`func_9`、`func_12`、`func_13`、`func_15` 与 `docs/Architecture.md`、`docs/Backend_TDD_Plan.md`
+  - 已运行: 核对当前实现参考 `services/api/app/application/prompts/*`、`services/api/app/application/ports/*`、`services/api/app/infrastructure/llm/zhipu.py`、`services/api/app/infrastructure/research/real_http.py`、`services/api/app/infrastructure/research/jina.py`、`services/api/app/infrastructure/delivery/zhipu.py`、`services/api/app/core/config.py`，确认文档中明确写出了“继承 PRD”与“设计层调整”的边界
+  - 已运行: 复核 `docs/OpenAPI_v1.md` 无需改动，因为本次收敛不改变前后端公开 REST / SSE 契约
+  - 未运行: 自动化测试；本任务包为 docs-first 收敛，不涉及实现改动
+- 验收结论: accepted；`Architecture` 已能明确回答各阶段真实外部调用应如何发起，`Backend_TDD_Plan` 已明确后续测试如何锁定参数、prompt、tool schema、request shape 与结果清洗规则，并显式写清了 Jina `web_fetch` 相对 PRD 的设计层调整。
+- blocker / 风险:
+  - 无当前文档 blocker
+  - 当前实现仍存在待修正项，例如阶段模型默认值、智谱 `web_search` 固定字段、薄端口未显式携带完整调用 profile；需在后续实现任务包中按本次文档结论修正
+- 下一步建议:
+  - 下发实现修正任务包，使 `services/api` 的 LLM / research / delivery adapters 与本次文档契约一致
+  - 为阶段 profile、prompt source-of-truth、`web_search` / Jina `web_fetch` request construction、新端口边界补齐 contract tests

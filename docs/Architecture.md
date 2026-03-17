@@ -888,6 +888,185 @@ E2B 生命周期约束：
 4. E2B sandbox 创建失败、执行失败或上传 artifact 失败时，适用 PRD 的通用重试策略；重试耗尽后该 Revision 失败，不做“静默跳过图表”的降级。
 5. 由于 v1 全局只允许一个活动任务，一个 Revision 持有一个活动 sandbox 的成本是可接受的。
 
+## 8.5 外部调用契约与 PRD 收敛
+
+本节用于把 PRD 中对第三方模型与工具服务的调用要求，正式收敛为后续实现修正的唯一设计口径。
+
+适用范围：
+
+- 智谱 LLM chat / tool-calling
+- 智谱 `web_search`
+- Jina Reader `web_fetch`
+- E2B `python_interpreter`
+
+总原则：
+
+1. 除本节显式说明的设计层调整外，PRD `func_4`、`func_5`、`func_6`、`func_7`、`func_8`、`func_9`、`func_12`、`func_13`、`func_15` 的调用定义仍是 source of truth。
+2. 后续实现不得再以“adapter 默认值”替代阶段级调用配置；若要调整模型、采样参数、tool schema 或 request shape，必须先同步更新 PRD、本文档和测试计划。
+3. 本节约束的是后端对外 provider/tool 调用，不改变已有 `TaskSnapshot`、`EventEnvelope` 与 REST/SSE 公共契约，因此 `docs/OpenAPI_v1.md` 不需要同步改动。
+
+### 8.5.1 LLM 阶段调用 profile
+
+下表是所有真实 LLM 调用必须遵守的阶段 profile。实现可以通过配置注入这些值，但配置项本身不构成新的 source of truth。
+
+| 阶段 | PRD 对应 | `model` | `temperature` | `top_p` | `max_tokens` | `thinking` | `stream` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| clarification natural | `func_4` | `glm-5` | `0.5` | `0.8` | `98304` | `false` | `true` |
+| clarification options | `func_5` | `glm-5` | `0.5` | `0.8` | `98304` | `false` | `true` |
+| requirement analysis | `func_6` | `glm-5` | `0.5` | `0.8` | `98304` | `false` | `true` |
+| planner | `func_7` | `glm-5` | `1` | `1` | `98304` | `true` | `true` |
+| collector | `func_8` | `glm-5` | `1` | `1` | `98304` | `true` | `true` |
+| summary | `func_9` | `glm-5` | `0.6` | `0.8` | `98304` | `false` | `true` |
+| outline | `func_12` | `glm-5` | `1` | `1` | `98304` | `true` | `true` |
+| writer | `func_13` | `glm-5` | `1` | `1` | `98304` | `true` | `true` |
+| feedback analysis | `func_15` | `glm-5` | `0.5` | `0.8` | `98304` | `false` | `true` |
+
+补充约束：
+
+1. `planner`、`collector`、`outline`、`writer` 四类 thinking-enabled 调用，还必须显式传递 `clear_thinking=false`，不得依赖 SDK 默认值。
+2. 未在上表列出的任意 LLM 调用，都不能绕过本表自行选择新的模型 profile。
+3. `stream=true` 是真实 provider 调用契约的一部分；即使后端内部最终把结果聚合后再持久化或发事件，也不能把上游请求默认为非流式。
+
+### 8.5.2 Prompt source of truth 与组织规则
+
+按 drift 风险把 prompt 分成两类。
+
+第一类：逐字继承 PRD
+
+- `clarification natural`
+- `clarification options`
+- `requirement analysis`
+- `feedback analysis`
+
+约束：
+
+1. 以上四类 prompt 的模型可见文本，以 PRD 原文为准逐字落实；允许的变化只有运行时变量插值、空白规范化和 JSON 示例中的动态值替换。
+2. `clarification natural` 与 `clarification options` 必须保持 PRD 的“空 system prompt”约束，不能再由 adapter 私自补一个新的 system prompt。
+3. `requirement analysis` 与 `feedback analysis` 的 system prompt / user prompt 边界，以 PRD 为准；不得把 PRD 中模型可见的角色说明挪到 adapter 不可见的默认字符串里。
+
+第二类：允许等价改写，但语义必须与 PRD 一致
+
+- `planner`
+- `collector`
+- `summary`
+- `outline`
+- `writer`
+
+允许的设计层抽象：
+
+1. 可以把 PRD 的稳定角色说明收口到 system prompt，把运行时数据放到 user prompt。
+2. 可以把“只输出合法 JSON”这类结构化输出指令抽成统一后缀或 adapter wrapper。
+3. 可以把 transcript 以多条 message 注入，而不是把全部历史拼成单个长字符串。
+
+不可改变的语义：
+
+1. tool 可见范围、tool 名称、tool 参数名不能改。
+2. 并发上限、`collect_agent` 次数上限、sub-agent 工具调用上限不能改。
+3. planner / collector / writer 的完整 transcript 必须按原始顺序回放，不能只注入摘要。
+4. 不得新增 PRD 未定义的模型可见字段、工具或输出 schema。
+
+system / user prompt 组织规则：
+
+1. system prompt 负责稳定角色、硬性边界、tool 使用约束。
+2. user prompt 负责当前 `RequirementDetail`、`CollectPlan`、`CollectResult`、`FormattedSource[]`、反馈文本等运行时输入。
+3. 若 PRD 明确要求 system prompt 为空，则设计也必须保持为空；这类调用不能为了“统一封装”而额外加 system prompt。
+
+### 8.5.3 Tool schema 契约
+
+| tool | 可用阶段 | 模型可见 request schema | 设计约束 |
+| --- | --- | --- | --- |
+| `collect_agent` | planner | `collect_target`、`additional_info`、`freshness_requirement` | 对模型暴露的 schema 以 PRD 为准，不额外暴露 `tool_call_id`、`revision_id`、`subtask_id`；这些内部元数据由后端在解析后补齐。 |
+| `web_search` | collector | `search_query`、`search_recency_filter` | `search_recency_filter` 的规范值为 `day | week | month | year | noLimit`；若历史 transcript 中出现 `nolimit`，只允许 adapter 做兼容归一化。 |
+| `web_fetch` | collector | `url` | 只允许模型传目标 URL，不对模型暴露 header、timeout、parser 等实现细节。 |
+| `python_interpreter` | writer | `code` | 只允许模型提交待执行 Python 代码；sandbox 创建、复用、上传 artifact、下载签名 URL 都由后端 orchestrator / adapter 负责。 |
+
+tool result 归一化规则：
+
+1. `collect_agent` 返回给 planner 的是后端综合后的 subtask 摘要，不是原始 `web_search` / `web_fetch` provider payload。
+2. `web_search` 与 `web_fetch` 的 tool result 都必须在 adapter 层标准化为“成功但内容为空”或“失败但可继续”的统一 envelope，避免 collector loop 因 provider 响应形态差异挂起。
+3. `python_interpreter` tool result 只允许返回文本摘要与 artifact 元数据，不能把二进制文件内容直接放进 transcript 或 SSE payload。
+
+### 8.5.4 Tool request construction 与结果清洗
+
+#### 智谱 `web_search`
+
+真实 HTTP 请求必须构造成：
+
+- `POST https://open.bigmodel.cn/api/paas/v4/web_search`
+- `Authorization: Bearer {ZHIPU_API_KEY}`
+- 请求体固定字段：
+  - `search_engine: "search_prime"`
+  - `query_rewrite: false`
+  - `count: 10`
+  - `search_query: <tool call 中的 search_query>`
+  - `search_recency_filter: <tool call 中的 search_recency_filter>`
+
+额外约束：
+
+1. `search_engine`、`query_rewrite`、`count` 属于固定 provider contract，不允许由 planner / collector prompt 或 adapter 默认值自由漂移。
+2. tool result 回灌给 collector 时，只保留 `search_result` 列表中的核心字段；`icon`、`media` 及其他展示性厂商字段一律剔除。
+3. provider 如果返回 `results`、`data.search_result` 等兼容形态，adapter 负责归一到同一内部结构，再返回给上层。
+
+#### Jina Reader `web_fetch`
+
+PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": ...}`。设计层在此做一处有意识调整：
+
+- 正式请求形态采用 `GET https://r.jina.ai/{url}`
+- Header:
+  - `Authorization: Bearer {JINA_API_KEY}`
+  - `Accept: text/plain`
+
+调整理由：
+
+1. Jina Reader 的稳定接入方式是“把目标 URL 直接拼到 reader base URL 后面”，这与现有 real adapter 和上游产品形态一致。
+2. 使用 path-based GET 比起自定义 POST body 更少歧义，也更适合通过 `respx` 与 contract tests 明确锁定。
+
+结果处理规则：
+
+1. 把响应视为 markdown / plaintext 文本，不做 HTML 二次抓取。
+2. 以首个 markdown 标题或首行文本生成 `title`，原始 `url` 仍作为主键。
+3. 返回给 collector transcript、数据库与 summary loop 的正文，统一截断到前 `10000` 个字符。
+4. 空内容、上游 4xx、拒绝访问、非文本体都转成标准化“失败但可继续”的 tool result；超时与 5xx 仍按可重试异常处理。
+
+#### `python_interpreter`
+
+1. writer 发出的 tool request 只包含 `code`。
+2. adapter / orchestrator 负责把执行结果拆成：
+   - 文本执行摘要
+   - artifact 元数据
+   - 失败错误摘要
+3. raw binary、压缩包内容或图片字节不进入 transcript；它们只能进入 artifact store。
+
+### 8.5.5 Port / adapter 责任边界
+
+必须通过端口层显式传递的内容：
+
+1. LLM 阶段标识，以及对应的 `model`、`temperature`、`top_p`、`max_tokens`、`thinking`、`clear_thinking`、`stream`
+2. system prompt / user prompt 的最终模型可见内容
+3. transcript message 列表及其顺序
+4. tool schema 列表，以及期望的输出模式（纯文本 / 结构化 JSON / tool-calling）
+5. `web_search` 的 `search_query` 与 `search_recency_filter`
+6. `web_fetch` 的 `url`
+7. `python_interpreter` 的 `code`
+
+可由 adapter 默认值承接的内容：
+
+1. API key、base URL、HTTP timeout、连接池、User-Agent、`Accept` 等传输层细节
+2. 智谱 `web_search` 的固定字段：`search_engine="search_prime"`、`query_rewrite=false`、`count=10`
+3. Jina Reader 的 base URL 与鉴权 header 组织方式
+4. 结果截断长度、标题提取、厂商字段清洗、错误映射、request id 采集
+5. `RetryPolicy`、风控异常映射与日志埋点
+
+禁止由 adapter 私自决定的内容：
+
+1. 阶段模型 profile
+2. prompt 文本语义
+3. tool 名称、tool 参数名、tool 可见字段
+4. transcript 是否完整回放
+5. planner 并发上限、`collect_agent` 总配额、sub-agent 工具调用上限
+
+后续实现修正应优先把当前“只传 prompt 字符串”的薄端口，提升为显式携带调用 profile 与 prompt bundle 的端口；在该修正完成前，任何真实 provider 适配都不得再新增隐式默认值。
+
 ## 9. API 契约
 
 约定：
