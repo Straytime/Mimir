@@ -1,11 +1,10 @@
 import json
 import re
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
-from app.application.dto.delivery import OutlineSection, ResearchOutline, WriterToolCall
+from app.application.dto.invocation import LLMInvocation, PromptBundle
 from app.application.dto.research import (
     CollectorDecision,
     CollectorInvocation,
@@ -21,9 +20,13 @@ from app.application.services.invocation import (
     RetryableOperationError,
     RiskControlTriggered,
 )
+from app.application.services.llm import RetryableLLMError
 from app.domain.enums import CollectSummaryStatus, FreshnessRequirement
 from app.domain.schemas import CollectPlan
-from app.infrastructure.llm.zhipu import ZhipuChatClient, map_zhipu_exception
+from app.infrastructure.llm.zhipu import (
+    ZhipuChatClient,
+    ZhipuClientProtocol,
+)
 
 
 def normalize_recency_filter(value: str) -> str:
@@ -31,18 +34,14 @@ def normalize_recency_filter(value: str) -> str:
 
 
 class ZhipuPlannerAgent:
-    def __init__(self, *, client: ZhipuChatClient, model: str) -> None:
-        self._client = client
+    def __init__(self, *, client: ZhipuChatClient | ZhipuClientProtocol, model: str) -> None:
+        self._client = _coerce_chat_client(client)
         self._model = model
 
     async def plan(self, invocation: PlannerInvocation) -> PlannerDecision:
-        prompt = _append_json_instruction(
-            "请输出合法 JSON：{\"reasoning_deltas\": string[], \"stop\": boolean, \"plans\": CollectPlan[]}。"
-        )
         payload = await _complete_json(
             client=self._client,
-            model=self._model,
-            prompt=f"{invocation.prompt_name}\n{prompt}",
+            invocation=invocation,
         )
         reasoning_deltas = _coerce_string_tuple(payload.get("reasoning_deltas"))
         stop = bool(payload.get("stop", False))
@@ -77,20 +76,14 @@ class ZhipuPlannerAgent:
 
 
 class ZhipuCollectorAgent:
-    def __init__(self, *, client: ZhipuChatClient, model: str) -> None:
-        self._client = client
+    def __init__(self, *, client: ZhipuChatClient | ZhipuClientProtocol, model: str) -> None:
+        self._client = _coerce_chat_client(client)
         self._model = model
 
     async def plan(self, invocation: CollectorInvocation) -> CollectorDecision:
         payload = await _complete_json(
             client=self._client,
-            model=self._model,
-            prompt=(
-                f"{invocation.prompt_name}\n"
-                + _append_json_instruction(
-                    "请输出合法 JSON：{\"reasoning_deltas\": string[], \"search_queries\": string[], \"search_recency_filter\": string}。"
-                )
-            ),
+            invocation=invocation,
         )
         return CollectorDecision(
             reasoning_deltas=_coerce_string_tuple(payload.get("reasoning_deltas")),
@@ -102,20 +95,14 @@ class ZhipuCollectorAgent:
 
 
 class ZhipuSummaryAgent:
-    def __init__(self, *, client: ZhipuChatClient, model: str) -> None:
-        self._client = client
+    def __init__(self, *, client: ZhipuChatClient | ZhipuClientProtocol, model: str) -> None:
+        self._client = _coerce_chat_client(client)
         self._model = model
 
     async def summarize(self, invocation: SummaryInvocation) -> SummaryDecision:
         payload = await _complete_json(
             client=self._client,
-            model=self._model,
-            prompt=(
-                f"{invocation.prompt_name}\n"
-                + _append_json_instruction(
-                    "请输出合法 JSON：{\"status\": \"completed|partial|risk_blocked\", \"key_findings_markdown\": string|null, \"message\": string|null}。"
-                )
-            ),
+            invocation=invocation,
         )
         return SummaryDecision(
             status=CollectSummaryStatus(str(payload["status"])),
@@ -133,7 +120,7 @@ class ZhipuWebSearchClient:
         api_key: str,
         base_url: str,
         endpoint_path: str = "web_search",
-        engine: str = "search_std",
+        engine: str = "search_prime",
         timeout_seconds: float = 30.0,
         transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -153,6 +140,8 @@ class ZhipuWebSearchClient:
                 self._endpoint_path,
                 json={
                     "search_engine": self._engine,
+                    "query_rewrite": False,
+                    "count": 10,
                     "search_query": query,
                     "search_recency_filter": normalized_filter,
                 },
@@ -246,26 +235,34 @@ class HttpWebFetchClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-
-def _append_json_instruction(instruction: str) -> str:
-    return f"{instruction}\n不要输出 Markdown 代码块，不要输出额外解释。"
-
-
 async def _complete_json(
     *,
     client: ZhipuChatClient,
-    model: str,
-    prompt: str,
+    invocation: PlannerInvocation | CollectorInvocation | SummaryInvocation,
 ) -> dict[str, Any]:
+    if invocation.prompt_bundle is None or invocation.profile is None:
+        raise RetryableOperationError("zhipu invocation contract is incomplete")
+    prompt_bundle = PromptBundle(
+        system_prompt=invocation.prompt_bundle.system_prompt,
+        user_prompt=(
+            invocation.prompt_bundle.user_prompt
+            + "\n\n"
+            + _json_instruction_for_invocation(invocation)
+        ).strip(),
+        transcript=invocation.prompt_bundle.transcript,
+    )
     try:
         result = await client.complete(
-            model=model,
-            prompt=prompt,
-            system_prompt="你是 Mimir 的结构化编排器，只输出合法 JSON。",
+            invocation=LLMInvocation(
+                profile=invocation.profile,
+                prompt_bundle=prompt_bundle,
+                tool_schemas=invocation.tool_schemas,
+            )
         )
-    except Exception as exc:  # pragma: no cover - delegated to mapper tests
-        mapped = map_zhipu_exception(exc, retryable_cls=RetryableOperationError)
-        raise mapped from exc
+    except RiskControlTriggered:
+        raise
+    except RetryableLLMError as exc:
+        raise RetryableOperationError("zhipu upstream request failed") from exc
 
     try:
         parsed = json.loads(_strip_code_fences(result.text))
@@ -275,6 +272,36 @@ async def _complete_json(
     if not isinstance(parsed, dict):
         raise RetryableOperationError("zhipu returned invalid JSON")
     return parsed
+
+
+def _coerce_chat_client(
+    client: ZhipuChatClient | ZhipuClientProtocol,
+) -> ZhipuChatClient:
+    if isinstance(client, ZhipuChatClient):
+        return client
+    return ZhipuChatClient(client=client)
+
+
+def _json_instruction_for_invocation(
+    invocation: PlannerInvocation | CollectorInvocation | SummaryInvocation,
+) -> str:
+    if isinstance(invocation, PlannerInvocation):
+        return (
+            '请输出合法 JSON：{"reasoning_deltas": string[], "stop": boolean, '
+            '"plans": [{"collect_target": string, "additional_info": string, '
+            '"freshness_requirement": "low|high"}]}。不要输出 Markdown 代码块，不要输出额外解释。'
+        )
+    if isinstance(invocation, CollectorInvocation):
+        return (
+            '请输出合法 JSON：{"reasoning_deltas": string[], "search_queries": string[], '
+            '"search_recency_filter": "day|week|month|year|noLimit"}。'
+            "不要输出 Markdown 代码块，不要输出额外解释。"
+        )
+    return (
+        '请输出合法 JSON：{"status": "completed|partial|risk_blocked", '
+        '"key_findings_markdown": string|null, "message": string|null}。'
+        "不要输出 Markdown 代码块，不要输出额外解释。"
+    )
 
 
 def _strip_code_fences(text: str) -> str:

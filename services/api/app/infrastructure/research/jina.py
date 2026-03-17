@@ -11,6 +11,7 @@ from app.application.dto.research import FetchResponse
 from app.application.services.invocation import RetryableOperationError
 
 _DEFAULT_BASE_URL = "https://r.jina.ai/"
+_MAX_FETCH_CONTENT_CHARS = 10000
 
 
 class JinaWebFetchClient:
@@ -49,7 +50,12 @@ class JinaWebFetchClient:
             return FetchResponse(url=url, success=False, title=None, content=None)
 
         title = _extract_title(body, fallback=url)
-        return FetchResponse(url=url, success=True, title=title, content=body)
+        return FetchResponse(
+            url=url,
+            success=True,
+            title=title,
+            content=body[:_MAX_FETCH_CONTENT_CHARS],
+        )
 
     async def aclose(self) -> None:
         await self._client.aclose()

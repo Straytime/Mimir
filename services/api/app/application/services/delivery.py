@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import json
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -15,6 +15,11 @@ from app.application.dto.delivery import (
     WriterDecision,
     WriterInvocation,
     WriterToolCall,
+)
+from app.application.dto.invocation import dump_prompt_bundle
+from app.application.invocation_contracts import (
+    build_python_interpreter_tool_schema,
+    build_stage_profile,
 )
 from app.application.ports.delivery import (
     ArtifactStore,
@@ -206,8 +211,13 @@ class DeliveryOrchestrator:
             requirement_detail=requirement_detail,
             formatted_sources=formatted_sources,
             now=self._clock(),
+            profile=build_stage_profile(
+                settings=self._settings,
+                stage="outline",
+            ),
         )
-        prompt = build_outline_prompt(invocation=invocation)
+        prompt_bundle = build_outline_prompt(invocation=invocation)
+        invocation = replace(invocation, prompt_bundle=prompt_bundle)
         try:
             decision = await self._invoke_operation(
                 lambda: self._outline_agent.prepare(invocation)
@@ -240,7 +250,7 @@ class DeliveryOrchestrator:
                 reasoning_text="\n".join(decision.deltas),
                 content_text=json.dumps(
                     {
-                        "prompt": prompt,
+                        "prompt_bundle": dump_prompt_bundle(prompt_bundle),
                         "outline": _outline_to_payload(decision.outline),
                     },
                     ensure_ascii=False,
@@ -280,8 +290,14 @@ class DeliveryOrchestrator:
             formatted_sources=formatted_sources,
             outline=outline,
             now=self._clock(),
+            profile=build_stage_profile(
+                settings=self._settings,
+                stage="writer",
+            ),
+            tool_schemas=(build_python_interpreter_tool_schema(),),
         )
-        prompt = build_writer_prompt(invocation=invocation)
+        prompt_bundle = build_writer_prompt(invocation=invocation)
+        invocation = replace(invocation, prompt_bundle=prompt_bundle)
         try:
             decision = await self._invoke_operation(lambda: self._writer_agent.write(invocation))
         except RiskControlTriggered:
@@ -312,7 +328,7 @@ class DeliveryOrchestrator:
                 reasoning_text="\n".join(decision.reasoning_deltas),
                 content_text=json.dumps(
                     {
-                        "prompt": prompt,
+                        "prompt_bundle": dump_prompt_bundle(prompt_bundle),
                         "final_markdown": decision.final_markdown,
                         "tool_calls": [
                             {

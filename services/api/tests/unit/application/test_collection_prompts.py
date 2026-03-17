@@ -38,7 +38,7 @@ def build_collect_plan(index: int = 1) -> CollectPlan:
     )
 
 
-def test_planner_prompt_invariants_cover_required_fields_and_constraints() -> None:
+def test_planner_prompt_semantic_lock_keeps_role_limits_and_transcript_order() -> None:
     prompt = build_planner_prompt(
         invocation=PlannerInvocation(
             prompt_name="planner_round",
@@ -52,6 +52,14 @@ def test_planner_prompt_invariants_cover_required_fields_and_constraints() -> No
                     search_queries=["中国 AI 搜索 产品 2025"],
                     key_findings_markdown="- 已出现多个垂直场景产品。",
                 ),
+                CollectSummary(
+                    tool_call_id="call_2",
+                    subtask_id="sub_2",
+                    collect_target="收集目标 2",
+                    status="completed",
+                    search_queries=["中国 AI 搜索 商业化 2025"],
+                    key_findings_markdown="- B 端落地开始加速。",
+                ),
             ),
             call_index=2,
             collect_agent_calls_used=3,
@@ -59,15 +67,19 @@ def test_planner_prompt_invariants_cover_required_fields_and_constraints() -> No
         )
     )
 
-    assert "分析中国 AI 搜索产品的竞争格局与机会" in prompt
-    assert "收集目标 1" in prompt
-    assert "2026-03-16T15:00:00+00:00" in prompt
-    assert "单轮最多 3 个 CollectPlan" in prompt
-    assert "单个 Revision 累计最多 5 次 collect_agent" in prompt
-    assert "只输出 stop 或 CollectPlan[]" in prompt
+    assert "信息搜集调度 agent" in prompt.system_prompt
+    assert "最多同时发起 3 个工具调用" in prompt.system_prompt
+    assert "collect_agent" in prompt.system_prompt
+    assert "2026-03-16T15:00:00+00:00" in prompt.user_prompt
+    assert "分析中国 AI 搜索产品的竞争格局与机会" in prompt.user_prompt
+    assert "当前 collect_agent 已使用次数: 3" in prompt.user_prompt
+    assert [message.role for message in prompt.transcript] == ["tool", "tool"]
+    assert [message.tool_call_id for message in prompt.transcript] == ["call_1", "call_2"]
+    assert "收集目标 1" in prompt.transcript[0].content
+    assert "收集目标 2" in prompt.transcript[1].content
 
 
-def test_collector_prompt_invariants_cover_required_fields_and_constraints() -> None:
+def test_collector_prompt_semantic_lock_keeps_tool_range_and_limits() -> None:
     prompt = build_collector_prompt(
         invocation=CollectorInvocation(
             prompt_name="collector_round",
@@ -79,16 +91,18 @@ def test_collector_prompt_invariants_cover_required_fields_and_constraints() -> 
         )
     )
 
-    assert "收集目标 1" in prompt
-    assert "优先官方发布与高可信媒体。" in prompt
-    assert "2026-03-16T15:00:00+00:00" in prompt
-    assert "最多 10 次工具调用" in prompt
-    assert "web_search" in prompt
-    assert "web_fetch" in prompt
-    assert "search_recency_filter 使用 noLimit" in prompt
+    assert "你是一个信息搜集 agent" in prompt.system_prompt
+    assert "max_tool_calls = 10" in prompt.system_prompt
+    assert "web_search" in prompt.system_prompt
+    assert "web_fetch" in prompt.system_prompt
+    assert "高质量的关键信息和数据" in prompt.system_prompt
+    assert "<信息获取目标>" in prompt.user_prompt
+    assert "收集目标 1" in prompt.user_prompt
+    assert "优先官方发布与高可信媒体。" in prompt.user_prompt
+    assert "high" in prompt.user_prompt
 
 
-def test_summary_prompt_invariants_cover_required_fields_and_constraints() -> None:
+def test_summary_prompt_semantic_lock_keeps_schema_and_runtime_inputs() -> None:
     prompt = build_summary_prompt(
         invocation=SummaryInvocation(
             prompt_name="summary_round",
@@ -107,9 +121,11 @@ def test_summary_prompt_invariants_cover_required_fields_and_constraints() -> No
         )
     )
 
-    assert "收集目标 1" in prompt
-    assert "某公司发布会回顾" in prompt
-    assert "2026-03-16T15:00:00+00:00" in prompt
-    assert "CollectSummary" in prompt
-    assert "risk_blocked" in prompt
-    assert "只输出压缩摘要正文" in prompt
+    assert "关键信息总结助手" in prompt.system_prompt
+    assert "提取5-10条关键发现" in prompt.system_prompt
+    assert "markdown 格式直接输出" in prompt.system_prompt
+    assert "<信息获取目标>" in prompt.user_prompt
+    assert "收集目标 1" in prompt.user_prompt
+    assert "中国 AI 搜索 产品 2025" in prompt.user_prompt
+    assert "某公司发布会回顾" in prompt.user_prompt
+    assert "completed" in prompt.user_prompt

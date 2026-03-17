@@ -1,6 +1,7 @@
 import json
 from typing import Any
 
+from app.application.dto.invocation import LLMInvocation, PromptBundle
 from app.application.dto.delivery import (
     OutlineDecision,
     OutlineInvocation,
@@ -11,23 +12,23 @@ from app.application.dto.delivery import (
     WriterToolCall,
 )
 from app.application.services.invocation import RetryableOperationError
+from app.application.services.llm import RetryableLLMError
 from app.infrastructure.research.real_http import _coerce_optional_string, _strip_code_fences
-from app.infrastructure.llm.zhipu import ZhipuChatClient, map_zhipu_exception
+from app.infrastructure.llm.zhipu import (
+    ZhipuChatClient,
+    ZhipuClientProtocol,
+)
 
 
 class ZhipuOutlineAgent:
-    def __init__(self, *, client: ZhipuChatClient, model: str) -> None:
-        self._client = client
+    def __init__(self, *, client: ZhipuChatClient | ZhipuClientProtocol, model: str) -> None:
+        self._client = _coerce_chat_client(client)
         self._model = model
 
     async def prepare(self, invocation: OutlineInvocation) -> OutlineDecision:
         payload = await _complete_json(
             client=self._client,
-            model=self._model,
-            prompt=(
-                f"{invocation.prompt_name}\n"
-                '请输出合法 JSON：{"deltas": string[], "research_outline": {"title": string, "sections": [{"section_id": string, "title": string, "description": string, "order": number}], "entities": string[]}}。'
-            ),
+            invocation=invocation,
         )
         outline_payload = payload.get("research_outline")
         if not isinstance(outline_payload, dict):
@@ -71,18 +72,14 @@ class ZhipuOutlineAgent:
 
 
 class ZhipuWriterAgent:
-    def __init__(self, *, client: ZhipuChatClient, model: str) -> None:
-        self._client = client
+    def __init__(self, *, client: ZhipuChatClient | ZhipuClientProtocol, model: str) -> None:
+        self._client = _coerce_chat_client(client)
         self._model = model
 
     async def write(self, invocation: WriterInvocation) -> WriterDecision:
         payload = await _complete_json(
             client=self._client,
-            model=self._model,
-            prompt=(
-                f"{invocation.prompt_name}\n"
-                '请输出合法 JSON：{"reasoning_deltas": string[], "content_deltas": string[], "tool_calls": [{"tool_call_id": string, "tool_name": "python_interpreter", "code": string}], "final_markdown": string}。'
-            ),
+            invocation=invocation,
         )
         raw_tool_calls = payload.get("tool_calls") or ()
         tool_calls: list[WriterToolCall] = []
@@ -116,18 +113,29 @@ class ZhipuWriterAgent:
 async def _complete_json(
     *,
     client: ZhipuChatClient,
-    model: str,
-    prompt: str,
+    invocation: OutlineInvocation | WriterInvocation,
 ) -> dict[str, Any]:
+    if invocation.prompt_bundle is None or invocation.profile is None:
+        raise RetryableOperationError("zhipu invocation contract is incomplete")
+    prompt_bundle = PromptBundle(
+        system_prompt=invocation.prompt_bundle.system_prompt,
+        user_prompt=(
+            invocation.prompt_bundle.user_prompt
+            + "\n\n"
+            + _json_instruction_for_invocation(invocation)
+        ).strip(),
+        transcript=invocation.prompt_bundle.transcript,
+    )
     try:
         result = await client.complete(
-            model=model,
-            prompt=prompt,
-            system_prompt="你是 Mimir 的结构化输出代理，只输出合法 JSON。",
+            invocation=LLMInvocation(
+                profile=invocation.profile,
+                prompt_bundle=prompt_bundle,
+                tool_schemas=invocation.tool_schemas,
+            )
         )
-    except Exception as exc:  # pragma: no cover - mapped by lower-level tests
-        mapped = map_zhipu_exception(exc, retryable_cls=RetryableOperationError)
-        raise mapped from exc
+    except RetryableLLMError as exc:
+        raise RetryableOperationError("zhipu upstream request failed") from exc
     try:
         payload = json.loads(_strip_code_fences(result.text))
     except json.JSONDecodeError as exc:
@@ -144,3 +152,28 @@ def _coerce_string_tuple(value: Any) -> tuple[str, ...]:
     if isinstance(value, (list, tuple)):
         return tuple(str(item).strip() for item in value if str(item).strip())
     return ()
+
+
+def _coerce_chat_client(
+    client: ZhipuChatClient | ZhipuClientProtocol,
+) -> ZhipuChatClient:
+    if isinstance(client, ZhipuChatClient):
+        return client
+    return ZhipuChatClient(client=client)
+
+
+def _json_instruction_for_invocation(
+    invocation: OutlineInvocation | WriterInvocation,
+) -> str:
+    if isinstance(invocation, OutlineInvocation):
+        return (
+            '请输出合法 JSON：{"deltas": string[], "research_outline": {"title": string, '
+            '"sections": [{"section_id": string, "title": string, "description": string, '
+            '"order": number}], "entities": string[]}}。'
+            "不要输出 Markdown 代码块，不要输出额外解释。"
+        )
+    return (
+        '请输出合法 JSON：{"reasoning_deltas": string[], "content_deltas": string[], '
+        '"tool_calls": [{"tool_call_id": string, "tool_name": "python_interpreter", "code": string}], '
+        '"final_markdown": string}。不要输出 Markdown 代码块，不要输出额外解释。'
+    )

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.application.dto.invocation import InvocationProfile, PromptBundle, ToolSchema
 from app.application.dto.research import FormattedSource
 from app.domain.schemas import RequirementDetail
 
@@ -26,6 +27,9 @@ class OutlineInvocation:
     requirement_detail: RequirementDetail
     formatted_sources: tuple[FormattedSource, ...]
     now: datetime
+    profile: InvocationProfile | None = None
+    prompt_bundle: PromptBundle | None = None
+    tool_schemas: tuple[ToolSchema, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +52,9 @@ class WriterInvocation:
     formatted_sources: tuple[FormattedSource, ...]
     outline: ResearchOutline
     now: datetime
+    profile: InvocationProfile | None = None
+    prompt_bundle: PromptBundle | None = None
+    tool_schemas: tuple[ToolSchema, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

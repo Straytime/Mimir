@@ -2,17 +2,24 @@ import asyncio
 import contextlib
 import json
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.dto.invocation import PromptBundle, dump_prompt_bundle
 from app.application.dto.research import (
     CollectResult,
     CollectedSourceItem,
     CollectorInvocation,
     PlannerInvocation,
     SummaryInvocation,
+)
+from app.application.invocation_contracts import (
+    build_collect_agent_tool_schema,
+    build_stage_profile,
+    build_web_fetch_tool_schema,
+    build_web_search_tool_schema,
 )
 from app.application.ports.research import (
     CollectorAgent,
@@ -233,8 +240,14 @@ class CollectionOrchestrator:
             call_index=call_index,
             collect_agent_calls_used=collect_agent_calls_used,
             now=self._clock(),
+            profile=build_stage_profile(
+                settings=self._settings,
+                stage="planner",
+            ),
+            tool_schemas=(build_collect_agent_tool_schema(),),
         )
-        prompt = build_planner_prompt(invocation=invocation)
+        prompt_bundle = build_planner_prompt(invocation=invocation)
+        invocation = replace(invocation, prompt_bundle=prompt_bundle)
         try:
             decision = await self._invoke_operation(
                 lambda: self._planner_agent.plan(invocation)
@@ -279,7 +292,7 @@ class CollectionOrchestrator:
                             plan.model_dump(mode="json")
                             for plan in decision.plans
                         ],
-                        "prompt": prompt,
+                        "prompt_bundle": dump_prompt_bundle(prompt_bundle),
                     },
                     ensure_ascii=False,
                 ),
@@ -323,8 +336,17 @@ class CollectionOrchestrator:
             call_index=1,
             tool_call_limit=self._settings.subtask_tool_call_limit,
             now=self._clock(),
+            profile=build_stage_profile(
+                settings=self._settings,
+                stage="collector",
+            ),
+            tool_schemas=(
+                build_web_search_tool_schema(),
+                build_web_fetch_tool_schema(),
+            ),
         )
-        prompt = build_collector_prompt(invocation=invocation)
+        prompt_bundle = build_collector_prompt(invocation=invocation)
+        invocation = replace(invocation, prompt_bundle=prompt_bundle)
         try:
             decision = await self._invoke_operation(
                 lambda: self._collector_agent.plan(invocation)
@@ -335,7 +357,7 @@ class CollectionOrchestrator:
                 revision_id=revision_id,
                 subtask_id=subtask_id,
                 plan=plan,
-                prompt=prompt,
+                prompt=prompt_bundle,
                 reasoning_text="collector 风控",
             )
         except RetryableOperationError:
@@ -401,7 +423,7 @@ class CollectionOrchestrator:
                     revision_id=revision_id,
                     subtask_id=subtask_id,
                     plan=plan,
-                    prompt=prompt,
+                    prompt=prompt_bundle,
                     reasoning_text="\n".join(decision.reasoning_deltas),
                 )
             except RetryableOperationError:
@@ -547,7 +569,7 @@ class CollectionOrchestrator:
                 reasoning_text="\n".join(decision.reasoning_deltas),
                 content_text=json.dumps(
                     {
-                        "prompt": prompt,
+                        "prompt_bundle": dump_prompt_bundle(prompt_bundle),
                         "search_queries": list(result.search_queries),
                         "tool_call_count": result.tool_call_count,
                     },
@@ -675,8 +697,13 @@ class CollectionOrchestrator:
                 for item in result.items
             ),
             now=now,
+            profile=build_stage_profile(
+                settings=self._settings,
+                stage="summary",
+            ),
         )
-        prompt = build_summary_prompt(invocation=invocation)
+        prompt_bundle = build_summary_prompt(invocation=invocation)
+        invocation = replace(invocation, prompt_bundle=prompt_bundle)
         try:
             decision = await self._invoke_operation(
                 lambda: self._summary_agent.summarize(invocation)
@@ -728,7 +755,7 @@ class CollectionOrchestrator:
                 reasoning_text=None,
                 content_text=json.dumps(
                     {
-                        "prompt": prompt,
+                        "prompt_bundle": dump_prompt_bundle(prompt_bundle),
                         "summary": summary.model_dump(mode="json", exclude_none=True),
                     },
                     ensure_ascii=False,
@@ -787,7 +814,7 @@ class CollectionOrchestrator:
         revision_id: str,
         subtask_id: str,
         plan: CollectPlan,
-        prompt: str,
+        prompt: PromptBundle,
         reasoning_text: str,
     ) -> CollectResult:
         now = self._clock()
@@ -801,7 +828,10 @@ class CollectionOrchestrator:
                 prompt_name="collector_round",
                 status=CollectSummaryStatus.RISK_BLOCKED.value,
                 reasoning_text=reasoning_text,
-                content_text=json.dumps({"prompt": prompt}, ensure_ascii=False),
+                content_text=json.dumps(
+                    {"prompt_bundle": dump_prompt_bundle(prompt)},
+                    ensure_ascii=False,
+                ),
                 finish_reason="risk_blocked",
                 tool_calls_json=None,
                 created_at=now,
