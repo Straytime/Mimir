@@ -1167,3 +1167,36 @@ Copy the template below for each completed session:
 - 下一步建议:
   - R1-002 阻塞已解除，可进入下一个 Release Engineering 任务包
   - README 中可补充 Homebrew PostgreSQL 特殊注意事项
+
+## R1-001R Web Fetch Adapter Alignment (Jina Reader)
+
+- 日期时间: 2026-03-17 CST (+0800)
+- 任务包编号: R1-001R
+- session 标识: claude-code-20260317-r1-001r-jina-web-fetch
+- 目标摘要: 将 `web_fetch` 真实 adapter 从通用 HTTP 抓取器对齐到 Jina Reader (`r.jina.ai`)。`web_search` 继续走智谱，`web_fetch` 改为 Jina Reader。不破坏 stub 模式和后端测试基线。
+- 修改文件:
+  - `services/api/app/infrastructure/research/jina.py` (新增：Jina Reader web_fetch adapter)
+  - `services/api/app/infrastructure/research/__init__.py` (导出 JinaWebFetchClient 替换 HttpWebFetchClient)
+  - `services/api/app/infrastructure/providers.py` (工厂接线从 HttpWebFetchClient 切到 JinaWebFetchClient)
+  - `services/api/app/core/config.py` (新增 jina_api_key、jina_base_url 配置；validate_provider_configuration 增加 JINA_API_KEY 校验)
+  - `services/api/.env.example` (web_fetch 配置段改为 Jina Reader)
+  - `services/api/README.md` (Provider modes 和 Real provider env 段落同步 Jina 说明)
+  - `services/api/tests/unit/infrastructure/test_jina_web_fetch.py` (新增：10 个 Jina adapter 测试)
+  - `services/api/tests/unit/infrastructure/test_provider_factory.py` (更新：real 模式断言改为 JinaWebFetchClient)
+  - `CLAUDE.md` (Provider Mode 说明更新)
+  - `AGENTS.md` (同步 CLAUDE.md 的 Provider Mode 和已实现边界更新)
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `uv run --group dev pytest tests/unit/infrastructure/test_jina_web_fetch.py tests/unit/infrastructure/test_provider_factory.py -v` — 13 passed
+  - 已运行: `uv run --group dev pytest tests/unit tests/contract -v` — 90 passed (全量回归无失败)
+  - 已运行: `uv run --group dev pytest tests/integration` — 24 passed (stub 模式完整后端基线回归通过)
+  - 未运行: 真实 Jina Reader smoke — 按任务包范围非目标，留待后续
+- 验收结论: accepted；web_fetch real 模式已对齐到 Jina Reader；stub 模式全量后端基线回归通过（unit 90 + integration 24 = 114 passed）；JINA_API_KEY 缺失 fail fast 有测试；敏感信息不泄漏有测试；无契约漂移；未越界进入真实 smoke。
+- blocker / 风险:
+  - 无当前 blocker
+  - 旧 `HttpWebFetchClient` 仍保留在 `real_http.py` 中但不再被工厂引用，可在后续清理
+  - `MIMIR_WEB_FETCH_USER_AGENT` 配置项不再被 Jina adapter 使用，保留在 Settings 中但无实际消费方
+- 下一步建议:
+  - 真实 Jina Reader provider smoke 验证
+  - 清理不再引用的 HttpWebFetchClient 和相关 user_agent 配置
+  - E2B 真实 adapter 接线

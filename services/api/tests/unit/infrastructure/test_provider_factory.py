@@ -23,8 +23,8 @@ from app.infrastructure.research.local_stub import (
     LocalStubWebFetchClient,
     LocalStubWebSearchClient,
 )
+from app.infrastructure.research.jina import JinaWebFetchClient
 from app.infrastructure.research.real_http import (
-    HttpWebFetchClient,
     ZhipuCollectorAgent,
     ZhipuPlannerAgent,
     ZhipuSummaryAgent,
@@ -53,6 +53,7 @@ def test_build_provider_runtime_uses_real_adapters_when_provider_mode_is_real() 
             Settings(),
             provider_mode="real",
             zhipu_api_key="secret-key",
+            jina_api_key="jina-key",
         )
     )
 
@@ -63,7 +64,7 @@ def test_build_provider_runtime_uses_real_adapters_when_provider_mode_is_real() 
     assert isinstance(runtime.collector_agent, ZhipuCollectorAgent)
     assert isinstance(runtime.summary_agent, ZhipuSummaryAgent)
     assert isinstance(runtime.web_search_client, ZhipuWebSearchClient)
-    assert isinstance(runtime.web_fetch_client, HttpWebFetchClient)
+    assert isinstance(runtime.web_fetch_client, JinaWebFetchClient)
     assert isinstance(runtime.outline_agent, ZhipuOutlineAgent)
     assert isinstance(runtime.writer_agent, ZhipuWriterAgent)
 

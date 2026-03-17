@@ -61,7 +61,7 @@ Mimir 仓库的 M0 ~ M4 实施阶段已全部完成，R1-001 真实 provider ada
 ### Provider Mode
 
 - 默认 `MIMIR_PROVIDER_MODE=stub`，所有外部 adapter 使用 deterministic local stub
-- `MIMIR_PROVIDER_MODE=real` 切换到真实 provider（需 `ZHIPU_API_KEY`）
+- `MIMIR_PROVIDER_MODE=real` 切换到真实 provider（需 `ZHIPU_API_KEY` + `JINA_API_KEY`）
 - 可通过 `MIMIR_LLM_PROVIDER_MODE` / `MIMIR_WEB_SEARCH_PROVIDER_MODE` / `MIMIR_WEB_FETCH_PROVIDER_MODE` 单独覆盖
 - stub 是 CI 和日常开发的默认路径；切换到 real 前必须确认环境变量与 API key 已就绪
 - 详见 [`services/api/.env.example`](services/api/.env.example)
@@ -76,7 +76,7 @@ Mimir 仓库的 M0 ~ M4 实施阶段已全部完成，R1-001 真实 provider ada
 - `GET /api/v1/tasks/{task_id}/artifacts/{artifact_id}`
 - 完整 Task 生命周期：创建 -> 澄清 -> 需求分析 -> planner -> collector -> summary -> merge -> outline -> writer -> delivery -> feedback revision -> cleanup
 - SSE broker、task_events 持久化、connect deadline、heartbeat timeout、补偿一致性 cleanup
-- 真实 provider adapter：Zhipu LLM SDK、web_search HTTP、web_fetch HTTP（E2B 仍为 local stub）
+- 真实 provider adapter：Zhipu LLM SDK、web_search HTTP、web_fetch Jina Reader（E2B 仍为 local stub）
 
 **前端（apps/web）已完成：**
 - 首页空态 -> 研究输入 -> 创建任务 -> 立即建 SSE

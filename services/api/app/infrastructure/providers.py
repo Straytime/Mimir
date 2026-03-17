@@ -37,8 +37,8 @@ from app.infrastructure.research.local_stub import (
     LocalStubWebFetchClient,
     LocalStubWebSearchClient,
 )
+from app.infrastructure.research.jina import JinaWebFetchClient
 from app.infrastructure.research.real_http import (
-    HttpWebFetchClient,
     ZhipuCollectorAgent,
     ZhipuPlannerAgent,
     ZhipuSummaryAgent,
@@ -142,9 +142,10 @@ def build_provider_runtime(settings: Settings) -> ProviderRuntime:
         web_search_client = LocalStubWebSearchClient()
 
     if web_fetch_mode == "real":
-        web_fetch_client = HttpWebFetchClient(
+        web_fetch_client = JinaWebFetchClient(
+            api_key=settings.jina_api_key or "",
+            base_url=settings.jina_base_url,
             timeout_seconds=settings.web_fetch_timeout_seconds,
-            user_agent=settings.web_fetch_user_agent,
         )
         cleanup_callbacks.append(web_fetch_client.aclose)
     else:
