@@ -15,6 +15,8 @@ from app.application.dto.clarification import (
     NaturalClarificationSubmission,
     OptionsClarificationSubmission,
 )
+from app.application.dto.invocation import LLMInvocation
+from app.application.invocation_contracts import build_stage_profile
 from app.application.parsers.clarification import (
     ClarificationOptionsParseError,
     ClarificationOptionsParser,
@@ -47,13 +49,25 @@ class ClarificationAnswerSet:
 class AnalysisInput:
     initial_query: str
     clarification_mode: str
+    clarification_output: str
     clarification_answer_set: ClarificationAnswerSet
+
+    def clarification_answer_text(self) -> str:
+        if self.clarification_answer_set.natural_answer is not None:
+            return self.clarification_answer_set.natural_answer
+        selected_labels = [
+            item["selected_label"]
+            for item in self.clarification_answer_set.selected_options
+            if item["selected_label"] != "自动"
+        ]
+        return "\n".join(selected_labels) if selected_labels else ""
 
 
 @dataclass(slots=True)
 class ClarificationRuntime:
     ready_question_set: ClarificationQuestionSet | None = None
     timeout_at: datetime | None = None
+    clarification_output: str | None = None
     initial_task: asyncio.Task[None] | None = None
     analysis_task: asyncio.Task[None] | None = None
 
@@ -163,6 +177,7 @@ class ClarificationOrchestrator:
                 analysis_input=AnalysisInput(
                     initial_query=task.initial_query,
                     clarification_mode=payload.mode,
+                    clarification_output=runtime.clarification_output or "",
                     clarification_answer_set=answer_set,
                 ),
             )
@@ -223,6 +238,7 @@ class ClarificationOrchestrator:
                 analysis_input=AnalysisInput(
                     initial_query=task.initial_query,
                     clarification_mode=ClarificationMode.OPTIONS.value,
+                    clarification_output=runtime.clarification_output or "",
                     clarification_answer_set=answer_set,
                 ),
             )
@@ -255,24 +271,18 @@ class ClarificationOrchestrator:
                 return
 
             mode = ClarificationMode(task.clarification_mode)
-            client_timezone = task.client_timezone
-            client_locale = task.client_locale
             initial_query = task.initial_query
 
         if mode is ClarificationMode.NATURAL:
             await self._run_natural_clarification(
                 task_id=task_id,
                 initial_query=initial_query,
-                client_timezone=client_timezone,
-                client_locale=client_locale,
             )
             return
 
         await self._run_options_clarification(
             task_id=task_id,
             initial_query=initial_query,
-            client_timezone=client_timezone,
-            client_locale=client_locale,
         )
 
     async def _run_natural_clarification(
@@ -280,18 +290,21 @@ class ClarificationOrchestrator:
         *,
         task_id: str,
         initial_query: str,
-        client_timezone: str,
-        client_locale: str,
     ) -> None:
         prompt = build_natural_clarification_prompt(
             initial_query=initial_query,
-            client_timezone=client_timezone,
-            client_locale=client_locale,
             now=self._clock(),
+        )
+        invocation = LLMInvocation(
+            profile=build_stage_profile(
+                settings=self._settings,
+                stage="clarification_natural",
+            ),
+            prompt_bundle=prompt,
         )
         try:
             generation = await self._llm_invoker.invoke(
-                lambda: self._clarification_generator.generate_natural(prompt)
+                lambda: self._clarification_generator.generate_natural(invocation)
             )
         except RiskControlTriggered:
             await self._fail_task(
@@ -308,6 +321,9 @@ class ClarificationOrchestrator:
             )
             return
         await self._emit_deltas(task_id=task_id, event="clarification.delta", deltas=generation.deltas)
+
+        runtime = self._runtimes.setdefault(task_id, ClarificationRuntime())
+        runtime.clarification_output = generation.full_text
 
         with self._session_factory() as session:
             snapshot = self._task_service.enter_awaiting_user_input(
@@ -332,18 +348,21 @@ class ClarificationOrchestrator:
         *,
         task_id: str,
         initial_query: str,
-        client_timezone: str,
-        client_locale: str,
     ) -> None:
         prompt = build_options_clarification_prompt(
             initial_query=initial_query,
-            client_timezone=client_timezone,
-            client_locale=client_locale,
             now=self._clock(),
+        )
+        invocation = LLMInvocation(
+            profile=build_stage_profile(
+                settings=self._settings,
+                stage="clarification_options",
+            ),
+            prompt_bundle=prompt,
         )
         try:
             generation = await self._llm_invoker.invoke(
-                lambda: self._clarification_generator.generate_options(prompt)
+                lambda: self._clarification_generator.generate_options(invocation)
             )
         except RiskControlTriggered:
             await self._fail_task(
@@ -381,12 +400,11 @@ class ClarificationOrchestrator:
             await self._run_natural_clarification(
                 task_id=task_id,
                 initial_query=initial_query,
-                client_timezone=client_timezone,
-                client_locale=client_locale,
             )
             return
 
         runtime = self._runtimes.setdefault(task_id, ClarificationRuntime())
+        runtime.clarification_output = generation.full_text
         runtime.ready_question_set = question_set
         runtime.timeout_at = self._clock() + timedelta(
             seconds=self._settings.clarification_backend_timeout_seconds
@@ -427,22 +445,20 @@ class ClarificationOrchestrator:
         task_id: str,
         analysis_input: AnalysisInput,
     ) -> None:
-        with self._session_factory() as session:
-            task = self._task_service.repository.get_task(session=session, task_id=task_id)
-            if task is None:
-                return
-            client_timezone = task.client_timezone
-            client_locale = task.client_locale
-
         prompt = build_requirement_analysis_prompt(
             analysis_input=analysis_input,
-            client_timezone=client_timezone,
-            client_locale=client_locale,
             now=self._clock(),
+        )
+        invocation = LLMInvocation(
+            profile=build_stage_profile(
+                settings=self._settings,
+                stage="requirement_analysis",
+            ),
+            prompt_bundle=prompt,
         )
         try:
             generation = await self._llm_invoker.invoke(
-                lambda: self._requirement_analyzer.analyze(prompt)
+                lambda: self._requirement_analyzer.analyze(invocation)
             )
         except RiskControlTriggered:
             await self._fail_task(

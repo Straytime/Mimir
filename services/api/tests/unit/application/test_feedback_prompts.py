@@ -20,22 +20,27 @@ def build_requirement_detail() -> RequirementDetail:
     )
 
 
-def test_feedback_prompt_invariants_cover_previous_requirement_and_feedback_delta() -> None:
+def test_feedback_prompt_matches_prd_literal_system_user_split() -> None:
     prompt = build_feedback_analysis_prompt(
         analysis_input=FeedbackAnalysisInput(
             initial_query="请分析中国 AI 搜索产品的竞争格局。",
             previous_requirement_detail=build_requirement_detail(),
             feedback_text="补充比较各家产品在 B 端场景的落地情况，并删掉不够确定的推测。",
         ),
-        client_timezone="Asia/Shanghai",
-        client_locale="zh-CN",
         now=NOW,
     )
 
-    assert "请分析中国 AI 搜索产品的竞争格局。" in prompt
-    assert "分析中国 AI 搜索产品的竞争格局与未来机会" in prompt
-    assert "补充比较各家产品在 B 端场景的落地情况" in prompt
-    assert "2026-03-16T18:30:00+00:00" in prompt
-    assert '"research_goal"' in prompt
-    assert '"requirement_details"' in prompt
-    assert "只输出合法 JSON" in prompt
+    assert "<背景>" in prompt.system_prompt
+    assert "你是一个研究报告撰写智能体中的需求分析器" in prompt.system_prompt
+    assert "现在是2026-03-16T18:30:00+00:00。" in prompt.system_prompt
+    assert "<上一轮研究需求></上一轮研究需求>中是用户上一轮的研究报告需求" in prompt.system_prompt
+    assert "<本次调整意见></本次调整意见>中是用户本轮的最新消息" in prompt.system_prompt
+    assert '"研究目标"' in prompt.system_prompt
+    assert '"适用形式"' in prompt.system_prompt
+
+    assert "<上一轮研究需求>" in prompt.user_prompt
+    assert "分析中国 AI 搜索产品的竞争格局与未来机会" in prompt.user_prompt
+    assert "<本次调整意见>" in prompt.user_prompt
+    assert "补充比较各家产品在 B 端场景的落地情况" in prompt.user_prompt
+    assert prompt.messages[0].role == "system"
+    assert prompt.messages[1].role == "user"

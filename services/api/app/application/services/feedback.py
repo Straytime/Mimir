@@ -11,6 +11,8 @@ from app.application.dto.feedback import (
     FeedbackAnalysisInput,
     FeedbackSubmission,
 )
+from app.application.dto.invocation import LLMInvocation
+from app.application.invocation_contracts import build_stage_profile
 from app.application.parsers.requirement import (
     RequirementDetailParseError,
     RequirementDetailParser,
@@ -98,8 +100,6 @@ class FeedbackOrchestrator:
                     previous_requirement_detail=previous_detail,
                     feedback_text=payload.feedback_text,
                 ),
-                client_timezone=task.client_timezone,
-                client_locale=task.client_locale,
             )
         )
         return task.trace_id, response
@@ -122,18 +122,21 @@ class FeedbackOrchestrator:
         task_id: str,
         revision_id: str,
         analysis_input: FeedbackAnalysisInput,
-        client_timezone: str,
-        client_locale: str,
     ) -> None:
         prompt = build_feedback_analysis_prompt(
             analysis_input=analysis_input,
-            client_timezone=client_timezone,
-            client_locale=client_locale,
             now=self._clock(),
+        )
+        invocation = LLMInvocation(
+            profile=build_stage_profile(
+                settings=self._task_service.settings,
+                stage="feedback_analysis",
+            ),
+            prompt_bundle=prompt,
         )
         try:
             generation = await self._llm_invoker.invoke(
-                lambda: self._feedback_analyzer.analyze(prompt)
+                lambda: self._feedback_analyzer.analyze(invocation)
             )
         except RiskControlTriggered:
             await self._fail_task(

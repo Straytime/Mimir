@@ -67,7 +67,7 @@ def build_outline() -> ResearchOutline:
     )
 
 
-def test_outline_prompt_invariants_cover_required_fields_and_constraints() -> None:
+def test_outline_prompt_semantic_lock_keeps_role_and_output_constraints() -> None:
     prompt = build_outline_prompt(
         invocation=OutlineInvocation(
             prompt_name="outline_round",
@@ -77,16 +77,17 @@ def test_outline_prompt_invariants_cover_required_fields_and_constraints() -> No
         )
     )
 
-    assert "分析中国 AI 搜索产品的竞争格局与未来机会" in prompt
-    assert "ref_1" in prompt
-    assert "某公司发布会回顾" in prompt
-    assert "2026-03-16T16:30:00+00:00" in prompt
-    assert '"research_outline"' in prompt
-    assert '"sections"' in prompt
-    assert "只输出合法 JSON" in prompt
+    assert "你是一个深度研究架构师" in prompt.system_prompt
+    assert "你绝对不能撰写具体内容" in prompt.system_prompt
+    assert "实体约束与大纲必须严格考量信息获取结果" in prompt.system_prompt
+    assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
+    assert "<用户研究需求>" in prompt.user_prompt
+    assert "分析中国 AI 搜索产品的竞争格局与未来机会" in prompt.user_prompt
+    assert "ref_1" in prompt.user_prompt
+    assert "某公司发布会回顾" in prompt.user_prompt
 
 
-def test_writer_prompt_invariants_cover_required_fields_and_python_tool_rules() -> None:
+def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() -> None:
     prompt = build_writer_prompt(
         invocation=WriterInvocation(
             prompt_name="writer_round",
@@ -97,10 +98,12 @@ def test_writer_prompt_invariants_cover_required_fields_and_python_tool_rules() 
         )
     )
 
-    assert "中国 AI 搜索产品竞争格局研究" in prompt
-    assert "竞争格局与主要玩家" in prompt
-    assert "ref_1" in prompt
-    assert "2026-03-16T16:30:00+00:00" in prompt
-    assert "python_interpreter" in prompt
-    assert "如需图表才调用" in prompt
-    assert "正文增量输出" in prompt
+    assert "你是一个资深研究员" in prompt.system_prompt
+    assert "绝对不要超过一万字" in prompt.system_prompt
+    assert "根据实际使用的参考信息创建脚注参考" in prompt.system_prompt
+    assert "python_interpreter" in prompt.system_prompt
+    assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
+    assert "<参考信息>" in prompt.user_prompt
+    assert "ref_1" in prompt.user_prompt
+    assert "中国 AI 搜索产品竞争格局研究" in prompt.user_prompt
+    assert "竞争格局与主要玩家" in prompt.user_prompt

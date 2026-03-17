@@ -6,6 +6,7 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
 
+from app.application.dto.invocation import LLMInvocation
 from app.application.ports.llm import ClarificationGenerator, RequirementAnalyzer
 from app.application.services.llm import TextGeneration
 from app.core.config import Settings
@@ -32,10 +33,10 @@ class ScriptedClarificationGenerator(ClarificationGenerator):
             full_text="1. 你更想聚焦哪个方向？\nA. 行业现状\nB. 竞争格局",
         )
 
-    async def generate_natural(self, prompt: str) -> TextGeneration:
+    async def generate_natural(self, invocation: LLMInvocation) -> TextGeneration:
         return self.natural_generation
 
-    async def generate_options(self, prompt: str) -> TextGeneration:
+    async def generate_options(self, invocation: LLMInvocation) -> TextGeneration:
         return self.options_generation
 
 
@@ -57,7 +58,7 @@ class ScriptedRequirementAnalyzer(RequirementAnalyzer):
             """,
         )
 
-    async def analyze(self, prompt: str) -> TextGeneration:
+    async def analyze(self, invocation: LLMInvocation) -> TextGeneration:
         return self.generation
 
 

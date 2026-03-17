@@ -1,7 +1,8 @@
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Iterable, Protocol
 
+from app.application.dto.invocation import LLMInvocation
 from app.application.services.invocation import RiskControlTriggered
 from app.application.services.llm import RetryableLLMError, TextGeneration
 
@@ -54,25 +55,39 @@ class ZhipuChatClient:
     async def complete(
         self,
         *,
-        model: str,
-        prompt: str,
-        system_prompt: str | None = None,
+        invocation: LLMInvocation,
     ) -> ZhipuCompletionResult:
-        messages: list[dict[str, str]] = []
-        if system_prompt is not None:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        messages = [
+            message.to_provider_payload()
+            for message in invocation.prompt_bundle.messages
+        ]
+        request_payload: dict[str, Any] = {
+            "model": invocation.profile.model,
+            "messages": messages,
+            "temperature": invocation.profile.temperature,
+            "top_p": invocation.profile.top_p,
+            "max_tokens": invocation.profile.max_tokens,
+            "thinking": invocation.profile.provider_thinking(),
+            "stream": invocation.profile.stream,
+        }
+        if invocation.tool_schemas:
+            request_payload["tools"] = [
+                tool_schema.to_provider_payload()
+                for tool_schema in invocation.tool_schemas
+            ]
 
         try:
             response = await asyncio.to_thread(
                 self._client.chat.completions.create,
-                model=model,
-                messages=messages,
+                **request_payload,
             )
         except Exception as exc:  # pragma: no cover - mapped by tests through helpers
             raise map_zhipu_exception(exc, retryable_cls=RetryableLLMError) from exc
 
-        text = extract_response_text(response)
+        if _is_stream_response(response):
+            text = await asyncio.to_thread(extract_stream_response_text, response)
+        else:
+            text = extract_response_text(response)
         if not text.strip():
             raise RetryableLLMError("zhipu upstream request failed")
         return ZhipuCompletionResult(
@@ -96,15 +111,9 @@ class _BaseTextGenerator:
     async def _generate(
         self,
         *,
-        model: str,
-        prompt: str,
-        system_prompt: str | None = None,
+        invocation: LLMInvocation,
     ) -> TextGeneration:
-        result = await self._client.complete(
-            model=model,
-            prompt=prompt,
-            system_prompt=system_prompt,
-        )
+        result = await self._client.complete(invocation=invocation)
         text = result.text.strip()
         return TextGeneration(
             deltas=(text,),
@@ -123,23 +132,15 @@ class ZhipuClarificationGenerator(_BaseTextGenerator):
         api_key_hint: str | None = None,
     ) -> None:
         super().__init__(client=client, api_key_hint=api_key_hint)
-        fallback_model = model or "glm-4.7"
+        fallback_model = model or "glm-5"
         self._natural_model = natural_model or fallback_model
         self._options_model = options_model or fallback_model
 
-    async def generate_natural(self, prompt: str) -> TextGeneration:
-        return await self._generate(
-            model=self._natural_model,
-            prompt=prompt,
-            system_prompt="你是 Mimir 的自然语言澄清生成器，只输出用户可见问题正文。",
-        )
+    async def generate_natural(self, invocation: LLMInvocation) -> TextGeneration:
+        return await self._generate(invocation=invocation)
 
-    async def generate_options(self, prompt: str) -> TextGeneration:
-        return await self._generate(
-            model=self._options_model,
-            prompt=prompt,
-            system_prompt="你是 Mimir 的选项澄清生成器，只输出问题与选项正文。",
-        )
+    async def generate_options(self, invocation: LLMInvocation) -> TextGeneration:
+        return await self._generate(invocation=invocation)
 
 
 class ZhipuRequirementAnalyzer(_BaseTextGenerator):
@@ -153,12 +154,8 @@ class ZhipuRequirementAnalyzer(_BaseTextGenerator):
         super().__init__(client=client, api_key_hint=api_key_hint)
         self._model = model
 
-    async def analyze(self, prompt: str) -> TextGeneration:
-        return await self._generate(
-            model=self._model,
-            prompt=prompt,
-            system_prompt="你是 Mimir 的 RequirementDetail 分析器，只输出合法 JSON。",
-        )
+    async def analyze(self, invocation: LLMInvocation) -> TextGeneration:
+        return await self._generate(invocation=invocation)
 
 
 class ZhipuFeedbackAnalyzer(_BaseTextGenerator):
@@ -172,12 +169,8 @@ class ZhipuFeedbackAnalyzer(_BaseTextGenerator):
         super().__init__(client=client, api_key_hint=api_key_hint)
         self._model = model
 
-    async def analyze(self, prompt: str) -> TextGeneration:
-        return await self._generate(
-            model=self._model,
-            prompt=prompt,
-            system_prompt="你是 Mimir 的 feedback analyzer，只输出合法 JSON。",
-        )
+    async def analyze(self, invocation: LLMInvocation) -> TextGeneration:
+        return await self._generate(invocation=invocation)
 
 
 def extract_response_text(response: Any) -> str:
@@ -195,6 +188,31 @@ def extract_response_text(response: Any) -> str:
     if isinstance(message, dict):
         content = message.get("content")
     return _coerce_text(content)
+
+
+def extract_stream_response_text(response: Iterable[Any]) -> str:
+    parts: list[str] = []
+    for chunk in response:
+        choices = getattr(chunk, "choices", None)
+        if isinstance(chunk, dict):
+            choices = chunk.get("choices")
+        if not choices:
+            continue
+        choice = choices[0]
+        delta = getattr(choice, "delta", None)
+        if isinstance(choice, dict):
+            delta = choice.get("delta")
+        content = getattr(delta, "content", None)
+        if isinstance(delta, dict):
+            content = delta.get("content")
+        part = _coerce_text(content)
+        if part:
+            parts.append(part)
+    return "".join(parts)
+
+
+def _is_stream_response(response: Any) -> bool:
+    return not isinstance(response, (dict, str, bytes)) and hasattr(response, "__iter__")
 
 
 def _coerce_text(content: Any) -> str:

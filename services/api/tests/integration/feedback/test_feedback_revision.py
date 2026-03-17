@@ -10,6 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.application.dto.invocation import LLMInvocation
 from app.application.dto.research import (
     CollectorDecision,
     CollectorInvocation,
@@ -47,8 +48,8 @@ class ScriptedFeedbackAnalyzer(FeedbackAnalyzer):
         self.generation = generation
         self.prompts: list[str] = []
 
-    async def analyze(self, prompt: str) -> TextGeneration:
-        self.prompts.append(prompt)
+    async def analyze(self, invocation: LLMInvocation) -> TextGeneration:
+        self.prompts.append(invocation.prompt_bundle.user_prompt)
         return self.generation
 
 

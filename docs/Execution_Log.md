@@ -1223,3 +1223,52 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 下发实现修正任务包，使 `services/api` 的 LLM / research / delivery adapters 与本次文档契约一致
   - 为阶段 profile、prompt source-of-truth、`web_search` / Jina `web_fetch` request construction、新端口边界补齐 contract tests
+
+## R1-003 Backend Invocation Contract Alignment
+
+- 日期时间: 2026-03-17 CST (+0800)
+- 任务包编号: R1-003
+- session 标识: codex-20260317-r1-003-invocation-contract-alignment
+- 目标摘要: 将后端真实外部调用实现对齐到最新设计文档。把阶段 profile、prompt bundle、tool schema 和真实 adapter 请求形态显式建模并真正传入 Zhipu / web_search / Jina Reader；同时保持 stub 模式和既有后端全量测试基线稳定。
+- 修改文件:
+  - `services/api/app/application/dto/invocation.py` (新增：显式 invocation profile / prompt bundle / tool schema DTO)
+  - `services/api/app/application/invocation_contracts.py` (新增：阶段 profile 与 tool schema 构造)
+  - `services/api/app/application/dto/research.py`
+  - `services/api/app/application/dto/delivery.py`
+  - `services/api/app/application/ports/llm.py`
+  - `services/api/app/application/prompts/clarification.py`
+  - `services/api/app/application/prompts/requirement.py`
+  - `services/api/app/application/prompts/collection.py`
+  - `services/api/app/application/prompts/delivery.py`
+  - `services/api/app/application/prompts/feedback.py`
+  - `services/api/app/application/services/clarification.py`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/application/services/feedback.py`
+  - `services/api/app/core/config.py` (阶段默认模型收敛到 `glm-5`，`web_search_engine` 默认收敛到 `search_prime`)
+  - `services/api/app/infrastructure/llm/local_stub.py`
+  - `services/api/app/infrastructure/llm/zhipu.py` (显式透传 `model` / `temperature` / `top_p` / `max_tokens` / `thinking` / `clear_thinking` / `stream` / `tools`)
+  - `services/api/app/infrastructure/research/real_http.py` (planner / collector / summary 不再退回 `prompt_name`；智谱 `web_search` 固定字段对齐)
+  - `services/api/app/infrastructure/research/jina.py` (`web_fetch` 结果截断统一为前 `10000` 字符)
+  - `services/api/app/infrastructure/delivery/zhipu.py` (outline / writer 改为显式 prompt bundle + profile + tool schema)
+  - `services/api/tests/unit/application/test_invocation_contracts.py` (新增)
+  - `services/api/tests/unit/application/test_prompts.py`
+  - `services/api/tests/unit/application/test_collection_prompts.py`
+  - `services/api/tests/unit/application/test_delivery_prompts.py`
+  - `services/api/tests/unit/application/test_feedback_prompts.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/integration/lifecycle/test_clarification_lifecycle.py`
+  - `services/api/tests/integration/feedback/test_feedback_revision.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_invocation_contracts.py tests/unit/application/test_prompts.py tests/unit/application/test_collection_prompts.py tests/unit/application/test_delivery_prompts.py tests/unit/application/test_feedback_prompts.py tests/unit/infrastructure/test_zhipu_adapters.py -x` — 21 passed
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit -x` — 68 passed
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration` — 118 passed
+- 验收结论: accepted；后端现在显式建模并传递阶段 profile、prompt bundle 与必要 tool schema；literal-lock 阶段 prompt 已与 PRD system/user 边界对齐；planner / collector / summary / outline / writer 不再让真实 adapter 只消费 `prompt_name`；智谱 `web_search` 请求体已固定为 `search_engine="search_prime"`、`query_rewrite=false`、`count=10`；Jina Reader `web_fetch` 仍按 `GET https://r.jina.ai/{url}` 调用且结果截断稳定；stub 模式全量后端回归继续通过。
+- blocker / 风险:
+  - 无当前 blocker
+  - 真实 smoke 尚未执行；本任务包只完成 contract alignment，不验证真实外部网络
+  - `web_search` / `web_fetch` 端口仍保持简单显式参数 (`search_query` / `search_recency_filter` / `url`) 而非再包一层请求对象；这与当前文档要求一致，但如果后续 provider 增加更多显式业务字段，需要再单开任务包扩展端口
+- 下一步建议:
+  - 在独立 smoke 任务包里验证智谱 LLM / `web_search` / Jina Reader 的真实联通性与返回形态
+  - 若 smoke 暴露 provider 侧字段差异，再回到 adapter contract tests 做最小闭环修补

@@ -31,17 +31,17 @@ class Settings:
     zhipu_api_key: str | None = None
     zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4/"
     zhipu_timeout_seconds: float = 30.0
-    zhipu_clarification_natural_model: str = "glm-4.7"
-    zhipu_clarification_options_model: str = "glm-4.7"
-    zhipu_requirement_analyzer_model: str = "glm-4.7"
-    zhipu_feedback_analyzer_model: str = "glm-4.7"
-    zhipu_planner_model: str = "glm-4.7"
-    zhipu_collector_model: str = "glm-4.7"
-    zhipu_summary_model: str = "glm-4.7"
-    zhipu_outline_model: str = "glm-4.7"
-    zhipu_writer_model: str = "glm-4.7"
+    zhipu_clarification_natural_model: str = "glm-5"
+    zhipu_clarification_options_model: str = "glm-5"
+    zhipu_requirement_analyzer_model: str = "glm-5"
+    zhipu_feedback_analyzer_model: str = "glm-5"
+    zhipu_planner_model: str = "glm-5"
+    zhipu_collector_model: str = "glm-5"
+    zhipu_summary_model: str = "glm-5"
+    zhipu_outline_model: str = "glm-5"
+    zhipu_writer_model: str = "glm-5"
     web_search_endpoint_path: str = "web_search"
-    web_search_engine: str = "search_std"
+    web_search_engine: str = "search_prime"
     web_search_timeout_seconds: float = 30.0
     web_fetch_timeout_seconds: float = 30.0
     web_fetch_user_agent: str = "mimir-api/0.1 (+https://github.com/Straytime/Mimir)"
@@ -128,39 +128,39 @@ class Settings:
             ),
             zhipu_clarification_natural_model=os.getenv(
                 "MIMIR_ZHIPU_MODEL_CLARIFICATION_NATURAL",
-                "glm-4.7",
+                "glm-5",
             ),
             zhipu_clarification_options_model=os.getenv(
                 "MIMIR_ZHIPU_MODEL_CLARIFICATION_OPTIONS",
-                "glm-4.7",
+                "glm-5",
             ),
             zhipu_requirement_analyzer_model=os.getenv(
                 "MIMIR_ZHIPU_MODEL_REQUIREMENT_ANALYZER",
-                "glm-4.7",
+                "glm-5",
             ),
             zhipu_feedback_analyzer_model=os.getenv(
                 "MIMIR_ZHIPU_MODEL_FEEDBACK_ANALYZER",
-                "glm-4.7",
+                "glm-5",
             ),
             zhipu_planner_model=os.getenv(
                 "MIMIR_ZHIPU_MODEL_PLANNER",
-                "glm-4.7",
+                "glm-5",
             ),
             zhipu_collector_model=os.getenv(
                 "MIMIR_ZHIPU_MODEL_COLLECTOR",
-                "glm-4.7",
+                "glm-5",
             ),
             zhipu_summary_model=os.getenv(
                 "MIMIR_ZHIPU_MODEL_SUMMARIZER",
-                "glm-4.7",
+                "glm-5",
             ),
             zhipu_outline_model=os.getenv(
                 "MIMIR_ZHIPU_MODEL_OUTLINER",
-                "glm-4.7",
+                "glm-5",
             ),
             zhipu_writer_model=os.getenv(
                 "MIMIR_ZHIPU_MODEL_WRITER",
-                "glm-4.7",
+                "glm-5",
             ),
             web_search_endpoint_path=os.getenv(
                 "MIMIR_WEB_SEARCH_ENDPOINT_PATH",
@@ -168,7 +168,7 @@ class Settings:
             ),
             web_search_engine=os.getenv(
                 "MIMIR_WEB_SEARCH_ENGINE",
-                "search_std",
+                "search_prime",
             ),
             web_search_timeout_seconds=float(
                 os.getenv("MIMIR_WEB_SEARCH_TIMEOUT_SECONDS", "30")

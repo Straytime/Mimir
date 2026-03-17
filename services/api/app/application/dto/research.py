@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.application.dto.invocation import InvocationProfile, PromptBundle, ToolSchema
 from app.domain.enums import CollectSummaryStatus
 from app.domain.schemas import CollectPlan, CollectSummary, RequirementDetail
 
@@ -13,6 +14,9 @@ class PlannerInvocation:
     call_index: int
     collect_agent_calls_used: int
     now: datetime
+    profile: InvocationProfile | None = None
+    prompt_bundle: PromptBundle | None = None
+    tool_schemas: tuple[ToolSchema, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +34,9 @@ class CollectorInvocation:
     call_index: int
     tool_call_limit: int
     now: datetime
+    profile: InvocationProfile | None = None
+    prompt_bundle: PromptBundle | None = None
+    tool_schemas: tuple[ToolSchema, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +95,9 @@ class SummaryInvocation:
     search_queries: tuple[str, ...]
     item_payloads: tuple[dict[str, str], ...]
     now: datetime
+    profile: InvocationProfile | None = None
+    prompt_bundle: PromptBundle | None = None
+    tool_schemas: tuple[ToolSchema, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
