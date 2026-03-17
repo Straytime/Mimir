@@ -84,6 +84,8 @@ Mimir/
 
 `real` 模式需要 `ZHIPU_API_KEY`。详见 [`services/api/.env.example`](services/api/.env.example)。
 
+使用 `./scripts/dev.sh` 启动本地联调时，provider 模式、数据库地址与密钥都读取当前 shell 环境；脚本不再强制覆盖为 `stub`。因此本地 real smoke 应先在 shell 中导出 `MIMIR_PROVIDER_MODE`、各 provider override、可选的 `MIMIR_DATABASE_URL` 以及 `ZHIPU_API_KEY` / `JINA_API_KEY`，再执行脚本。
+
 ## 本地联调（一条命令）
 
 从仓库根目录启动完整本地开发环境：

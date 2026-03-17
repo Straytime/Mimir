@@ -30,6 +30,11 @@ log()  { echo -e "${GREEN}[dev]${NC} $*"; }
 warn() { echo -e "${YELLOW}[dev]${NC} $*"; }
 err()  { echo -e "${RED}[dev]${NC} $*" >&2; }
 
+mask_database_url() {
+  local value="$1"
+  printf '%s' "$value" | sed -E 's#(://[^:/@]+):[^@]*@#\1:***@#'
+}
+
 # ---------- helpers ----------
 
 check_prerequisites() {
@@ -89,9 +94,8 @@ ensure_web_env() {
 start_api() {
   log "Starting API server on http://localhost:8000 ..."
   cd "$API_DIR"
-  MIMIR_PROVIDER_MODE=stub \
-    uv run --group dev uvicorn app.main:app \
-      --host 127.0.0.1 --port 8000 --reload &
+  uv run --group dev uvicorn app.main:app \
+    --host 127.0.0.1 --port 8000 --reload &
   API_PID=$!
 }
 
@@ -139,8 +143,8 @@ case "${1:-start}" in
     log "=== Mimir local dev is running ==="
     log "  Web:  http://localhost:3000"
     log "  API:  http://localhost:8000"
-    log "  DB:   postgresql://postgres@localhost:5432/postgres"
-    log "  Mode: stub (no real provider keys required)"
+    log "  DB:   $(mask_database_url "${MIMIR_DATABASE_URL:-postgresql+psycopg://postgres@127.0.0.1:5432/postgres}")"
+    log "  Mode: ${MIMIR_PROVIDER_MODE:-stub}"
     log ""
     log "Press Ctrl+C to stop API and Web servers."
     log "Run './scripts/dev.sh stop' to also stop PostgreSQL (Docker only)."

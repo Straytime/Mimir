@@ -21,6 +21,7 @@ from app.application.services.invocation import (
     RiskControlTriggered,
 )
 from app.application.services.llm import RetryableLLMError
+from app.core.json_utils import strip_markdown_code_fence
 from app.domain.enums import CollectSummaryStatus, FreshnessRequirement
 from app.domain.schemas import CollectPlan
 from app.infrastructure.llm.zhipu import (
@@ -265,7 +266,7 @@ async def _complete_json(
         raise RetryableOperationError("zhipu upstream request failed") from exc
 
     try:
-        parsed = json.loads(_strip_code_fences(result.text))
+        parsed = json.loads(strip_markdown_code_fence(result.text))
     except json.JSONDecodeError as exc:
         raise RetryableOperationError("zhipu returned invalid JSON") from exc
 
@@ -302,14 +303,6 @@ def _json_instruction_for_invocation(
         '"key_findings_markdown": string|null, "message": string|null}。'
         "不要输出 Markdown 代码块，不要输出额外解释。"
     )
-
-
-def _strip_code_fences(text: str) -> str:
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = re.sub(r"^```[a-zA-Z0-9_-]*\n?", "", stripped)
-        stripped = re.sub(r"\n?```$", "", stripped)
-    return stripped.strip()
 
 
 def _coerce_string_tuple(value: Any) -> tuple[str, ...]:

@@ -170,8 +170,79 @@ def test_requirement_detail_parser_maps_valid_json_into_schema() -> None:
     }
 
 
+def test_requirement_detail_parser_accepts_fenced_prd_json_and_normalizes_keys() -> None:
+    parser = RequirementDetailParser()
+
+    detail = parser.parse(
+        """
+        ```json
+        {
+          "研究目标": "分析中国 AI 搜索产品的竞争格局与机会",
+          "所属垂域": "互联网 / AI 产品",
+          "需求明细": "偏商业报告，关注中国市场，重点覆盖近两年变化，输出语言为中文。",
+          "适用形式": "商业报告",
+          "时效需求": "是"
+        }
+        ```
+        """
+    )
+
+    assert detail.model_dump(mode="json", exclude_none=True) == {
+        "research_goal": "分析中国 AI 搜索产品的竞争格局与机会",
+        "domain": "互联网 / AI 产品",
+        "requirement_details": "偏商业报告，关注中国市场，重点覆盖近两年变化，输出语言为中文。",
+        "output_format": "business_report",
+        "freshness_requirement": "high",
+        "language": "zh-CN",
+        "raw_llm_output": {
+            "研究目标": "分析中国 AI 搜索产品的竞争格局与机会",
+            "所属垂域": "互联网 / AI 产品",
+            "需求明细": "偏商业报告，关注中国市场，重点覆盖近两年变化，输出语言为中文。",
+            "适用形式": "商业报告",
+            "时效需求": "是",
+        },
+    }
+
+
+def test_feedback_requirement_detail_parser_accepts_fenced_prd_json() -> None:
+    parser = RequirementDetailParser()
+
+    detail = parser.parse(
+        """
+        ```json
+        {
+          "研究目标": "补充中国 AI 搜索产品 B 端场景竞争格局",
+          "所属垂域": "互联网 / AI 产品",
+          "需求明细": "保留中文输出，增加 B 端落地案例，删除不确定推测。",
+          "适用形式": "商业报告",
+          "时效需求": "否"
+        }
+        ```
+        """
+    )
+
+    assert detail.research_goal == "补充中国 AI 搜索产品 B 端场景竞争格局"
+    assert detail.output_format == "business_report"
+    assert detail.freshness_requirement == "normal"
+    assert detail.language == "zh-CN"
+
+
 def test_requirement_detail_parser_rejects_malformed_json_with_explicit_error() -> None:
     parser = RequirementDetailParser()
 
     with pytest.raises(RequirementDetailParseError):
         parser.parse('{"research_goal": "缺了结尾"')
+
+
+def test_requirement_detail_parser_still_rejects_non_json_noise_wrapped_output() -> None:
+    parser = RequirementDetailParser()
+
+    with pytest.raises(RequirementDetailParseError):
+        parser.parse(
+            """
+            下面是结果：
+            ```json
+            {"研究目标":"有包装噪音"}
+            ```
+            """
+        )
