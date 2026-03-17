@@ -327,23 +327,86 @@ Repository 层测试分两类：
 - mock SQLAlchemy session
 - mock ORM model 实例行为
 
-## 6.4 Prompt Builder Test Strategy
+## 6.4 Prompt Builder 与 External Invocation Contract Test Strategy
 
-prompt 相关测试不建议整段 snapshot 大文本，因为过于脆弱。
+prompt 相关测试不建议滥用整段 snapshot，因为过于脆弱；但对外部调用契约又必须锁住会导致 provider 漂移的关键信号。
 
-建议断言以下 invariant：
+建议按两层锁定：
 
-- 包含必须字段
-- 枚举值映射正确
-- 时间变量存在
-- PRD 约束语句存在
-- 反馈 revision 会注入新的 `RequirementDetail`
+### 6.4.1 Prompt source-of-truth 锁定
 
-仅在少量关键 prompt 上保留 snapshot：
+`literal lock`：
+
+- 自然语言澄清 prompt
+- 选单澄清 prompt
+- 需求分析 prompt
+- 反馈需求分析 prompt
+
+要求：
+
+1. 以上四类 prompt 的模型可见文本，以 PRD 原文约束为准。
+2. 测试必须断言 PRD 要求的关键语句逐字存在；允许变化只有运行时变量插值、空白规范化和动态 JSON 值替换。
+3. `clarification natural` 与 `clarification options` 必须断言 system prompt 为空，不允许由 adapter 私加 system prompt。
+4. `requirement analysis` 与 `feedback analysis` 必须断言 system prompt / user prompt 分工与 PRD 一致。
+
+`semantic lock`：
+
+- master planning prompt
+- 搜集目标执行 prompt
+- 目标执行总结 prompt
+- 研究输出准备 prompt
+- 研究输出撰写 prompt
+
+要求：
+
+1. 允许等价改写，但测试必须锁定角色语义、tool 可见范围、次数上限、输出 schema 约束、transcript 注入规则。
+2. planner / collector / writer 必须断言完整 transcript 被按顺序注入，而不是只注入摘要。
+3. 任何 prompt 都必须断言：必须字段、枚举映射、时间变量、PRD 约束语句。
+
+仅在少量关键 prompt 上保留 normalized snapshot：
 
 - 需求分析 prompt
 - master planning prompt
 - writer prompt
+
+snapshot 规则：
+
+1. 先做时间、ID、动态 JSON 的占位符规范化，再 snapshot。
+2. snapshot 只用于锁定高价值骨架，不替代对参数、tool schema 与 request shape 的单独断言。
+
+### 6.4.2 Invocation profile 与 tool contract 锁定
+
+所有真实 provider adapter 都必须有独立 contract tests，至少锁定：
+
+1. 每个阶段的 `model`、`temperature`、`top_p`、`max_tokens`、`thinking`、`clear_thinking`、`stream`
+2. no-tool 阶段不应意外挂载 tool schema
+3. `collect_agent`、`web_search`、`web_fetch`、`python_interpreter` 的名称与参数名
+4. planner / collector / writer 的 transcript 回放顺序
+
+其中必须重点锁定的 request construction：
+
+1. 智谱 `web_search`：
+   - `POST .../web_search`
+   - body 固定包含 `search_engine="search_prime"`、`query_rewrite=false`、`count=10`
+   - body 动态字段只允许 `search_query` 与 `search_recency_filter`
+2. Jina Reader `web_fetch`：
+   - `GET https://r.jina.ai/{url}`
+   - `Authorization: Bearer ...`
+   - `Accept: text/plain`
+   - 不再接受“POST + JSON body”作为正式契约
+3. `python_interpreter`：
+   - tool request 只允许 `code`
+   - tool result 不得回灌 raw binary
+4. `collect_agent`：
+   - 模型可见参数只允许 `collect_target`、`additional_info`、`freshness_requirement`
+   - `tool_call_id`、`revision_id`、`subtask_id` 只能在后端内部补齐
+
+结果清洗 contract tests 还必须锁定：
+
+1. `web_search` tool result 只保留 `search_result` 的核心字段，剔除 `icon`、`media` 等展示性字段
+2. `web_fetch` 正文截断到前 `10000` 字符，标题提取规则稳定
+3. `python_interpreter` 只返回文本摘要与 artifact 元数据，不把二进制内容写入 transcript
+4. provider 风控、超时、空内容、4xx、5xx 都会被映射到统一异常或统一 tool result envelope
 
 阶段映射：
 
@@ -363,8 +426,8 @@ prompt 相关测试不建议整段 snapshot 大文本，因为过于脆弱。
 
 要求：
 
-- 每个阶段的 prompt builder 在实现前，都应先有 invariant tests
-- invariant tests 至少断言：必须字段、枚举映射、时间变量、PRD 约束语句
+- 每个阶段的 prompt builder 与真实 provider adapter，在实现前都应先有对应 contract tests
+- prompt tests 锁语义，adapter tests 锁真实 request shape，两者不能相互替代
 
 ## 6.5 Test Data Builder 策略
 
@@ -404,6 +467,8 @@ prompt 相关测试不建议整段 snapshot 大文本，因为过于脆弱。
 1. 集成测试优先验证“我们的编排器是否正确处理上游响应”，而不是验证第三方服务是否可用。
 2. E2B 在 CI 中不接真实服务，避免成本和不稳定性。
 3. `web_search` / `web_fetch` 的风控、超时、空内容都应在 integration 层有覆盖。
+4. `web_search` 与 Jina `web_fetch` 的 request construction contract，必须至少在一层测试里直接断言 HTTP method、path、headers 与 body，而不是只断言最终解析结果。
+5. 智谱 LLM adapter 必须使用 recording fake / spy client 直接断言阶段 profile、system prompt、user prompt 和 tool schema，避免只测 prompt builder 却漏掉 adapter 默认值漂移。
 
 ## 8. CI 流程设计
 
@@ -657,6 +722,8 @@ DoD：
 - 自然语言澄清 prompt invariant tests
 - 选单澄清 prompt invariant tests
 - 需求分析 prompt invariant tests
+- 澄清 / 需求分析调用 profile contract tests
+- 自然语言 / 选单澄清的空 system prompt contract tests
 
 实现内容：
 
@@ -697,6 +764,8 @@ DoD：
 - 搜集调度 prompt invariant tests
 - 搜集目标执行 prompt invariant tests
 - 目标执行总结 prompt invariant tests
+- planner / collector / summary 调用 profile contract tests
+- `collect_agent` / `web_search` / `web_fetch` request construction contract tests
 
 实现内容：
 
@@ -738,6 +807,8 @@ DoD：
 - pdf 下载
 - 研究输出准备 prompt invariant tests
 - 研究输出撰写 prompt invariant tests
+- outline / writer 调用 profile contract tests
+- `python_interpreter` tool request / tool result contract tests
 
 实现内容：
 
@@ -778,6 +849,7 @@ DoD：
 - `CleanupExpiredTasks`
 - access token 过期后重新 `GET /tasks/{id}` 能刷新 URL
 - 反馈需求分析 prompt invariant tests
+- feedback analysis 调用 profile contract tests
 
 实现内容：
 
