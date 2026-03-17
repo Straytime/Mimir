@@ -1073,4 +1073,26 @@ Copy the template below for each completed session:
   - `web_fetch` 本轮按任务约束实现为真实原生 HTTP 抓取路径，没有扩张到 Jina reader 或额外抓取代理；若后续决定接入特定 provider，应在独立任务包里继续沿用当前 `WebFetchClient` 边界与错误语义
 - 下一步建议:
   - 可以进入 R1-002 类任务，补本地 provider 联调入口、受控 smoke 样例和最小 observability，验证真实智谱/搜索/抓取在本机环境下的端到端行为
-  - 若后续需要接真实 E2B、对象存储或 Railway/Vercel 部署变量模板，继续保持“先 adapter contract tests，再接 provider”的节奏，不要直接改动现有 orchestrator 主链路
+  - 若后续需要接真实 E2B、对象存储或 Railway/Vercel 部署变量模板，继续保持”先 adapter contract tests，再接 provider”的节奏，不要直接改动现有 orchestrator 主链路
+
+## R1-DOC-001 Repository Docs Refresh (README + AGENTS)
+
+- 日期时间: 2026-03-17 CST (+0800)
+- 任务包编号: R1-DOC-001
+- session 标识: claude-code-20260317-r1-doc-001-docs-refresh
+- 目标摘要: 全面更新根目录 `README.md` 与 `AGENTS.md`，使其反映 M0~M4 实施完成、R1-001 真实 provider 已接线的当前真实工程状态；将仓库口径从”实施阶段”更新为”发布前工程化收尾”；在 `AGENTS.md` 中明确落地 Conventional Commit 规范，作为后续提交的强制约束；本轮只做仓库级说明文档，不改业务实现。
+- 修改文件:
+  - `README.md`
+  - `AGENTS.md`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: 逐一核对 README 中列出的全部命令与当前仓库 `package.json` / `pyproject.toml` 一致；核对 AGENTS 中的架构约束、provider mode、前后端已实现边界与当前代码基线一致；核对文档索引中所有文件路径真实存在
+  - 已运行: 核对 Execution_Log 中 M0-001 至 R1-001 全部记录完整且未被修改
+  - 未运行: 无代码变更，无需运行自动化测试
+- 验收结论: accepted；README 已从”Stage 0 harness”口径更新为”M0~M4 完成 + 发布前工程化收尾”，包含里程碑状态表、仓库结构、技术栈、provider mode、常用命令、文档索引、已知非阻塞事项与下一步方向；AGENTS 已覆盖当前阶段定义、执行纪律、docs/tests/implementation 顺序、Execution_Log 维护规则、架构约束、前后端已实现边界、release engineering 工作口径与 Conventional Commit 规范；commit message 规范已明确写入仓库文档，面向当前及未来提交，不追溯历史。
+- blocker / 风险:
+  - 无当前 blocker
+  - commit message 规范为文档约束，尚未通过 commit-msg hook 或 CI 自动检查强制执行；如需技术强制，应在独立任务包中引入 commitlint 或等价工具
+- 下一步建议:
+  - 如需技术强制 commit message 规范，可在后续独立任务包中引入 commitlint + husky
+  - 继续按 Release Engineering 口径推进本地开发体验、静态检查门禁、CI pipeline 等工程化收尾任务
