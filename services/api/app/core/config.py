@@ -26,6 +26,8 @@ class Settings:
     llm_provider_mode: str | None = None
     web_search_provider_mode: str | None = None
     web_fetch_provider_mode: str | None = None
+    jina_api_key: str | None = None
+    jina_base_url: str = "https://r.jina.ai/"
     zhipu_api_key: str | None = None
     zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4/"
     zhipu_timeout_seconds: float = 30.0
@@ -111,6 +113,11 @@ class Settings:
             llm_provider_mode=os.getenv("MIMIR_LLM_PROVIDER_MODE"),
             web_search_provider_mode=os.getenv("MIMIR_WEB_SEARCH_PROVIDER_MODE"),
             web_fetch_provider_mode=os.getenv("MIMIR_WEB_FETCH_PROVIDER_MODE"),
+            jina_api_key=os.getenv("MIMIR_JINA_API_KEY") or os.getenv("JINA_API_KEY"),
+            jina_base_url=os.getenv(
+                "MIMIR_JINA_BASE_URL",
+                "https://r.jina.ai/",
+            ),
             zhipu_api_key=os.getenv("MIMIR_ZHIPU_API_KEY") or os.getenv("ZHIPU_API_KEY"),
             zhipu_base_url=os.getenv(
                 "MIMIR_ZHIPU_BASE_URL",
@@ -215,6 +222,10 @@ class Settings:
         ) and not self.zhipu_api_key:
             raise ValueError(
                 "ZHIPU_API_KEY (or MIMIR_ZHIPU_API_KEY) is required when real providers are enabled."
+            )
+        if self.resolved_web_fetch_provider_mode() == "real" and not self.jina_api_key:
+            raise ValueError(
+                "JINA_API_KEY (or MIMIR_JINA_API_KEY) is required when real web_fetch provider is enabled."
             )
 
 

@@ -5,8 +5,8 @@ from app.infrastructure.research.local_stub import (
     LocalStubWebFetchClient,
     LocalStubWebSearchClient,
 )
+from app.infrastructure.research.jina import JinaWebFetchClient
 from app.infrastructure.research.real_http import (
-    HttpWebFetchClient,
     ZhipuCollectorAgent,
     ZhipuPlannerAgent,
     ZhipuSummaryAgent,
@@ -14,7 +14,7 @@ from app.infrastructure.research.real_http import (
 )
 
 __all__ = [
-    "HttpWebFetchClient",
+    "JinaWebFetchClient",
     "LocalStubCollectorAgent",
     "LocalStubPlannerAgent",
     "LocalStubSummaryAgent",
