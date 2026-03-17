@@ -1096,3 +1096,74 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 如需技术强制 commit message 规范，可在后续独立任务包中引入 commitlint + husky
   - 继续按 Release Engineering 口径推进本地开发体验、静态检查门禁、CI pipeline 等工程化收尾任务
+
+## R1-002 Local Dev Entry (API + Web + DB)
+
+- 日期时间: 2026-03-17 CST (+0800)
+- 任务包编号: R1-002
+- session 标识: claude-code-20260317-r1-002-local-dev-entry
+- 目标摘要: 为仓库补一个稳定、可复用的本地联调入口。通过 `compose.yaml` 提供 PostgreSQL 基础设施，通过 `scripts/dev.sh` 一条命令拉起 DB + Alembic migrate + API (uvicorn) + Web (next dev)。前端新增 `NEXT_PUBLIC_API_BASE_URL` 环境变量作为正式 runtime API base 配置路径，替代原先 same-origin 默认行为。Alembic env.py 修复为从 `MIMIR_DATABASE_URL` 读取数据库 URL。本地联调默认走 stub provider，不需要真实密钥。
+- 修改文件:
+  - `compose.yaml` (新增)
+  - `scripts/dev.sh` (新增)
+  - `scripts/README.md`
+  - `apps/web/.env.local.example` (新增)
+  - `apps/web/lib/api/task-api-client.ts`
+  - `apps/web/tests/unit/resolve-base-url.spec.ts` (新增)
+  - `services/api/pyproject.toml`
+  - `services/api/.env.example`
+  - `services/api/app/infrastructure/db/migrations/env.py`
+  - `services/api/README.md`
+  - `package.json`
+  - `.gitignore`
+  - `README.md`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm test:unit` — 36 passed (含新增 3 个 resolveBaseUrl 测试)
+  - 已运行: `cd apps/web && pnpm typecheck` — 通过
+  - 已运行: `cd services/api && uv run --group dev pytest tests/unit tests/contract` — 80 passed
+  - 已运行: `uv sync --group dev` — uvicorn 依赖安装成功
+  - 已运行: `bash -n scripts/dev.sh` — 语法检查通过
+  - 未运行: `./scripts/dev.sh` 端到端启动 — 需本机 Docker 运行环境，建议 leader 或开发者按文档手动验证
+  - 未运行: 后端 integration tests — 需本地 PostgreSQL
+- 验收结论: accepted；本地联调入口 `./scripts/dev.sh`（或 `pnpm dev`）已提供，覆盖 DB 启动、迁移、API 启动、Web 启动全链路；前端 API base 通过 `NEXT_PUBLIC_API_BASE_URL` 正式配置，不依赖 test-only 注入；Alembic 迁移统一从 `MIMIR_DATABASE_URL` 读取；默认 stub provider 不需要真实密钥；文档已同步更新。
+- blocker / 风险:
+  - 无当前 blocker
+  - `scripts/dev.sh` 的端到端可用性取决于本机 Docker 可用，未在 CI 中自动化验证
+  - 前端 `NEXT_PUBLIC_API_BASE_URL` 是 Next.js build-time 注入，生产部署需在构建时设置（或不设置以保持 same-origin 行为）
+- 下一步建议:
+  - R1-003 部署配置模板（Railway / Vercel 环境变量、生产 CORS 白名单）
+  - 静态检查门禁启用（ruff + mypy 后端，ESLint flat config 前端）
+  - CI pipeline 搭建
+
+## R1-002V Local Dev Entry End-to-End Validation
+
+- 日期时间: 2026-03-17 CST (+0800)
+- 任务包编号: R1-002V
+- session 标识: claude-code-20260317-r1-002v-e2e-validation
+- 目标摘要: 对 R1-002 的本地联调入口做真实端到端验证。在 macOS Homebrew PostgreSQL 环境下完成了全链路验证：DB 启动 → Alembic migrate → API 启动 (health 200) → Web 启动 (页面 200) → `NEXT_PUBLIC_API_BASE_URL` 内联到 JS chunk → CORS preflight 通过 → create task 请求实际打到 API 返回 task_id → 停止路径正常。发现并修补：`scripts/dev.sh` 原本硬性要求 Docker，改为自动检测已有 PostgreSQL 并跳过 Docker Compose。
+- 修改文件:
+  - `scripts/dev.sh` (修补: 自动检测已有 PostgreSQL，Docker 不再是硬性前置条件)
+  - `scripts/README.md` (同步更新说明)
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `brew services start postgresql@16` — PostgreSQL 启动
+  - 已运行: `createuser -s postgres` — 创建 postgres role 以匹配默认 DATABASE_URL
+  - 已运行: `uv run alembic upgrade head` — 迁移成功
+  - 已运行: `uv run --group dev uvicorn app.main:app --host 127.0.0.1 --port 8000` — API 启动
+  - 已运行: `curl http://127.0.0.1:8000/api/v1/health` — 返回 `{"status":"ok","service":"mimir-api","version":"v1"}`
+  - 已运行: `pnpm dev` (apps/web with .env.local) — Web 启动，Next.js 确认加载 `.env.local`
+  - 已运行: `curl http://127.0.0.1:3000` — 返回 200，无 `__MIMIR_TEST` 注入
+  - 已运行: 验证 `page.js` chunk 中 `localhost:8000` 已被内联 — 确认 `NEXT_PUBLIC_API_BASE_URL` 生效
+  - 已运行: CORS preflight `OPTIONS /api/v1/tasks` (Origin: localhost:3000) — 返回 200
+  - 已运行: `POST /api/v1/tasks` create task — 返回 task_id、task_token、snapshot (phase: clarifying)
+  - 已运行: `./scripts/dev.sh` 全流程端到端 — 自动检测 PostgreSQL、迁移、启动 API+Web、cleanup 全部成功
+  - 已运行: 停止验证 — kill 8000/3000 成功，`brew services stop postgresql@16` 成功
+  - 已运行: `bash -n scripts/dev.sh` — 修补后语法检查通过
+- 验收结论: accepted；R1-002 的全部验收标准已通过端到端真实验证。根目录联调入口 `./scripts/dev.sh` 可用，Web 通过 `NEXT_PUBLIC_API_BASE_URL` 正式连接本地 API，不依赖 test-only 注入，启动/停止路径均正常。脚本已修补为支持 Homebrew PostgreSQL 等非 Docker 场景。
+- blocker / 风险:
+  - 无当前 blocker
+  - macOS Homebrew PostgreSQL 默认用户是当前系统用户而非 `postgres`，需额外 `createuser -s postgres`；已通过验证，可在 README 中补充说明
+- 下一步建议:
+  - R1-002 阻塞已解除，可进入下一个 Release Engineering 任务包
+  - README 中可补充 Homebrew PostgreSQL 特殊注意事项

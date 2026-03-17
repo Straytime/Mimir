@@ -100,6 +100,11 @@ function resolveBaseUrl(baseUrl: string) {
     return baseUrl;
   }
 
+  const envBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+  if (envBaseUrl.length > 0) {
+    return envBaseUrl;
+  }
+
   if (typeof window !== "undefined") {
     return window.location.origin;
   }

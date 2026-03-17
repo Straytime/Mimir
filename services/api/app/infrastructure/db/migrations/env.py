@@ -1,7 +1,8 @@
+import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, engine_from_config, pool
 
 from app.infrastructure.db.base import Base
 from app.infrastructure.db import models  # noqa: F401
@@ -13,9 +14,15 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+_DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres@127.0.0.1:5432/postgres"
+
+
+def _get_database_url() -> str:
+    return os.getenv("MIMIR_DATABASE_URL", _DEFAULT_DATABASE_URL)
+
 
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
+    url = config.get_main_option("sqlalchemy.url") or _get_database_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -28,11 +35,15 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    ini_url = config.get_main_option("sqlalchemy.url")
+    if ini_url:
+        connectable = engine_from_config(
+            config.get_section(config.config_ini_section, {}),
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        )
+    else:
+        connectable = create_engine(_get_database_url(), poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
