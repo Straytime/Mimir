@@ -26,9 +26,14 @@ class Settings:
     llm_provider_mode: str | None = None
     web_search_provider_mode: str | None = None
     web_fetch_provider_mode: str | None = None
+    e2b_provider_mode: str | None = None
     jina_api_key: str | None = None
     jina_base_url: str = "https://r.jina.ai/"
     zhipu_api_key: str | None = None
+    e2b_api_key: str | None = None
+    e2b_request_timeout_seconds: float = 30.0
+    e2b_execution_timeout_seconds: float = 120.0
+    e2b_sandbox_timeout_seconds: int = 600
     zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4/"
     zhipu_timeout_seconds: float = 30.0
     zhipu_clarification_natural_model: str = "glm-5"
@@ -113,12 +118,23 @@ class Settings:
             llm_provider_mode=os.getenv("MIMIR_LLM_PROVIDER_MODE"),
             web_search_provider_mode=os.getenv("MIMIR_WEB_SEARCH_PROVIDER_MODE"),
             web_fetch_provider_mode=os.getenv("MIMIR_WEB_FETCH_PROVIDER_MODE"),
+            e2b_provider_mode=os.getenv("MIMIR_E2B_PROVIDER_MODE"),
             jina_api_key=os.getenv("MIMIR_JINA_API_KEY") or os.getenv("JINA_API_KEY"),
             jina_base_url=os.getenv(
                 "MIMIR_JINA_BASE_URL",
                 "https://r.jina.ai/",
             ),
             zhipu_api_key=os.getenv("MIMIR_ZHIPU_API_KEY") or os.getenv("ZHIPU_API_KEY"),
+            e2b_api_key=os.getenv("MIMIR_E2B_API_KEY") or os.getenv("E2B_API_KEY"),
+            e2b_request_timeout_seconds=float(
+                os.getenv("MIMIR_E2B_REQUEST_TIMEOUT_SECONDS", "30")
+            ),
+            e2b_execution_timeout_seconds=float(
+                os.getenv("MIMIR_E2B_EXECUTION_TIMEOUT_SECONDS", "120")
+            ),
+            e2b_sandbox_timeout_seconds=int(
+                os.getenv("MIMIR_E2B_SANDBOX_TIMEOUT_SECONDS", "600")
+            ),
             zhipu_base_url=os.getenv(
                 "MIMIR_ZHIPU_BASE_URL",
                 "https://open.bigmodel.cn/api/paas/v4/",
@@ -215,6 +231,11 @@ class Settings:
             self.web_fetch_provider_mode or self.provider_mode
         )
 
+    def resolved_e2b_provider_mode(self) -> str:
+        return _resolve_provider_mode(
+            self.e2b_provider_mode or self.provider_mode
+        )
+
     def validate_provider_configuration(self) -> None:
         if (
             self.resolved_llm_provider_mode() == "real"
@@ -226,6 +247,10 @@ class Settings:
         if self.resolved_web_fetch_provider_mode() == "real" and not self.jina_api_key:
             raise ValueError(
                 "JINA_API_KEY (or MIMIR_JINA_API_KEY) is required when real web_fetch provider is enabled."
+            )
+        if self.resolved_e2b_provider_mode() == "real" and not self.e2b_api_key:
+            raise ValueError(
+                "E2B_API_KEY (or MIMIR_E2B_API_KEY) is required when real E2B provider is enabled."
             )
 
 

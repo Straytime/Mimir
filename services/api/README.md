@@ -25,8 +25,8 @@ The `MIMIR_DATABASE_URL` env var (default: `postgresql+psycopg://postgres@127.0.
 ## Provider modes
 
 - `MIMIR_PROVIDER_MODE=stub` is the default and keeps the current deterministic test path.
-- `MIMIR_PROVIDER_MODE=real` switches LLM and `web_search` to Zhipu real adapters and `web_fetch` to Jina Reader (`r.jina.ai`).
-- `MIMIR_LLM_PROVIDER_MODE`, `MIMIR_WEB_SEARCH_PROVIDER_MODE`, and `MIMIR_WEB_FETCH_PROVIDER_MODE` can override the global mode per adapter.
+- `MIMIR_PROVIDER_MODE=real` switches LLM and `web_search` to Zhipu real adapters, `web_fetch` to Jina Reader (`r.jina.ai`), and `python_interpreter` sandbox calls to real E2B.
+- `MIMIR_LLM_PROVIDER_MODE`, `MIMIR_WEB_SEARCH_PROVIDER_MODE`, `MIMIR_WEB_FETCH_PROVIDER_MODE`, and `MIMIR_E2B_PROVIDER_MODE` can override the global mode per adapter.
 
 ## Real provider env
 
@@ -34,5 +34,6 @@ See [`.env.example`](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects
 
 - `ZHIPU_API_KEY` or `MIMIR_ZHIPU_API_KEY` is required when `llm` or `web_search` runs in `real` mode.
 - `JINA_API_KEY` or `MIMIR_JINA_API_KEY` is required when `web_fetch` runs in `real` mode. Jina Reader base URL defaults to `https://r.jina.ai/` and can be overridden via `MIMIR_JINA_BASE_URL`.
+- `E2B_API_KEY` or `MIMIR_E2B_API_KEY` is required when the E2B sandbox runs in `real` mode. Request / execution / sandbox lifetime defaults can be overridden via `MIMIR_E2B_REQUEST_TIMEOUT_SECONDS`, `MIMIR_E2B_EXECUTION_TIMEOUT_SECONDS`, and `MIMIR_E2B_SANDBOX_TIMEOUT_SECONDS`.
 - Model IDs are configurable per agent role; the current default contract is `glm-5` for all roles unless you explicitly override them in local env.
 - `MIMIR_WEB_SEARCH_ENGINE` defaults to `search_prime`, which matches the current architecture contract for Zhipu `web_search`.

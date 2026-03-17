@@ -1362,3 +1362,53 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若继续做 real provider smoke，可把 heartbeat 保活逻辑纳入专用 smoke harness，而不是每次手写
   - 单独开下一任务包时再决定是否推进到 outline / writer，当前不应混入 E2B 真实接线
+
+## R1-005 E2B Real Adapter Baseline
+
+- 日期时间: 2026-03-17 21:29:00 CST (+0800)
+- 任务包编号: R1-005
+- session 标识: codex-20260317-r1-005-e2b-real-adapter
+- 目标摘要: 为 `python_interpreter` 接入真实 E2B adapter 与 provider/env 工厂接线，保持 stub/fake 仍为默认测试路径；在本地真实环境中完成 `create -> execute -> png artifact -> destroy` 的最小 smoke，不扩展到完整 writer 端到端。
+- 修改文件:
+  - `services/api/pyproject.toml`（新增 `e2b-code-interpreter>=2.0,<3.0` 依赖）
+  - `services/api/uv.lock`
+  - `services/api/app/core/config.py`（新增 `MIMIR_E2B_PROVIDER_MODE`、`E2B_API_KEY` / `MIMIR_E2B_API_KEY`、E2B request / execution / sandbox timeout 配置与 fail-fast 校验）
+  - `services/api/app/infrastructure/delivery/e2b.py`（新增真实 E2B sandbox adapter，封装 create / execute_python / artifact PNG 收集 / destroy / shutdown）
+  - `services/api/app/infrastructure/delivery/__init__.py`
+  - `services/api/app/infrastructure/providers.py`（provider runtime 新增 `sandbox_client`，支持按 mode 切换 `LocalStubSandboxClient` / `E2BRealSandboxClient`）
+  - `services/api/app/main.py`（delivery / lifecycle 改为复用 provider runtime 的 sandbox client）
+  - `services/api/tests/unit/infrastructure/test_provider_factory.py`（新增 E2B provider mode stub/real 与缺失 key fail-fast 测试）
+  - `services/api/tests/unit/infrastructure/test_e2b_adapter.py`（新增真实 adapter 错误映射、artifact 映射、敏感信息不泄漏测试）
+  - `services/api/tests/unit/infrastructure/test_jina_web_fetch.py`（补 real provider runtime 场景下的 E2B key 配置）
+  - `services/api/.env.example`（补 E2B env contract）
+  - `services/api/README.md`（补 real E2B env 说明）
+  - `README.md`（更新 E2B baseline 状态说明）
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv sync --group dev`
+    - 说明: 初次尝试使用旧版 `e2b-code-interpreter` 约束失败，已按官方当前 SDK 签名修正为 `>=2.0,<3.0`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_e2b_adapter.py tests/unit/infrastructure/test_provider_factory.py tests/unit/infrastructure/test_jina_web_fetch.py -q`
+    - 结果: `19 passed`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+    - 结果: `127 passed`
+  - 已运行: 创建并迁移临时数据库 `mimir_e2b_smoke`
+  - 已运行: 在本地 shell 中以 `MIMIR_PROVIDER_MODE=stub`、`MIMIR_E2B_PROVIDER_MODE=real`、临时 `MIMIR_DATABASE_URL` 和本地 `E2B_API_KEY` 启动 `uvicorn app.main:app`
+  - 已运行: `curl -sS http://127.0.0.1:8000/api/v1/health`
+    - 返回: `{"status":"ok","service":"mimir-api","version":"v1"}`
+  - 已运行: 基于真实 E2B 的本地 smoke 脚本，步骤为：
+    - `POST /api/v1/tasks` 创建任务
+    - 直接调用真实 `E2BRealSandboxClient.create()`
+    - 在 sandbox 内执行 Python，生成 `smoke_chart.png`
+    - 通过现有 `LocalArtifactStore` 保存二进制文件，并用 `TaskRepository.append_artifact(...)` 登记到数据库
+    - 调用 `E2BRealSandboxClient.destroy()`
+    - `POST /disconnect` 关闭该 smoke 任务
+    - 最终结果: `stdout="e2b smoke ok"`, `artifact_count=1`, `stored_count=1`, `disconnect_status=202`
+  - 已运行: 删除临时数据库 `mimir_e2b_smoke`
+- 验收结论: accepted；stub 模式下全量后端测试继续通过，real E2B adapter 已在本地真实环境完成 create / execute / png artifact / destroy 的最小闭环，并能通过现有 artifact store 路径完成保存与登记。错误映射保持统一 `RetryableOperationError` 语义，测试覆盖了 create / execute / destroy 失败与敏感信息不泄漏。
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前 smoke 只验证了真实 E2B adapter baseline，没有把链路扩大到完整 writer / `artifact.ready` / `report.completed`，这符合本任务包边界
+  - 真实 E2B 文件扫描目前仅收集新增 `.png` 文件，若后续 writer 需要导出其他 MIME 类型，应单独开任务包扩展
+- 下一步建议:
+  - 若继续做 real writer smoke，可在后续独立任务中把 `writer.tool_call.requested/completed` 与真实 E2B adapter 连接起来，验证 `artifact.ready` / `report.completed`
+  - 保持 stub 为 CI 默认路径，真实 E2B 只用于本地/受控 smoke

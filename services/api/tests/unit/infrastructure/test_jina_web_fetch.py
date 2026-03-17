@@ -30,6 +30,7 @@ def test_real_mode_web_fetch_uses_jina_adapter() -> None:
             provider_mode="real",
             zhipu_api_key="zhipu-key",
             jina_api_key="jina-key",
+            e2b_api_key="e2b-key",
         )
     )
     assert isinstance(runtime.web_fetch_client, JinaWebFetchClient)

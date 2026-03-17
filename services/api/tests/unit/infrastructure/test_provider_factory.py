@@ -3,7 +3,12 @@ from dataclasses import replace
 import pytest
 
 from app.core.config import Settings
-from app.infrastructure.delivery.local import LocalStubOutlineAgent, LocalStubWriterAgent
+from app.infrastructure.delivery.e2b import E2BRealSandboxClient
+from app.infrastructure.delivery.local import (
+    LocalStubOutlineAgent,
+    LocalStubSandboxClient,
+    LocalStubWriterAgent,
+)
 from app.infrastructure.delivery.zhipu import ZhipuOutlineAgent, ZhipuWriterAgent
 from app.infrastructure.llm.local_stub import (
     LocalStubClarificationGenerator,
@@ -45,6 +50,7 @@ def test_build_provider_runtime_uses_stub_adapters_when_provider_mode_is_stub() 
     assert isinstance(runtime.web_fetch_client, LocalStubWebFetchClient)
     assert isinstance(runtime.outline_agent, LocalStubOutlineAgent)
     assert isinstance(runtime.writer_agent, LocalStubWriterAgent)
+    assert isinstance(runtime.sandbox_client, LocalStubSandboxClient)
 
 
 def test_build_provider_runtime_uses_real_adapters_when_provider_mode_is_real() -> None:
@@ -54,6 +60,7 @@ def test_build_provider_runtime_uses_real_adapters_when_provider_mode_is_real() 
             provider_mode="real",
             zhipu_api_key="secret-key",
             jina_api_key="jina-key",
+            e2b_api_key="e2b-key",
         )
     )
 
@@ -67,6 +74,7 @@ def test_build_provider_runtime_uses_real_adapters_when_provider_mode_is_real() 
     assert isinstance(runtime.web_fetch_client, JinaWebFetchClient)
     assert isinstance(runtime.outline_agent, ZhipuOutlineAgent)
     assert isinstance(runtime.writer_agent, ZhipuWriterAgent)
+    assert isinstance(runtime.sandbox_client, E2BRealSandboxClient)
 
 
 def test_settings_from_env_fails_fast_when_real_provider_mode_lacks_api_key(
@@ -79,5 +87,20 @@ def test_settings_from_env_fails_fast_when_real_provider_mode_lacks_api_key(
     with pytest.raises(
         ValueError,
         match="ZHIPU_API_KEY",
+    ):
+        Settings.from_env()
+
+
+def test_settings_from_env_fails_fast_when_real_e2b_provider_mode_lacks_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MIMIR_PROVIDER_MODE", "stub")
+    monkeypatch.setenv("MIMIR_E2B_PROVIDER_MODE", "real")
+    monkeypatch.delenv("MIMIR_E2B_API_KEY", raising=False)
+    monkeypatch.delenv("E2B_API_KEY", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match="E2B_API_KEY",
     ):
         Settings.from_env()

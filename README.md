@@ -77,14 +77,15 @@ Mimir/
 | 环境变量 | 说明 |
 | --- | --- |
 | `MIMIR_PROVIDER_MODE=stub` | 全局默认，所有 adapter 使用本地 stub |
-| `MIMIR_PROVIDER_MODE=real` | 切换 LLM / web_search / web_fetch 为真实 provider |
+| `MIMIR_PROVIDER_MODE=real` | 切换 LLM / web_search / web_fetch / E2B 为真实 provider |
 | `MIMIR_LLM_PROVIDER_MODE` | 单独覆盖 LLM adapter 模式 |
 | `MIMIR_WEB_SEARCH_PROVIDER_MODE` | 单独覆盖 web_search adapter 模式 |
 | `MIMIR_WEB_FETCH_PROVIDER_MODE` | 单独覆盖 web_fetch adapter 模式 |
+| `MIMIR_E2B_PROVIDER_MODE` | 单独覆盖 E2B sandbox adapter 模式 |
 
-`real` 模式需要 `ZHIPU_API_KEY`。详见 [`services/api/.env.example`](services/api/.env.example)。
+`real` 模式下，LLM / `web_search` 需要 `ZHIPU_API_KEY`，`web_fetch` 需要 `JINA_API_KEY`，E2B sandbox 需要 `E2B_API_KEY`。详见 [`services/api/.env.example`](services/api/.env.example)。
 
-使用 `./scripts/dev.sh` 启动本地联调时，provider 模式、数据库地址与密钥都读取当前 shell 环境；脚本不再强制覆盖为 `stub`。因此本地 real smoke 应先在 shell 中导出 `MIMIR_PROVIDER_MODE`、各 provider override、可选的 `MIMIR_DATABASE_URL` 以及 `ZHIPU_API_KEY` / `JINA_API_KEY`，再执行脚本。
+使用 `./scripts/dev.sh` 启动本地联调时，provider 模式、数据库地址与密钥都读取当前 shell 环境；脚本不再强制覆盖为 `stub`。因此本地 real smoke 应先在 shell 中导出 `MIMIR_PROVIDER_MODE`、各 provider override、可选的 `MIMIR_DATABASE_URL` 以及 `ZHIPU_API_KEY` / `JINA_API_KEY` / `E2B_API_KEY`，再执行脚本。
 
 ## 本地联调（一条命令）
 
@@ -191,7 +192,7 @@ pnpm install
 - `ruff check` 与 `mypy` 在后端尚未作为门禁启用
 - `pnpm test:e2e` 与后端 integration tests 依赖本机 PostgreSQL 与 Chromium
 - 本地联调入口 `./scripts/dev.sh` 已提供，依赖 Docker（PostgreSQL）+ uv + pnpm
-- E2B sandbox 真实 adapter 尚未接线（当前为 local stub）
+- E2B sandbox 已具备真实 adapter baseline；完整 writer 实战联调仍待后续独立 smoke
 - 浏览器 e2e 通过 test-only `__MIMIR_TEST_RUNTIME__ / __MIMIR_TEST_STORE__` 注入驱动
 
 ## 发布前工程化收尾 — 下一步方向
