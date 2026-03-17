@@ -1027,3 +1027,50 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 实施阶段已完成；后续如进入运营或真实部署准备，应单独规划“本地开发体验 / 部署脚本 / 真实 provider 接线”任务包，而不是继续混在当前实施收口里
   - 若后续要压缩 test-only surface，优先把浏览器注入与 e2e harness 收敛成显式开发工具层，不要回退修改既有业务契约
+
+## R1-001 Backend Real Provider Adapters (Zhipu + Web Search/Web Fetch)
+
+- 日期时间: 2026-03-17 10:40:45 CST (+0800)
+- 任务包编号: R1-001
+- session 标识: codex-20260317-r1-001-real-provider-adapters
+- 目标摘要: 在不破坏现有 stub/fake 测试基线的前提下，为后端补齐真实 provider adapter 实现路径；本轮聚焦智谱官方 LLM SDK、智谱 `web_search` 原生 HTTP adapter、真实 `web_fetch` HTTP adapter，以及 provider mode / env 配置与工厂接线；默认模式继续保持 `stub`，不进入 E2B 真实接线、本地 dev entry 或部署脚本扩张。
+- 修改文件:
+  - `.gitignore`
+  - `services/api/.env.example`
+  - `services/api/README.md`
+  - `services/api/pyproject.toml`
+  - `services/api/uv.lock`
+  - `services/api/app/core/config.py`
+  - `services/api/app/main.py`
+  - `services/api/app/application/services/clarification.py`
+  - `services/api/app/application/services/feedback.py`
+  - `services/api/app/infrastructure/providers.py`
+  - `services/api/app/infrastructure/llm/__init__.py`
+  - `services/api/app/infrastructure/llm/zhipu.py`
+  - `services/api/app/infrastructure/research/__init__.py`
+  - `services/api/app/infrastructure/research/real_http.py`
+  - `services/api/app/infrastructure/delivery/__init__.py`
+  - `services/api/app/infrastructure/delivery/zhipu.py`
+  - `services/api/tests/unit/infrastructure/test_provider_factory.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_provider_factory.py tests/unit/infrastructure/test_zhipu_adapters.py`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv sync --group dev`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+  - 调试过程:
+    - red tests 先暴露出真实 provider 模块与 provider 工厂缺失；已按最小边界补 `build_provider_runtime()`，把 `stub/real` 模式切换集中到基础设施层，避免 SDK / HTTP 调用散落进 application services
+    - `Settings.from_env()` 新增 provider mode 解析与 fail-fast 校验；当 `llm` 或 `web_search` 开启 `real` 模式但缺少 `ZHIPU_API_KEY` 时，会立即抛出明确错误，默认 `stub` 模式维持现有测试/开发稳定基线
+    - LLM 真实接线采用智谱官方 SDK（`zai-sdk`），通过共享 `ZhipuChatClient` 统一封装自然澄清、需求分析、feedback analyzer，以及 planner / collector / summarizer / outliner / writer 所需的智谱 LLM 调用路径；复杂角色统一通过“结构化 JSON 输出 + adapter 解析”收口为现有 port 返回结构
+    - `web_search` 真实 adapter 按架构约束继续走原生 HTTP，对接智谱官方 `POST /web_search`；`400 + code=1301` 会在 adapter 层统一抛出 `RiskControlTriggered`，其他上游失败统一收口为 `RetryableOperationError`
+    - `web_fetch` 真实 adapter 采用直接 HTTP 抓取，处理超时、5xx、空内容和非文本内容；其中超时/5xx 转为 `RetryableOperationError`，非文本与显式拒绝访问返回标准化失败 `FetchResponse(success=False)`，保持 collect loop 的既有“失败但可继续”语义
+    - 为了让 real provider 真正可用，clarification / feedback 两个现有 orchestrator 额外补了最小异常兜底：`RiskControlTriggered` 和 `RetryableLLMError` 现在会明确落到既有 `task.failed` 语义，而不是在后台 task 中变成未处理异常
+    - 适配层不记录 prompt、API key、Authorization 等敏感字段；新增 unit tests 只验证错误映射与无泄漏约束，不依赖真实外部网络
+- 验收结论: accepted；默认 `stub` 模式下全量后端回归已由 `93 passed` 扩展为 `104 passed`，说明新增真实 provider 接线没有破坏既有主链路；`real` 模式下 provider 工厂、fail-fast 校验、智谱成功映射、`1301` 风控映射、可重试错误映射以及 `web_search` / `web_fetch` 的 HTTP 适配边界均已具备单测保护；本轮没有越界进入 E2B 真实接线、前端改造、部署脚本或新的 API / domain 契约漂移。
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前真实 planner / collector / summarizer / outliner / writer 采用“提示词 + JSON 输出解析”的最小实现路径，足以建立 provider integration 骨架，但真实模型稳定性仍需后续本地联调任务包用受控样本继续收敛
+  - `web_fetch` 本轮按任务约束实现为真实原生 HTTP 抓取路径，没有扩张到 Jina reader 或额外抓取代理；若后续决定接入特定 provider，应在独立任务包里继续沿用当前 `WebFetchClient` 边界与错误语义
+- 下一步建议:
+  - 可以进入 R1-002 类任务，补本地 provider 联调入口、受控 smoke 样例和最小 observability，验证真实智谱/搜索/抓取在本机环境下的端到端行为
+  - 若后续需要接真实 E2B、对象存储或 Railway/Vercel 部署变量模板，继续保持“先 adapter contract tests，再接 provider”的节奏，不要直接改动现有 orchestrator 主链路

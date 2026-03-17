@@ -52,13 +52,7 @@ from app.infrastructure.llm.local_stub import (
     LocalStubFeedbackAnalyzer,
     LocalStubRequirementAnalyzer,
 )
-from app.infrastructure.research.local_stub import (
-    LocalStubCollectorAgent,
-    LocalStubPlannerAgent,
-    LocalStubSummaryAgent,
-    LocalStubWebFetchClient,
-    LocalStubWebSearchClient,
-)
+from app.infrastructure.providers import build_provider_runtime
 from app.infrastructure.security.hmac_signers import (
     HMACAccessTokenSigner,
     HMACTaskTokenSigner,
@@ -94,6 +88,7 @@ def create_app(
             yield
         finally:
             await application.state.task_lifecycle.shutdown()
+            await application.state.provider_runtime.shutdown()
             engine.dispose()
 
     application = FastAPI(
@@ -101,9 +96,11 @@ def create_app(
         version=resolved_settings.service_version,
         lifespan=lifespan,
     )
+    provider_runtime = build_provider_runtime(resolved_settings)
     application.state.settings = resolved_settings
     application.state.engine = engine
     application.state.session_factory = session_factory
+    application.state.provider_runtime = provider_runtime
     application.state.artifact_store = artifact_store or LocalArtifactStore()
     application.state.task_service = TaskService(
         repository=TaskRepository(),
@@ -138,8 +135,8 @@ def create_app(
     delivery_orchestrator = DeliveryOrchestrator(
         session_factory=session_factory,
         task_service=application.state.task_service,
-        outline_agent=outline_agent or LocalStubOutlineAgent(),
-        writer_agent=writer_agent or LocalStubWriterAgent(),
+        outline_agent=outline_agent or provider_runtime.outline_agent,
+        writer_agent=writer_agent or provider_runtime.writer_agent,
         sandbox_client=sandbox_client or LocalStubSandboxClient(),
         artifact_store=application.state.artifact_store,
         report_export_service=report_export_service or LocalReportExportService(),
@@ -151,11 +148,11 @@ def create_app(
     collection_orchestrator = CollectionOrchestrator(
         session_factory=session_factory,
         task_service=application.state.task_service,
-        planner_agent=planner_agent or LocalStubPlannerAgent(),
-        collector_agent=collector_agent or LocalStubCollectorAgent(),
-        summary_agent=summary_agent or LocalStubSummaryAgent(),
-        web_search_client=web_search_client or LocalStubWebSearchClient(),
-        web_fetch_client=web_fetch_client or LocalStubWebFetchClient(),
+        planner_agent=planner_agent or provider_runtime.planner_agent,
+        collector_agent=collector_agent or provider_runtime.collector_agent,
+        summary_agent=summary_agent or provider_runtime.summary_agent,
+        web_search_client=web_search_client or provider_runtime.web_search_client,
+        web_fetch_client=web_fetch_client or provider_runtime.web_fetch_client,
         operation_invoker=operation_invoker,
         merge_service=SourceMergeService(),
         settings=resolved_settings,
@@ -168,7 +165,7 @@ def create_app(
     feedback_orchestrator = FeedbackOrchestrator(
         session_factory=session_factory,
         task_service=application.state.task_service,
-        feedback_analyzer=feedback_analyzer or LocalStubFeedbackAnalyzer(),
+        feedback_analyzer=feedback_analyzer or provider_runtime.feedback_analyzer,
         llm_invoker=llm_invoker,
         on_feedback_completed=lambda task_id: collection_orchestrator.ensure_started(
             task_id=task_id
@@ -179,8 +176,10 @@ def create_app(
     clarification_orchestrator = ClarificationOrchestrator(
         session_factory=session_factory,
         task_service=application.state.task_service,
-        clarification_generator=clarification_generator or LocalStubClarificationGenerator(),
-        requirement_analyzer=requirement_analyzer or LocalStubRequirementAnalyzer(),
+        clarification_generator=clarification_generator
+        or provider_runtime.clarification_generator,
+        requirement_analyzer=requirement_analyzer
+        or provider_runtime.requirement_analyzer,
         llm_invoker=llm_invoker,
         settings=resolved_settings,
         on_requirement_completed=lambda task_id: collection_orchestrator.ensure_started(

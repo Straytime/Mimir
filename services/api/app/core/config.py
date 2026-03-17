@@ -22,6 +22,27 @@ class Settings:
     clarification_backend_timeout_seconds: int = 60
     llm_retry_max_retries: int = 3
     llm_retry_wait_seconds: int = 3
+    provider_mode: str = "stub"
+    llm_provider_mode: str | None = None
+    web_search_provider_mode: str | None = None
+    web_fetch_provider_mode: str | None = None
+    zhipu_api_key: str | None = None
+    zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4/"
+    zhipu_timeout_seconds: float = 30.0
+    zhipu_clarification_natural_model: str = "glm-4.7"
+    zhipu_clarification_options_model: str = "glm-4.7"
+    zhipu_requirement_analyzer_model: str = "glm-4.7"
+    zhipu_feedback_analyzer_model: str = "glm-4.7"
+    zhipu_planner_model: str = "glm-4.7"
+    zhipu_collector_model: str = "glm-4.7"
+    zhipu_summary_model: str = "glm-4.7"
+    zhipu_outline_model: str = "glm-4.7"
+    zhipu_writer_model: str = "glm-4.7"
+    web_search_endpoint_path: str = "web_search"
+    web_search_engine: str = "search_std"
+    web_search_timeout_seconds: float = 30.0
+    web_fetch_timeout_seconds: float = 30.0
+    web_fetch_user_agent: str = "mimir-api/0.1 (+https://github.com/Straytime/Mimir)"
     planner_parallel_limit: int = 3
     revision_collect_agent_limit: int = 5
     subtask_tool_call_limit: int = 10
@@ -39,7 +60,7 @@ class Settings:
             ).split(",")
             if origin.strip()
         )
-        return cls(
+        settings = cls(
             service_name=os.getenv("MIMIR_SERVICE_NAME", "mimir-api"),
             service_version=os.getenv("MIMIR_SERVICE_VERSION", "v1"),
             database_url=os.getenv(
@@ -86,6 +107,72 @@ class Settings:
             llm_retry_wait_seconds=int(
                 os.getenv("MIMIR_LLM_RETRY_WAIT_SECONDS", "3")
             ),
+            provider_mode=os.getenv("MIMIR_PROVIDER_MODE", "stub"),
+            llm_provider_mode=os.getenv("MIMIR_LLM_PROVIDER_MODE"),
+            web_search_provider_mode=os.getenv("MIMIR_WEB_SEARCH_PROVIDER_MODE"),
+            web_fetch_provider_mode=os.getenv("MIMIR_WEB_FETCH_PROVIDER_MODE"),
+            zhipu_api_key=os.getenv("MIMIR_ZHIPU_API_KEY") or os.getenv("ZHIPU_API_KEY"),
+            zhipu_base_url=os.getenv(
+                "MIMIR_ZHIPU_BASE_URL",
+                "https://open.bigmodel.cn/api/paas/v4/",
+            ),
+            zhipu_timeout_seconds=float(
+                os.getenv("MIMIR_ZHIPU_TIMEOUT_SECONDS", "30")
+            ),
+            zhipu_clarification_natural_model=os.getenv(
+                "MIMIR_ZHIPU_MODEL_CLARIFICATION_NATURAL",
+                "glm-4.7",
+            ),
+            zhipu_clarification_options_model=os.getenv(
+                "MIMIR_ZHIPU_MODEL_CLARIFICATION_OPTIONS",
+                "glm-4.7",
+            ),
+            zhipu_requirement_analyzer_model=os.getenv(
+                "MIMIR_ZHIPU_MODEL_REQUIREMENT_ANALYZER",
+                "glm-4.7",
+            ),
+            zhipu_feedback_analyzer_model=os.getenv(
+                "MIMIR_ZHIPU_MODEL_FEEDBACK_ANALYZER",
+                "glm-4.7",
+            ),
+            zhipu_planner_model=os.getenv(
+                "MIMIR_ZHIPU_MODEL_PLANNER",
+                "glm-4.7",
+            ),
+            zhipu_collector_model=os.getenv(
+                "MIMIR_ZHIPU_MODEL_COLLECTOR",
+                "glm-4.7",
+            ),
+            zhipu_summary_model=os.getenv(
+                "MIMIR_ZHIPU_MODEL_SUMMARIZER",
+                "glm-4.7",
+            ),
+            zhipu_outline_model=os.getenv(
+                "MIMIR_ZHIPU_MODEL_OUTLINER",
+                "glm-4.7",
+            ),
+            zhipu_writer_model=os.getenv(
+                "MIMIR_ZHIPU_MODEL_WRITER",
+                "glm-4.7",
+            ),
+            web_search_endpoint_path=os.getenv(
+                "MIMIR_WEB_SEARCH_ENDPOINT_PATH",
+                "web_search",
+            ),
+            web_search_engine=os.getenv(
+                "MIMIR_WEB_SEARCH_ENGINE",
+                "search_std",
+            ),
+            web_search_timeout_seconds=float(
+                os.getenv("MIMIR_WEB_SEARCH_TIMEOUT_SECONDS", "30")
+            ),
+            web_fetch_timeout_seconds=float(
+                os.getenv("MIMIR_WEB_FETCH_TIMEOUT_SECONDS", "30")
+            ),
+            web_fetch_user_agent=os.getenv(
+                "MIMIR_WEB_FETCH_USER_AGENT",
+                "mimir-api/0.1 (+https://github.com/Straytime/Mimir)",
+            ),
             planner_parallel_limit=int(
                 os.getenv("MIMIR_PLANNER_PARALLEL_LIMIT", "3")
             ),
@@ -105,3 +192,36 @@ class Settings:
                 os.getenv("MIMIR_CLEANUP_SCAN_INTERVAL_SECONDS", "60.0")
             ),
         )
+        settings.validate_provider_configuration()
+        return settings
+
+    def resolved_llm_provider_mode(self) -> str:
+        return _resolve_provider_mode(self.llm_provider_mode or self.provider_mode)
+
+    def resolved_web_search_provider_mode(self) -> str:
+        return _resolve_provider_mode(
+            self.web_search_provider_mode or self.provider_mode
+        )
+
+    def resolved_web_fetch_provider_mode(self) -> str:
+        return _resolve_provider_mode(
+            self.web_fetch_provider_mode or self.provider_mode
+        )
+
+    def validate_provider_configuration(self) -> None:
+        if (
+            self.resolved_llm_provider_mode() == "real"
+            or self.resolved_web_search_provider_mode() == "real"
+        ) and not self.zhipu_api_key:
+            raise ValueError(
+                "ZHIPU_API_KEY (or MIMIR_ZHIPU_API_KEY) is required when real providers are enabled."
+            )
+
+
+def _resolve_provider_mode(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in {"stub", "real"}:
+        raise ValueError(
+            "Provider mode must be either 'stub' or 'real'."
+        )
+    return normalized
