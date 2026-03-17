@@ -11,9 +11,16 @@ Stage 0 FastAPI harness for the Mimir backend.
 
 ## Local commands
 
-- `uv sync --group dev`
-- `uv run --group dev pytest tests/unit`
-- `uv run --group dev pytest tests/contract`
+```bash
+uv sync --group dev                                                # install deps
+uv run --group dev uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload  # dev server
+uv run alembic upgrade head                                        # run migrations
+uv run --group dev pytest tests/unit                               # unit tests
+uv run --group dev pytest tests/contract                           # contract tests
+uv run --group dev pytest tests/integration                        # integration tests (needs PostgreSQL)
+```
+
+The `MIMIR_DATABASE_URL` env var (default: `postgresql+psycopg://postgres@127.0.0.1:5432/postgres`) is shared between the app and Alembic migrations.
 
 ## Provider modes
 

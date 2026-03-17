@@ -1,0 +1,28 @@
+# Local development infrastructure only.
+# Application services (API, Web) run directly on the host for better DX.
+#
+# Usage:
+#   docker compose up -d        # start PostgreSQL
+#   docker compose down          # stop
+#   docker compose down -v       # stop and remove data volume
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ""
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

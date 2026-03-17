@@ -3,5 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "description": "Monorepo skeleton for the Mimir project.",
-  "packageManager": "pnpm@10.32.1"
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev": "./scripts/dev.sh",
+    "dev:stop": "./scripts/dev.sh stop",
+    "dev:migrate": "./scripts/dev.sh migrate"
+  }
 }

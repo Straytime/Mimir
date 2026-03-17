@@ -84,6 +84,41 @@ Mimir/
 
 `real` 模式需要 `ZHIPU_API_KEY`。详见 [`services/api/.env.example`](services/api/.env.example)。
 
+## 本地联调（一条命令）
+
+从仓库根目录启动完整本地开发环境：
+
+```bash
+# 前置条件：docker, uv, pnpm
+pnpm install                        # 首次：安装 JS 依赖
+cd services/api && uv sync --group dev && cd ../..  # 首次：安装 Python 依赖
+
+# 启动（PostgreSQL + migrate + API + Web）
+./scripts/dev.sh
+
+# 或通过 pnpm
+pnpm dev
+```
+
+启动后：
+- Web: http://localhost:3000
+- API: http://localhost:8000
+- DB: `postgresql://postgres@localhost:5432/postgres`
+- Provider 模式: `stub`（不需要真实密钥）
+
+```bash
+# 仅运行迁移
+./scripts/dev.sh migrate
+
+# 停止 PostgreSQL
+./scripts/dev.sh stop
+
+# 停止 PostgreSQL 并清除数据
+docker compose down -v
+```
+
+> `services/api` 不是 pnpm workspace 的一部分，后端工具链使用 `uv` 独立管理。
+
 ## 常用命令
 
 ### 后端 (`services/api`)
@@ -93,6 +128,9 @@ cd services/api
 
 # 依赖安装
 uv sync --group dev
+
+# 启动 API 服务器（需本地 PostgreSQL）
+uv run --group dev uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 # 运行测试
 uv run --group dev pytest tests/unit
@@ -109,7 +147,7 @@ uv run alembic upgrade head
 ```bash
 cd apps/web
 
-# 开发服务器
+# 开发服务器（读取 .env.local 中的 NEXT_PUBLIC_API_BASE_URL）
 pnpm dev
 
 # 类型检查与 lint
@@ -131,8 +169,6 @@ pnpm test:e2e          # 需要先安装 Chromium: pnpm exec playwright install 
 pnpm install
 ```
 
-> **注意**：`services/api` 不是 pnpm workspace 的一部分，后端工具链使用 `uv` 独立管理。
-
 ## 文档索引
 
 | 文档 | 说明 |
@@ -152,7 +188,7 @@ pnpm install
 - `pnpm lint` 使用 ESLint 9 legacy `.eslintrc` 兼容模式，会打印 deprecation warning（lint 本身通过）
 - `ruff check` 与 `mypy` 在后端尚未作为门禁启用
 - `pnpm test:e2e` 与后端 integration tests 依赖本机 PostgreSQL 与 Chromium
-- 当前无"一条命令拉起完整本地联调环境"的正式开发入口
+- 本地联调入口 `./scripts/dev.sh` 已提供，依赖 Docker（PostgreSQL）+ uv + pnpm
 - E2B sandbox 真实 adapter 尚未接线（当前为 local stub）
 - 浏览器 e2e 通过 test-only `__MIMIR_TEST_RUNTIME__ / __MIMIR_TEST_STORE__` 注入驱动
 
