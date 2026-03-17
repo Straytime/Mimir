@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -100,7 +101,11 @@ def create_app(
     application.state.engine = engine
     application.state.session_factory = session_factory
     application.state.provider_runtime = provider_runtime
-    application.state.artifact_store = artifact_store or LocalArtifactStore()
+    application.state.artifact_store = artifact_store or LocalArtifactStore(
+        root_dir=Path(resolved_settings.artifact_root_dir)
+        if resolved_settings.artifact_root_dir
+        else None
+    )
     application.state.task_service = TaskService(
         repository=TaskRepository(),
         task_token_signer=HMACTaskTokenSigner(

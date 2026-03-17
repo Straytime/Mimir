@@ -27,6 +27,7 @@ class Settings:
     web_search_provider_mode: str | None = None
     web_fetch_provider_mode: str | None = None
     e2b_provider_mode: str | None = None
+    artifact_root_dir: str | None = None
     jina_api_key: str | None = None
     jina_base_url: str = "https://r.jina.ai/"
     zhipu_api_key: str | None = None
@@ -70,9 +71,10 @@ class Settings:
         settings = cls(
             service_name=os.getenv("MIMIR_SERVICE_NAME", "mimir-api"),
             service_version=os.getenv("MIMIR_SERVICE_VERSION", "v1"),
-            database_url=os.getenv(
-                "MIMIR_DATABASE_URL",
-                "postgresql+psycopg://postgres@127.0.0.1:5432/postgres",
+            database_url=(
+                os.getenv("MIMIR_DATABASE_URL")
+                or os.getenv("DATABASE_URL")
+                or "postgresql+psycopg://postgres@127.0.0.1:5432/postgres"
             ),
             cors_allow_origins=cors_allow_origins or ("http://localhost:3000",),
             task_token_secret=os.getenv("MIMIR_TASK_TOKEN_SECRET", "task-secret"),
@@ -119,6 +121,7 @@ class Settings:
             web_search_provider_mode=os.getenv("MIMIR_WEB_SEARCH_PROVIDER_MODE"),
             web_fetch_provider_mode=os.getenv("MIMIR_WEB_FETCH_PROVIDER_MODE"),
             e2b_provider_mode=os.getenv("MIMIR_E2B_PROVIDER_MODE"),
+            artifact_root_dir=_resolve_artifact_root_dir(),
             jina_api_key=os.getenv("MIMIR_JINA_API_KEY") or os.getenv("JINA_API_KEY"),
             jina_base_url=os.getenv(
                 "MIMIR_JINA_BASE_URL",
@@ -261,3 +264,15 @@ def _resolve_provider_mode(value: str) -> str:
             "Provider mode must be either 'stub' or 'real'."
         )
     return normalized
+
+
+def _resolve_artifact_root_dir() -> str | None:
+    configured = os.getenv("MIMIR_ARTIFACT_ROOT_DIR")
+    if configured:
+        return configured
+
+    railway_mount_path = os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
+    if railway_mount_path:
+        return os.path.join(railway_mount_path, "mimir-artifacts")
+
+    return None

@@ -394,6 +394,7 @@ dependencies = [
     { name = "httpx" },
     { name = "psycopg", extra = ["binary"] },
     { name = "sqlalchemy" },
+    { name = "uvicorn", extra = ["standard"] },
     { name = "zai-sdk" },
 ]
 
@@ -401,7 +402,6 @@ dependencies = [
 dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
@@ -412,6 +412,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4.0" },
     { name = "sqlalchemy", specifier = ">=2.0,<3.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1.0" },
     { name = "zai-sdk", specifier = ">=0.0.1,<1.0" },
 ]
 
@@ -419,7 +420,6 @@ requires-dist = [
 dev = [
     { name = "pytest", specifier = ">=8.4,<9.0" },
     { name = "pytest-asyncio", specifier = ">=1.0,<2.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1.0" },
 ]
 
 [[package]]
