@@ -1465,3 +1465,28 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 下一步若做真实上线演练，优先验证 Railway `Config File Path=/services/api/railway.json`、Volume 挂载和 Vercel `NEXT_PUBLIC_API_BASE_URL` 录入是否与文档完全一致
   - 生产前再开独立任务包，补 preview/prod CORS 管理策略、回滚手册与真实 writer smoke
+
+## R1-007 Release Readiness Checklist + Decision Register
+
+- 日期时间: 2026-03-18 00:01:18 CST (+0800)
+- 任务包编号: R1-007
+- session 标识: codex-20260318-r1-007-release-readiness
+- 目标摘要: 在不修改功能实现的前提下，为当前 R1 基线整理发布前最终检查单与待拍板决策清单，让发布负责人可以直接据此执行上线前人工核对，并把已知非阻塞边界整理成可执行的 release contract。
+- 修改文件:
+  - `docs/Release_Readiness_Checklist.md`（新增：发布前检查单、待拍板决策、发布后观察项、负责人填写区）
+  - `docs/Deploy_Contract.md`（补充到 release checklist 的交叉引用）
+  - `README.md`（在文档索引中加入 release checklist）
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - docs-only 任务，未改代码实现
+  - 已运行: `rg -n "Release_Readiness_Checklist" README.md docs/Deploy_Contract.md docs/Release_Readiness_Checklist.md -S`
+    - 结果: 交叉引用链闭合，root README 与 deploy contract 都已指向新文档
+  - 已运行: `git diff --check`
+    - 结果: 通过，无空白或 patch 格式问题
+- 验收结论: accepted；已形成一份可直接交给发布负责人执行的发布前检查单，覆盖 env 完整性、DB migration、healthcheck、provider key、token secret、artifact/download、cleanup、feedback revision、real provider smoke、E2B smoke，以及发布后观察项；同时单独整理了仍需拍板的上线决策，包括 API/Web 正式域名、是否支持 Vercel Preview 访问 API、CORS 白名单策略、production 是否允许 stub fallback、以及 Railway Volume artifact 保留策略。文档内容与当前 deploy contract 保持一致，没有引入契约漂移。
+- blocker / 风险:
+  - 无代码 blocker
+  - 当前仍有若干上线决策需要人工拍板，不能从技术文档中自动推断为已定案
+- 下一步建议:
+  - 由发布负责人先完成 checklist 第 2 节“待拍板决策”
+  - 真正上线前，再以本清单为主索引执行一次完整人工预演

@@ -7,6 +7,8 @@
 - 前端浏览器直连后端 REST + SSE
 - 不包含真实上线步骤、CI/CD 流水线、域名与 HTTPS 运维
 
+发布前人工检查与待拍板决策见 [Release_Readiness_Checklist.md](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/docs/Release_Readiness_Checklist.md)。
+
 ## 1. 生产拓扑
 
 ```text
