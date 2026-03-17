@@ -1412,3 +1412,56 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若继续做 real writer smoke，可在后续独立任务中把 `writer.tool_call.requested/completed` 与真实 E2B adapter 连接起来，验证 `artifact.ready` / `report.completed`
   - 保持 stub 为 CI 默认路径，真实 E2B 只用于本地/受控 smoke
+
+## R1-006 Deploy Config + Release Contract
+
+- 日期时间: 2026-03-17 23:18:42 CST (+0800)
+- 任务包编号: R1-006
+- session 标识: codex-20260317-r1-006-deploy-contract
+- 目标摘要: 为 `apps/web -> Vercel`、`services/api -> Railway` 固化部署配置与发布合同，收敛生产环境变量矩阵、构建/启动命令、健康检查、CORS 与 artifact/storage 边界；仅做 deploy config 与最小启动接线，不做真实上线。
+- 修改文件:
+  - `services/api/pyproject.toml`（将 `uvicorn[standard]` 提升为生产依赖，避免 `uv sync --no-dev` 后缺少启动器）
+  - `services/api/uv.lock`
+  - `services/api/app/core/config.py`（新增 `artifact_root_dir`，支持 `MIMIR_ARTIFACT_ROOT_DIR` 与 `RAILWAY_VOLUME_MOUNT_PATH` 自动收敛；数据库连接新增 `DATABASE_URL` fallback）
+  - `services/api/app/main.py`（`LocalArtifactStore` 改为按配置 root dir 初始化）
+  - `services/api/tests/unit/core/test_config.py`（新增 Railway Volume artifact root 与 `DATABASE_URL` fallback 测试）
+  - `services/api/tests/unit/test_app_factory.py`（新增 app factory 使用配置化 artifact root 的测试）
+  - `services/api/railway.json`（新增 Railway config-as-code：build / pre-deploy / start / healthcheck）
+  - `apps/web/vercel.json`（新增最小 Vercel config，固定 Next.js framework 与 build command）
+  - `docs/Deploy_Contract.md`（新增完整 deploy/release contract 文档）
+  - `services/api/.env.example`（补 production required env、artifact root 与 Railway `DATABASE_URL` 说明）
+  - `apps/web/.env.local.example`（澄清 local 与 Vercel production 的 `NEXT_PUBLIC_API_BASE_URL` 语义差异）
+  - `services/api/README.md`
+  - `apps/web/README.md`
+  - `README.md`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `python -m json.tool services/api/railway.json >/dev/null`
+  - 已运行: `python -m json.tool apps/web/vercel.json >/dev/null`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv sync --group dev`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv sync --frozen --no-dev --dry-run`
+    - 结果: dry-run 成功，说明 Railway build command 在当前锁文件下可执行
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/test_app_factory.py tests/unit/infrastructure/test_provider_factory.py -q`
+    - 结果: `7 passed`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration`
+    - 结果: `129 passed`
+  - 已运行: `cd apps/web && NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm build`
+    - 结果: `next build` 成功，production build 可本地通过
+  - 已运行: 以 production-like env 本地 dry-run backend start command
+    - 命令核心: `uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port ${PORT}`
+    - 附带 env: `MIMIR_PROVIDER_MODE=stub`、显式 `MIMIR_CORS_ALLOW_ORIGINS`、token secrets、`MIMIR_ARTIFACT_ROOT_DIR`
+    - 已运行: `curl -sS http://127.0.0.1:18080/api/v1/health`
+    - 返回: `{"status":"ok","service":"mimir-api","version":"v1"}`
+  - 追加验证: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/test_app_factory.py -q`
+    - 结果: `4 passed`
+  - 追加验证: `cd apps/web && NEXT_PUBLIC_API_BASE_URL=https://api.example.com pnpm build`
+    - 结果: 再次通过
+- 验收结论: accepted；部署合同已固定为 `apps/web -> Vercel`、`services/api -> Railway`。Railway 的 build / pre-deploy / start / healthcheck 已落实到 config-as-code；Vercel 的项目根目录、build command 与 runtime env 已明确；env matrix 已分层为 local stub / local real / production required / production optional；backend 生产启动命令可本地 dry-run，frontend production build 可本地通过；deploy 文档、README、`.env.example` 之间已对齐，不依赖 test-only 注入。
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前 backend artifact store 仍是本地文件系统实现；生产可靠性依赖 Railway Volume，而不是对象存储
+  - 当前 backend CORS 只支持显式白名单，不会自动放行任意 Vercel Preview 域名；preview 联调仍需手工追加 origin
+  - 本任务未做真实上线，也未加入 CI/CD 发布流水线，这符合任务包边界
+- 下一步建议:
+  - 下一步若做真实上线演练，优先验证 Railway `Config File Path=/services/api/railway.json`、Volume 挂载和 Vercel `NEXT_PUBLIC_API_BASE_URL` 录入是否与文档完全一致
+  - 生产前再开独立任务包，补 preview/prod CORS 管理策略、回滚手册与真实 writer smoke
