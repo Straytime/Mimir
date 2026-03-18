@@ -1513,3 +1513,14 @@ Copy the template below for each completed session:
   - `cd apps/web && pnpm exec vitest run tests/unit/task-event-source.spec.ts tests/integration/task-stream-lifecycle.spec.tsx` -> `15 passed`
   - `cd apps/web && pnpm typecheck` -> passed
   - `cd apps/web && NEXT_PUBLIC_API_BASE_URL=https://mimir-api-production.up.railway.app pnpm build` -> passed
+
+## 2026-03-18 19:15 CST - Git workflow guardrails update
+
+- Context: user added two repository-level collaboration constraints for all subsequent work:
+  - do not modify files directly on `main` unless the user explicitly requests `main`
+  - do not run `git commit` or `git push` unless the user explicitly instructs it
+- Changes:
+  - updated `AGENTS.md` to add a dedicated `Git 工作树纪律` section and commit/push authorization rules
+  - mirrored the same rules into `CLAUDE.md`
+- Validation:
+  - manual review of `AGENTS.md` and `CLAUDE.md` for rule parity
