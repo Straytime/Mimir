@@ -5,9 +5,14 @@ import { expect, test, vi } from "vitest";
 
 import { DeliveryActions } from "@/features/research/components/delivery-actions";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
+import type {
+  TaskApiClient,
+  TaskDetailResult,
+} from "@/lib/api/task-api-client";
 import {
   makeDeliverySummary,
   makeResearchSessionState,
+  makeRevisionSummary,
   makeTaskSnapshot,
 } from "@/tests/fixtures/builders";
 import { mswServer } from "@/tests/fixtures/msw-server";
@@ -39,6 +44,18 @@ function createDeliveryStore() {
       },
     }),
   );
+}
+
+function createTaskApiClientMock(overrides: Partial<TaskApiClient> = {}): TaskApiClient {
+  return {
+    createTask: vi.fn(),
+    getTaskDetail: vi.fn(),
+    submitClarification: vi.fn(),
+    submitFeedback: vi.fn(),
+    sendHeartbeat: vi.fn(),
+    disconnectTask: vi.fn(),
+    ...overrides,
+  };
 }
 
 test("disables download buttons while delivery refresh is in progress", () => {
@@ -136,4 +153,252 @@ test("shows independent loading state for markdown zip and pdf downloads", async
     expect(pdfButton).toHaveTextContent("下载 PDF");
   });
   expect(anchorClickSpy).toHaveBeenCalled();
+});
+
+test.each([
+  {
+    format: "markdown" as const,
+    buttonName: "下载 Markdown Zip",
+    staleUrl: "/api/v1/tasks/tsk_stage0/downloads/markdown.zip?access_token=zip_stale",
+    freshUrl: "/api/v1/tasks/tsk_stage0/downloads/markdown.zip?access_token=zip_fresh",
+    filename: "report-markdown.zip",
+    mimeType: "application/zip",
+    bytes: new Uint8Array([80, 75, 3, 4]),
+  },
+  {
+    format: "pdf" as const,
+    buttonName: "下载 PDF",
+    staleUrl: "/api/v1/tasks/tsk_stage0/downloads/report.pdf?access_token=pdf_stale",
+    freshUrl: "/api/v1/tasks/tsk_stage0/downloads/report.pdf?access_token=pdf_fresh",
+    filename: "report.pdf",
+    mimeType: "application/pdf",
+    bytes: new Uint8Array([37, 80, 68, 70]),
+  },
+])(
+  "refreshes %s delivery after access_token_invalid and retries with the fresh url",
+  async ({ buttonName, staleUrl, freshUrl, filename, mimeType, bytes }) => {
+    const user = userEvent.setup();
+    const store = createDeliveryStore();
+    const clickedAnchors: HTMLAnchorElement[] = [];
+    const anchorClickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        clickedAnchors.push(this);
+      });
+    let staleCalls = 0;
+    let freshCalls = 0;
+    const getTaskDetail = vi.fn<TaskApiClient["getTaskDetail"]>().mockResolvedValue({
+      task_id: "tsk_stage0",
+      snapshot: makeTaskSnapshot({
+        task_id: "tsk_stage0",
+        phase: "delivered",
+        status: "awaiting_feedback",
+        available_actions: [
+          "download_markdown",
+          "download_pdf",
+          "submit_feedback",
+        ],
+      }),
+      current_revision: makeRevisionSummary(),
+      delivery: makeDeliverySummary({
+        markdown_zip_url:
+          buttonName === "下载 Markdown Zip"
+            ? freshUrl
+            : staleUrl,
+        pdf_url:
+          buttonName === "下载 PDF"
+            ? freshUrl
+            : staleUrl,
+      }),
+      requestId: "req_delivery_detail",
+      traceId: "trc_delivery_detail",
+    } satisfies TaskDetailResult);
+
+    store.setState((state) => ({
+      ...state,
+      remote: {
+        ...state.remote,
+        delivery: makeDeliverySummary({
+          ...state.remote.delivery!,
+          markdown_zip_url:
+            buttonName === "下载 Markdown Zip"
+              ? staleUrl
+              : state.remote.delivery!.markdown_zip_url,
+          pdf_url:
+            buttonName === "下载 PDF"
+              ? staleUrl
+              : state.remote.delivery!.pdf_url,
+        }),
+      },
+    }));
+
+    mswServer.use(
+      http.get("*/api/v1/tasks/tsk_stage0/downloads/markdown.zip", ({ request }) => {
+        const accessToken = new URL(request.url).searchParams.get("access_token");
+
+        if (accessToken === "zip_fresh") {
+          freshCalls += 1;
+          return new HttpResponse(bytes, {
+            status: 200,
+            headers: {
+              "Content-Type": mimeType,
+            },
+          });
+        }
+
+        staleCalls += 1;
+        return HttpResponse.json(
+          {
+            error: {
+              code: "access_token_invalid",
+              message: "链接已失效。",
+              detail: {},
+              request_id: "req_zip_stale",
+              trace_id: null,
+            },
+          },
+          { status: 401 },
+        );
+      }),
+      http.get("*/api/v1/tasks/tsk_stage0/downloads/report.pdf", ({ request }) => {
+        const accessToken = new URL(request.url).searchParams.get("access_token");
+
+        if (accessToken === "pdf_fresh") {
+          freshCalls += 1;
+          return new HttpResponse(bytes, {
+            status: 200,
+            headers: {
+              "Content-Type": mimeType,
+            },
+          });
+        }
+
+        staleCalls += 1;
+        return HttpResponse.json(
+          {
+            error: {
+              code: "access_token_invalid",
+              message: "链接已失效。",
+              detail: {},
+              request_id: "req_pdf_stale",
+              trace_id: null,
+            },
+          },
+          { status: 401 },
+        );
+      }),
+    );
+
+    renderWithStore(<DeliveryActions />, {
+      store,
+      runtime: {
+        taskApiClient: createTaskApiClientMock({
+          getTaskDetail,
+        }),
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: buttonName }));
+
+    await waitFor(() => {
+      expect(getTaskDetail).toHaveBeenCalledTimes(1);
+      expect(staleCalls).toBe(1);
+      expect(freshCalls).toBe(1);
+      expect(anchorClickSpy).toHaveBeenCalledTimes(1);
+    });
+
+    expect(clickedAnchors[0]?.download).toBe(filename);
+    expect(screen.queryByText("交付链接已失效或任务已清理。")).not.toBeInTheDocument();
+  },
+);
+
+test("does not refresh delivery on non-access_token_invalid errors", async () => {
+  const user = userEvent.setup();
+  const store = createDeliveryStore();
+  const getTaskDetail = vi.fn();
+
+  mswServer.use(
+    http.get("*/api/v1/tasks/tsk_stage0/downloads/markdown.zip", () =>
+      HttpResponse.json(
+        {
+          error: {
+            code: "artifact_not_found",
+            message: "文件不存在。",
+            detail: {},
+            request_id: "req_download_missing",
+            trace_id: null,
+          },
+        },
+        { status: 404 },
+      ),
+    ),
+  );
+
+  renderWithStore(<DeliveryActions />, {
+    store,
+    runtime: {
+      taskApiClient: createTaskApiClientMock({
+        getTaskDetail,
+      }),
+    },
+  });
+
+  await user.click(screen.getByRole("button", { name: "下载 Markdown Zip" }));
+
+  await screen.findByText("交付链接已失效或任务已清理。");
+  expect(getTaskDetail).not.toHaveBeenCalled();
+});
+
+test("stops after one refresh attempt when delivery refresh fails", async () => {
+  const user = userEvent.setup();
+  const store = createDeliveryStore();
+  let staleCalls = 0;
+  const getTaskDetail = vi
+    .fn<TaskApiClient["getTaskDetail"]>()
+    .mockRejectedValue(new Error("refresh_failed"));
+
+  store.setState((state) => ({
+    ...state,
+    remote: {
+      ...state.remote,
+      delivery: makeDeliverySummary({
+        ...state.remote.delivery!,
+        markdown_zip_url:
+          "/api/v1/tasks/tsk_stage0/downloads/markdown.zip?access_token=zip_stale",
+      }),
+    },
+  }));
+
+  mswServer.use(
+    http.get("*/api/v1/tasks/tsk_stage0/downloads/markdown.zip", () => {
+      staleCalls += 1;
+      return HttpResponse.json(
+        {
+          error: {
+            code: "access_token_invalid",
+            message: "链接已失效。",
+            detail: {},
+            request_id: "req_zip_stale",
+            trace_id: null,
+          },
+        },
+        { status: 401 },
+      );
+    }),
+  );
+
+  renderWithStore(<DeliveryActions />, {
+    store,
+    runtime: {
+      taskApiClient: createTaskApiClientMock({
+        getTaskDetail,
+      }),
+    },
+  });
+
+  await user.click(screen.getByRole("button", { name: "下载 Markdown Zip" }));
+
+  await screen.findByText("交付链接已失效或任务已清理。");
+  expect(staleCalls).toBe(1);
+  expect(getTaskDetail).toHaveBeenCalledTimes(1);
 });

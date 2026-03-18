@@ -1632,3 +1632,34 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 将本次 task `tsk_41c4a48874998003040f5c00` 的 heartbeat 节奏与 phase 证据作为 release smoke 样例，回填到发布前检查记录
   - 后续若继续做生产 smoke，应保持“单任务、最小停留、取证后立即终止”的原则，避免浪费 real provider 配额
+
+## R1-012 Delivery Access Token Refresh Regression
+
+- 日期时间: 2026-03-18 23:53:49 CST (+0800)
+- 任务包编号: R1-012
+- session 标识: codex-20260318-r1-012-delivery-refresh-regression
+- 目标摘要: 只修复前端下载 / artifact 访问路径在 `access_token_invalid` 后的 refresh 回退问题，不改 heartbeat、feedback revision 或公开契约。先补红测锁定 markdown / pdf 下载与 artifact 相对 URL 的 refresh 路径，再对照失败用例定界根因，最终只修补 artifact URL 规范化并把下载 refresh 测试切到稳定的 runtime 注入，恢复 `access_token_invalid -> GET /tasks/{id} -> retry` 的预期行为。
+- 修改文件:
+  - `apps/web/features/research/utils/task-artifact.ts`
+  - `apps/web/tests/unit/task-artifact.spec.ts`
+  - `apps/web/tests/component/delivery-actions.spec.tsx`
+  - `apps/web/tests/integration/report-delivery-flow.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行红测: `cd apps/web && pnpm exec vitest run tests/unit/task-artifact.spec.ts tests/component/delivery-actions.spec.tsx tests/integration/report-delivery-flow.spec.tsx`
+  - 红测现象:
+    - `parseArtifactUrl()` 无法解析相对 artifact URL，导致 `findLatestArtifactBySource()` 返回 `null`
+    - `tests/integration/report-delivery-flow.spec.tsx` 中 artifact 401 后未能刷新到最新 delivery
+    - 新增的 markdown / pdf download refresh 组件测试同样失败，暴露出 `GET /tasks/{id}` refresh 路径在测试里没有被可靠触发
+  - 已运行回归: `cd apps/web && pnpm exec vitest run tests/unit/task-artifact.spec.ts tests/component/delivery-actions.spec.tsx tests/integration/report-delivery-flow.spec.tsx` -> `10 passed`
+  - 已运行: `cd apps/web && pnpm typecheck` -> passed
+- 验收结论: accepted；`report-delivery-flow` 已恢复通过，且现在有测试明确锁住三条恢复路径：
+  - markdown 下载首次 `access_token_invalid` 后会执行 refresh 并使用新 URL 重试
+  - pdf 下载首次 `access_token_invalid` 后会执行 refresh 并使用新 URL 重试
+  - artifact 图片在相对 URL 场景下也能从最新 delivery 中解析并恢复访问
+- blocker / 风险:
+  - 本次没有扩张到真实生产 smoke；当前验证范围为前端 unit / component / integration + typecheck
+  - 组件测试里的 refresh client 改为显式 runtime mock，是为了隔离 jsdom/default runtime 对 `fetch` 绑定的差异；真实网络 refresh 仍由 integration 测试覆盖
+- 下一步建议:
+  - 进入下一轮发布前 smoke 时，优先手动验证一次 `report.pdf`、`markdown.zip` 和至少 1 个 artifact 在真实生产上经过 `access_token_invalid -> GET /tasks/{id} -> retry` 后仍可恢复
+  - 若后续要继续收紧发布门禁，可把 delivery refresh 路径加入更高层的 e2e 或 smoke 脚本，而不是只停留在组件 / integration

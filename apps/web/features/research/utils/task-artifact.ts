@@ -1,7 +1,7 @@
 "use client";
 
 import type { ArtifactSummary } from "@/lib/contracts";
-import { resolveApiUrl } from "@/lib/api/backend-url";
+import { resolveApiBaseUrl, resolveApiUrl } from "@/lib/api/backend-url";
 
 type ArtifactUrlMatch = {
   taskId: string;
@@ -10,7 +10,7 @@ type ArtifactUrlMatch = {
 };
 
 function resolveUrl(url: string) {
-  return new URL(resolveApiUrl(url));
+  return new URL(resolveApiUrl(url), resolveApiBaseUrl());
 }
 
 export function parseArtifactUrl(url: string): ArtifactUrlMatch | null {
