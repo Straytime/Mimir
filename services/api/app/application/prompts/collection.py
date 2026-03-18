@@ -9,7 +9,7 @@ from app.application.dto.research import (
 
 
 def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
-    transcript = tuple(
+    tool_messages = tuple(
         PromptMessage(
             role="tool",
             name="collect_agent",
@@ -22,6 +22,25 @@ def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
         )
         for summary in invocation.summaries
     )
+    if tool_messages:
+        assistant_tool_calls = tuple(
+            {
+                "id": summary.tool_call_id,
+                "type": "function",
+                "function": {"name": "collect_agent", "arguments": "{}"},
+            }
+            for summary in invocation.summaries
+        )
+        transcript = (
+            PromptMessage(
+                role="assistant",
+                content="",
+                tool_calls=assistant_tool_calls,
+            ),
+            *tool_messages,
+        )
+    else:
+        transcript = ()
     return PromptBundle(
         system_prompt="""
 <背景>

@@ -28,13 +28,16 @@ class PromptMessage:
     content: str
     name: str | None = None
     tool_call_id: str | None = None
+    tool_calls: tuple[dict[str, Any], ...] | None = None
 
-    def to_provider_payload(self) -> dict[str, str]:
-        payload: dict[str, str] = {"role": self.role, "content": self.content}
+    def to_provider_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"role": self.role, "content": self.content}
         if self.name is not None:
             payload["name"] = self.name
         if self.tool_call_id is not None:
             payload["tool_call_id"] = self.tool_call_id
+        if self.tool_calls is not None:
+            payload["tool_calls"] = list(self.tool_calls)
         return payload
 
 
@@ -95,6 +98,7 @@ def dump_prompt_bundle(bundle: PromptBundle) -> dict[str, Any]:
                 "content": message.content,
                 "name": message.name,
                 "tool_call_id": message.tool_call_id,
+                "tool_calls": list(message.tool_calls) if message.tool_calls else None,
             }
             for message in bundle.transcript
         ],

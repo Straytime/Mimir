@@ -1663,3 +1663,26 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 进入下一轮发布前 smoke 时，优先手动验证一次 `report.pdf`、`markdown.zip` 和至少 1 个 artifact 在真实生产上经过 `access_token_invalid -> GET /tasks/{id} -> retry` 后仍可恢复
   - 若后续要继续收紧发布门禁，可把 delivery refresh 路径加入更高层的 e2e 或 smoke 脚本，而不是只停留在组件 / integration
+
+---
+
+### R1-013 fix(api): planner transcript missing assistant tool_calls message
+
+- 日期: 2026-03-19
+- 分支: `claude/collection-fix`
+- 目标: 修复 planner 第二轮调用时 transcript 中 `role="tool"` 消息缺少前置 `role="assistant"` + `tool_calls` 消息导致 Zhipu API 拒绝请求的 bug；附带修复 `LocalStubPlannerAgent` 在 `summaries` 为空时的 `IndexError`
+- 修改文件:
+  - `services/api/app/application/dto/invocation.py` — `PromptMessage` 增加 `tool_calls` 字段，`to_provider_payload()` 和 `dump_prompt_bundle()` 输出 `tool_calls`
+  - `services/api/app/application/prompts/collection.py` — `build_planner_prompt` 在 summaries 非空时插入 synthetic `role="assistant"` 消息（含匹配的 `tool_calls`）
+  - `services/api/app/infrastructure/research/local_stub.py` — `LocalStubPlannerAgent.plan` 将 `summaries[0]` 访问提前到条件判断之外，避免 `IndexError`
+  - `services/api/tests/unit/application/test_collection_prompts.py` — 更新已有语义锁测试以适应新的 `[assistant, tool, tool]` transcript 结构
+- 新增测试文件:
+  - `services/api/tests/unit/dto/test_prompt_message.py` — 2 tests (tool_calls in payload / omit when None)
+  - `services/api/tests/unit/application/prompts/test_planner_prompt.py` — 3 tests (no summaries / assistant before tools / tool_call_ids match)
+  - `services/api/tests/unit/infrastructure/research/test_local_stub.py` — 2 tests (first call empty summaries / second call stop)
+- 测试:
+  - 已运行: `pytest tests/unit tests/contract` -> 116 passed, 0 failed
+  - 未运行: `tests/integration`（需本地 PostgreSQL）
+- 验收结论: accepted；7 个新测试全部通过，已有 116 个测试无回归
+- blocker / 风险: 无
+- 下一步建议: 在真实 provider 模式下进行端到端验证，确认多轮 planner 调用正常完成

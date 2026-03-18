@@ -16,14 +16,17 @@ from app.domain.schemas import CollectPlan
 class LocalStubPlannerAgent:
     async def plan(self, invocation: PlannerInvocation) -> PlannerDecision:
         if invocation.call_index == 1:
+            revision_id = (
+                invocation.summaries[0].tool_call_id
+                if invocation.summaries
+                else "rev_placeholder"
+            )
             return PlannerDecision(
                 reasoning_deltas=("当前还缺少代表性玩家与市场趋势信息。",),
                 plans=(
                     CollectPlan(
                         tool_call_id="call_local_1",
-                        revision_id=invocation.summaries[0].tool_call_id
-                        if invocation.summaries
-                        else "rev_placeholder",
+                        revision_id=revision_id,
                         collect_target="收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展",
                         additional_info="优先官方发布与高可信媒体。",
                         freshness_requirement=FreshnessRequirement.HIGH,
