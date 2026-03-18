@@ -377,6 +377,82 @@ describe("Stage 4 clarification flow", () => {
     expect(screen.queryByText(/剩余 \d+ 秒/)).not.toBeInTheDocument();
   });
 
+  test("natural clarification submit does not stop heartbeat while the task remains alive", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-16T00:00:00+08:00"));
+    const sendHeartbeat = vi.fn().mockResolvedValue({
+      requestId: "req_heartbeat",
+      traceId: "trc_heartbeat",
+    });
+    const submitClarification = vi.fn().mockResolvedValue(
+      makeClarificationAcceptedResponse({
+        snapshot: makeTaskSnapshot({
+          status: "running",
+          phase: "analyzing_requirement",
+          clarification_mode: "natural",
+          available_actions: [],
+        }),
+      }),
+    );
+    const store = createClarifyingStore(
+      {
+        session: {
+          sseState: "open",
+        },
+      },
+      {
+        status: "awaiting_user_input",
+        clarification_mode: "natural",
+        available_actions: ["submit_clarification"],
+      },
+    );
+
+    render(
+      <ResearchPageClient
+        runtime={createMockRuntime(new ControlledTaskEventSource<EventEnvelope>(), {
+          sendHeartbeat,
+          submitClarification,
+        })}
+        store={store}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("澄清补充说明"), {
+      target: {
+        value: "请重点关注产品能力和商业模式。",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "提交澄清" }));
+
+    await act(async () => {
+      await flushAsyncWork();
+    });
+
+    expect(submitClarification).toHaveBeenCalledTimes(1);
+
+    expect(store.getState().remote.snapshot).toMatchObject({
+      status: "running",
+      phase: "analyzing_requirement",
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(20_000);
+      await flushAsyncWork();
+    });
+
+    expect(sendHeartbeat).toHaveBeenCalledTimes(1);
+    expect(sendHeartbeat).toHaveBeenCalledWith({
+      url: "/api/v1/tasks/tsk_stage0/heartbeat",
+      token: "secret_stage0",
+      request: {
+        client_time: expect.any(String),
+      },
+    });
+    expect(sendHeartbeat.mock.calls[0]?.[0]?.request.client_time).toBe(
+      new Date().toISOString(),
+    );
+  });
+
   test("shows inline 422 validation errors for natural clarification and keeps the draft", async () => {
     const user = userEvent.setup();
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();

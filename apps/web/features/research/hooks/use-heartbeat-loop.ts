@@ -16,7 +16,9 @@ const HEARTBEAT_ELIGIBLE_STATUSES = new Set([
 const TERMINAL_STATUS_SET = new Set<string>(TERMINAL_TASK_STATUSES);
 
 export function useHeartbeatLoop() {
-  const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
+  const snapshotStatus = useResearchSessionStore(
+    (state) => state.remote.snapshot?.status ?? null,
+  );
   const heartbeatUrl = useResearchSessionStore((state) => state.session.heartbeatUrl);
   const taskToken = useResearchSessionStore((state) => state.session.taskToken);
   const sseState = useResearchSessionStore((state) => state.session.sseState);
@@ -25,12 +27,12 @@ export function useHeartbeatLoop() {
 
   useEffect(() => {
     if (
-      snapshot === null ||
+      snapshotStatus === null ||
       heartbeatUrl === null ||
       taskToken === null ||
       sseState !== "open" ||
-      TERMINAL_STATUS_SET.has(snapshot.status) ||
-      !HEARTBEAT_ELIGIBLE_STATUSES.has(snapshot.status)
+      TERMINAL_STATUS_SET.has(snapshotStatus) ||
+      !HEARTBEAT_ELIGIBLE_STATUSES.has(snapshotStatus)
     ) {
       return;
     }
@@ -69,5 +71,12 @@ export function useHeartbeatLoop() {
       stopped = true;
       clearInterval(intervalId);
     };
-  }, [heartbeatUrl, setTerminalState, snapshot, sseState, taskApiClient, taskToken]);
+  }, [
+    heartbeatUrl,
+    setTerminalState,
+    snapshotStatus,
+    sseState,
+    taskApiClient,
+    taskToken,
+  ]);
 }
