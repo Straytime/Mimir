@@ -1514,6 +1514,14 @@ Copy the template below for each completed session:
   - `cd apps/web && pnpm typecheck` -> passed
   - `cd apps/web && NEXT_PUBLIC_API_BASE_URL=https://mimir-api-production.up.railway.app pnpm build` -> passed
 
+## 2026-03-18 19:46 CST - Ignore local skill workspace artifacts
+
+- Context: local Railway helper skills and related generated metadata were added for operator use, creating untracked repository noise that should not be versioned.
+- Changes:
+  - updated `.gitignore` to ignore local `.agents/`, `.claude/`, and `skills-lock.json`
+- Validation:
+  - `git status --short --untracked-files=all` now excludes local skill workspace artifacts
+
 ## 2026-03-18 19:15 CST - Git workflow guardrails update
 
 - Context: user added two repository-level collaboration constraints for all subsequent work:

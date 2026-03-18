@@ -16,3 +16,6 @@ __pycache__/
 .env.*
 !.env.example
 !.env.local.example
+.agents/
+.claude/
+skills-lock.json
