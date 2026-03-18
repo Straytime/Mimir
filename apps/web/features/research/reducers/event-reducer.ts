@@ -6,6 +6,10 @@ import type {
   TaskTerminatedEventEnvelope,
   TaskSnapshot,
 } from "@/lib/contracts";
+import {
+  normalizeArtifactSummary,
+  normalizeDeliverySummary,
+} from "@/lib/api/backend-url";
 
 import { mergeTaskSnapshot } from "../mappers/task-snapshot-merger";
 import { reduceTimelineStream } from "../mappers/timeline-mapper";
@@ -375,6 +379,11 @@ export function reduceResearchSessionEvent(
         },
       };
     case "artifact.ready":
+      {
+        const normalizedArtifact = normalizeArtifactSummary(
+          event.payload.artifact,
+        );
+
       return {
         ...stateWithLastEventSeq,
         stream: {
@@ -382,22 +391,23 @@ export function reduceResearchSessionEvent(
           ...reduceStreamTimeline(stateWithLastEventSeq, event),
           artifacts: state.stream.artifacts.some(
             (artifact) =>
-              artifact.artifact_id === event.payload.artifact.artifact_id,
+              artifact.artifact_id === normalizedArtifact.artifact_id,
           )
             ? state.stream.artifacts.map((artifact) =>
-                artifact.artifact_id === event.payload.artifact.artifact_id
-                  ? event.payload.artifact
+                artifact.artifact_id === normalizedArtifact.artifact_id
+                  ? normalizedArtifact
                   : artifact,
               )
-            : [...state.stream.artifacts, event.payload.artifact],
+            : [...state.stream.artifacts, normalizedArtifact],
         },
       };
+      }
     case "report.completed":
       return {
         ...stateWithLastEventSeq,
         remote: {
           ...state.remote,
-          delivery: event.payload.delivery,
+          delivery: normalizeDeliverySummary(event.payload.delivery),
         },
         stream: {
           ...stateWithLastEventSeq.stream,

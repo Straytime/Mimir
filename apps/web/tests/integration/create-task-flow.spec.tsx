@@ -102,9 +102,15 @@ test("creates a task, writes session context, and immediately starts the SSE con
     taskToken: createTaskResponse.task_token,
     traceId: createTaskResponse.trace_id,
     requestId: "req_stage2",
-    eventsUrl: createTaskResponse.urls.events,
-    heartbeatUrl: createTaskResponse.urls.heartbeat,
-    disconnectUrl: createTaskResponse.urls.disconnect,
+    eventsUrl: new URL(createTaskResponse.urls.events, window.location.origin).toString(),
+    heartbeatUrl: new URL(
+      createTaskResponse.urls.heartbeat,
+      window.location.origin,
+    ).toString(),
+    disconnectUrl: new URL(
+      createTaskResponse.urls.disconnect,
+      window.location.origin,
+    ).toString(),
     connectDeadlineAt: createTaskResponse.connect_deadline_at,
     sseState: "connecting",
   });
@@ -112,7 +118,7 @@ test("creates a task, writes session context, and immediately starts the SSE con
   expect(store.getState().ui.pendingAction).toBeNull();
   expect(connect).toHaveBeenCalledTimes(1);
   expect(connect).toHaveBeenCalledWith({
-    url: createTaskResponse.urls.events,
+    url: new URL(createTaskResponse.urls.events, window.location.origin).toString(),
     token: createTaskResponse.task_token,
     onOpen: expect.any(Function),
     onEvent: expect.any(Function),

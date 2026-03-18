@@ -1522,6 +1522,19 @@ Copy the template below for each completed session:
 - Validation:
   - `git status --short --untracked-files=all` now excludes local skill workspace artifacts
 
+## 2026-03-18 19:58 CST - Cross-origin frontend backend URL normalization
+
+- Context: after production deployment on Vercel + Railway, task creation could succeed but the workspace then terminated during `clarifying` with `SSE=failed`. Root cause analysis showed the backend returns relative `/api/v1/...` URLs for task lifecycle, delivery downloads, and artifacts, while the frontend was consuming them verbatim under a cross-origin deployment (`research.robiniflore.com` -> `mimir-api-production.up.railway.app`).
+- Changes:
+  - added `apps/web/lib/api/backend-url.ts` to centralize API-base resolution and relative URL normalization
+  - normalized `createTask` lifecycle URLs and `getTaskDetail` delivery URLs inside `apps/web/lib/api/task-api-client.ts`
+  - normalized `artifact.ready` and `report.completed` SSE payload URLs inside `apps/web/features/research/reducers/event-reducer.ts`
+  - updated `apps/web/features/research/utils/task-artifact.ts` to resolve relative artifact URLs against API base instead of blindly using the frontend origin
+  - added/updated test coverage for URL normalization in create-task flow, event reducer, and base-url helpers
+- Validation:
+  - `cd apps/web && pnpm exec vitest run tests/unit/resolve-base-url.spec.ts tests/unit/reducers/event-reducer.spec.ts tests/integration/create-task-flow.spec.tsx tests/unit/task-event-source.spec.ts tests/integration/task-stream-lifecycle.spec.tsx` -> `44 passed`
+  - `cd apps/web && NEXT_PUBLIC_API_BASE_URL=https://mimir-api-production.up.railway.app pnpm build && pnpm typecheck` -> passed
+
 ## 2026-03-18 19:15 CST - Git workflow guardrails update
 
 - Context: user added two repository-level collaboration constraints for all subsequent work:

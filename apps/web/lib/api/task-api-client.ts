@@ -12,6 +12,12 @@ import type {
   TaskDetailResponse,
   ValidationErrorItem,
 } from "@/lib/contracts";
+import {
+  normalizeDeliverySummary,
+  normalizeTaskUrls,
+  resolveApiBaseUrl,
+  resolveApiUrl,
+} from "@/lib/api/backend-url";
 
 export type CreateTaskResult = {
   response: CreateTaskResponse;
@@ -95,25 +101,8 @@ type ParsedResponse = {
   responseJson: unknown;
 };
 
-function resolveBaseUrl(baseUrl: string) {
-  if (baseUrl.length > 0) {
-    return baseUrl;
-  }
-
-  const envBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-  if (envBaseUrl.length > 0) {
-    return envBaseUrl;
-  }
-
-  if (typeof window !== "undefined") {
-    return window.location.origin;
-  }
-
-  return "http://localhost";
-}
-
 function resolveRequestUrl(baseUrl: string, url: string) {
-  return new URL(url, baseUrl).toString();
+  return resolveApiUrl(url, baseUrl);
 }
 
 async function parseResponse(response: Response): Promise<ParsedResponse> {
@@ -189,7 +178,7 @@ export function createFetchTaskApiClient(
   options: FetchTaskApiClientOptions = {},
 ): TaskApiClient {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const baseUrl = resolveBaseUrl(options.baseUrl ?? "");
+  const baseUrl = resolveApiBaseUrl(options.baseUrl ?? "");
 
   return {
     async createTask(request: CreateTaskRequest) {
@@ -203,9 +192,13 @@ export function createFetchTaskApiClient(
       });
       const parsedResponse = ensureOkResponse(response, await parseResponse(response));
       const successResponse = parsedResponse.responseJson as CreateTaskResponse;
+      const normalizedResponse: CreateTaskResponse = {
+        ...successResponse,
+        urls: normalizeTaskUrls(successResponse.urls, baseUrl),
+      };
 
       return {
-        response: successResponse,
+        response: normalizedResponse,
         requestId: parsedResponse.requestId,
         traceId: parsedResponse.traceId,
       };
@@ -224,9 +217,16 @@ export function createFetchTaskApiClient(
       );
       const parsedResponse = ensureOkResponse(response, await parseResponse(response));
       const successResponse = parsedResponse.responseJson as TaskDetailResponse;
+      const normalizedResponse: TaskDetailResponse = {
+        ...successResponse,
+        delivery:
+          successResponse.delivery === null
+            ? null
+            : normalizeDeliverySummary(successResponse.delivery, baseUrl),
+      };
 
       return {
-        ...successResponse,
+        ...normalizedResponse,
         requestId: parsedResponse.requestId,
         traceId: parsedResponse.traceId,
       };

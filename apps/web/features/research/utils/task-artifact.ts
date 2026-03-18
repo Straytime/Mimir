@@ -1,6 +1,7 @@
 "use client";
 
 import type { ArtifactSummary } from "@/lib/contracts";
+import { resolveApiUrl } from "@/lib/api/backend-url";
 
 type ArtifactUrlMatch = {
   taskId: string;
@@ -8,13 +9,8 @@ type ArtifactUrlMatch = {
   normalizedUrl: string;
 };
 
-const FALLBACK_BASE_URL = "http://localhost";
-
 function resolveUrl(url: string) {
-  return new URL(
-    url,
-    typeof window === "undefined" ? FALLBACK_BASE_URL : window.location.origin,
-  );
+  return new URL(resolveApiUrl(url));
 }
 
 export function parseArtifactUrl(url: string): ArtifactUrlMatch | null {
