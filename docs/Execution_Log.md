@@ -1597,3 +1597,38 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 下发一个独立的小任务包，专门定界并修复 `report-delivery-flow` 的 artifact refresh 失败，不与 heartbeat 问题耦合处理
   - 发布前按 `docs/Release_Readiness_Checklist.md` 增加一条真实 smoke，确认 `collecting` 长耗时阶段仍稳定发送 heartbeat，避免再次出现 `heartbeat_timeout`
+
+## R1-011 Production Heartbeat Regression Verification
+
+- 日期时间: 2026-03-18 23:36:00 CST (+0800)
+- 任务包编号: R1-011
+- session 标识: codex-20260318-r1-011-production-heartbeat-verification
+- 目标摘要: 只做生产回归验证，不改代码。先确认 Railway 生产上下文和 Vercel 线上 bundle 是否已包含 `R1-010` 的 heartbeat hook 修补，再用 1 条最小真实任务验证前端在 `clarifying -> planning_collection -> collecting -> summarizing_collection` 期间会持续发送 heartbeat，且生产不再因为 `heartbeat_timeout` 卡死在 `collecting`。
+- 修改文件:
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `railway whoami --json`；`railway --version`；`cd services/api && railway status --json`；`cd services/api && railway service status --all --json`
+  - 已运行: 打开生产 Web `https://research.robiniflore.com`，抓取生产页面 chunk `/_next/static/chunks/app/page-eebcd2b450de8c49.js`
+  - 已确认: 该 chunk 响应头 `last-modified: Wed, 18 Mar 2026 15:24:16 GMT`（即 2026-03-18 23:24:16 CST），且 bundle 中 heartbeat hook 已是 `remote.snapshot?.status ?? null` 版本；minified 片段为 `let e=O(e=>{var t,a;return null!=(a=null==(t=e.remote.snapshot)?void 0:t.status)?a:null}) ... setInterval(... sendHeartbeat ...)`，与 `R1-010` 修补后的依赖收敛一致，不是旧的整包 `snapshot` 依赖
+  - 已运行: 在生产 Web 创建 1 条自然澄清任务 `tsk_41c4a48874998003040f5c00`
+  - 已观察到 phase 顺序: `clarifying` -> `planning_collection` -> `collecting` -> `summarizing_collection`
+  - 已观察到 UI / 时间线证据:
+    - `collecting` 阶段页面显示 `SSE=open`、`最近心跳：2026-03-18T15:31:19.566354Z`
+    - `summarizing_collection` 阶段页面显示 `SSE=open`、`最近心跳：2026-03-18T15:33:20.930090Z`
+    - 时间线出现 `阶段结论已整理`，说明至少 1 条 `summary.completed` 已被前端消费并呈现
+  - 已观察到浏览器网络证据:
+    - 任务创建后到澄清提交前已连续出现 heartbeat `reqid=15..20`
+    - 澄清提交 `reqid=22` 之后，heartbeat 继续出现 `reqid=23..30`
+    - 在进入 `collecting` 和推进到 `summarizing_collection` 期间，heartbeat 没有停在前 1~2 次
+  - 已观察到 Railway 生产日志证据:
+    - `tsk_41c4a48874998003040f5c00` 的 heartbeat 从 `2026-03-18T15:29:13Z` 一直持续到 `2026-03-18T15:33:53Z`
+    - 日志中的 heartbeat 时间点保持约 20 秒节奏：`15:29:13`、`15:29:33`、`15:29:53`、`15:30:13`、`15:30:33`、`15:30:53`、`15:31:13`、`15:31:33`、`15:31:53`、`15:32:13`、`15:32:33`、`15:32:53`、`15:33:13`、`15:33:33`、`15:33:53`
+    - 在本次验证窗口内未出现该 task 的 `task.terminated`、`task.failed` 或 `heartbeat_timeout` 相关终止证据
+  - 已运行: 在取得足够证据后，通过前端 UI 手动触发终止，避免继续消耗 real provider 配额
+- 验收结论: accepted；生产环境已越过 `collecting -> heartbeat_timeout` 阻塞线。Vercel 生产已部署包含 `R1-010` 行为修补的前端版本；在真实 Railway + Vercel + real provider 条件下，heartbeat 在澄清提交后、`collecting` 阶段以及推进到 `summarizing_collection` 时都仍持续发送，没有复现旧问题中的 `heartbeat_timeout` 终止。
+- blocker / 风险:
+  - Railway HTTP 运行日志默认不输出 `summary.completed` 事件名；本次对 `summary.completed` 的确认主要来自前端时间线出现 `阶段结论已整理`
+  - 本次验证已在拿到 `summarizing_collection + summary UI 证据` 后停止，没有继续扩张到 writer / report / feedback
+- 下一步建议:
+  - 将本次 task `tsk_41c4a48874998003040f5c00` 的 heartbeat 节奏与 phase 证据作为 release smoke 样例，回填到发布前检查记录
+  - 后续若继续做生产 smoke，应保持“单任务、最小停留、取证后立即终止”的原则，避免浪费 real provider 配额
