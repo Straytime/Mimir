@@ -10,6 +10,7 @@ import { useStore, type StoreApi } from "zustand";
 
 import { createFetchTaskApiClient, type TaskApiClient } from "@/lib/api/task-api-client";
 import {
+  createFetchTaskEventSource,
   createNoopTaskEventSource,
   type TaskEventSource,
 } from "@/lib/sse/task-event-source";
@@ -32,7 +33,10 @@ export type ResearchWorkspaceProvidersProps = PropsWithChildren<{
 
 const defaultRuntime: ResearchRuntime = {
   taskApiClient: createFetchTaskApiClient(),
-  taskEventSource: createNoopTaskEventSource<EventEnvelope>(),
+  taskEventSource:
+    typeof window === "undefined"
+      ? createNoopTaskEventSource<EventEnvelope>()
+      : createFetchTaskEventSource<EventEnvelope>(),
 };
 
 const ResearchSessionStoreContext =

@@ -1501,3 +1501,15 @@ Copy the template below for each completed session:
 - Validation:
   - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/integration/db/test_migrations.py -q` -> `6 passed`
   - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration -q` -> `133 passed`
+
+## 2026-03-18 18:45 CST - Web production SSE client hotfix
+
+- Context: first production web deployment on Vercel could create tasks but consistently hit `connect deadline` and terminated during the clarifying phase. Root cause was that the default frontend runtime still used a `noop` `taskEventSource`, so production never opened the SSE stream after task creation.
+- Changes:
+  - implemented a real fetch-based SSE client in `apps/web/lib/sse/task-event-source.ts`
+  - switched the browser default runtime in `apps/web/features/research/providers/research-workspace-providers.tsx` from `noop` to the real SSE client while keeping SSR/test fallbacks intact
+  - added unit coverage for Authorization header forwarding, SSE event parsing, non-OK response errors, and abort cleanup
+- Validation:
+  - `cd apps/web && pnpm exec vitest run tests/unit/task-event-source.spec.ts tests/integration/task-stream-lifecycle.spec.tsx` -> `15 passed`
+  - `cd apps/web && pnpm typecheck` -> passed
+  - `cd apps/web && NEXT_PUBLIC_API_BASE_URL=https://mimir-api-production.up.railway.app pnpm build` -> passed
