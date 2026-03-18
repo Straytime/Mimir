@@ -13,6 +13,11 @@ import type {
   TaskEventSourceConnectArgs,
 } from "@/lib/sse/task-event-source";
 import {
+  makeCollectorFetchCompletedEvent,
+  makeCollectorFetchStartedEvent,
+  makeCollectorSearchCompletedEvent,
+  makeCollectorSearchStartedEvent,
+  makePhaseChangedEvent,
   makeResearchSessionState,
   makeTaskCreatedEvent,
   makeTaskExpiredEvent,
@@ -311,6 +316,139 @@ describe("Stage 3 task stream lifecycle", () => {
       });
     },
   );
+
+  test("keeps sending heartbeat across clarification handoff and long collecting phase churn", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-16T00:00:00+08:00"));
+    let heartbeatCalls = 0;
+    const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
+
+    mswServer.use(
+      http.post(HEARTBEAT_API_URL, () => {
+        heartbeatCalls += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    const store = createActiveStore(
+      {},
+      {
+        status: "awaiting_user_input",
+        phase: "clarifying",
+        available_actions: ["submit_clarification"],
+      },
+    );
+
+    render(
+      <ResearchPageClient
+        runtime={createLifecycleRuntime(taskEventSource)}
+        store={store}
+      />,
+    );
+
+    await act(async () => {
+      taskEventSource.open();
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(20_000);
+      await flushAsyncWork();
+    });
+
+    expect(heartbeatCalls).toBe(1);
+
+    await act(async () => {
+      taskEventSource.emit(
+        makePhaseChangedEvent({
+          seq: 10,
+          phase: "analyzing_requirement",
+          timestamp: "2026-03-16T00:00:20+08:00",
+          payload: {
+            from_phase: "clarifying",
+            to_phase: "analyzing_requirement",
+            status: "running",
+          },
+        }),
+      );
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(15_000);
+      taskEventSource.emit(
+        makePhaseChangedEvent({
+          seq: 11,
+          phase: "planning_collection",
+          timestamp: "2026-03-16T00:00:35+08:00",
+          payload: {
+            from_phase: "analyzing_requirement",
+            to_phase: "planning_collection",
+            status: "running",
+          },
+        }),
+      );
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(15_000);
+      taskEventSource.emit(
+        makePhaseChangedEvent({
+          seq: 12,
+          phase: "collecting",
+          timestamp: "2026-03-16T00:00:50+08:00",
+          payload: {
+            from_phase: "planning_collection",
+            to_phase: "collecting",
+            status: "running",
+          },
+        }),
+      );
+      taskEventSource.emit(
+        makeCollectorSearchStartedEvent({
+          seq: 13,
+          timestamp: "2026-03-16T00:00:50+08:00",
+        }),
+      );
+      taskEventSource.emit(
+        makeCollectorSearchCompletedEvent({
+          seq: 14,
+          timestamp: "2026-03-16T00:00:51+08:00",
+        }),
+      );
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+      taskEventSource.emit(
+        makeCollectorFetchStartedEvent({
+          seq: 15,
+          timestamp: "2026-03-16T00:00:55+08:00",
+        }),
+      );
+      taskEventSource.emit(
+        makeCollectorFetchCompletedEvent({
+          seq: 16,
+          timestamp: "2026-03-16T00:00:56+08:00",
+        }),
+      );
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(15_000);
+      await flushAsyncWork();
+    });
+
+    expect(heartbeatCalls).toBe(3);
+    expect(store.getState().remote.snapshot).toMatchObject({
+      status: "running",
+      phase: "collecting",
+    });
+    expect(store.getState().session.sseState).toBe("open");
+  });
 
   test("enters a terminal state immediately when the SSE stream errors and never auto reconnects", async () => {
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();

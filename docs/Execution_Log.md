@@ -1545,3 +1545,55 @@ Copy the template below for each completed session:
   - mirrored the same rules into `CLAUDE.md`
 - Validation:
   - manual review of `AGENTS.md` and `CLAUDE.md` for rule parity
+
+## R1-009 Production Collecting Termination Triage
+
+- 日期时间: 2026-03-18 23:00:36 CST (+0800)
+- 任务包编号: R1-009
+- session 标识: codex-20260318-r1-009-production-collecting-triage
+- 目标摘要: 只做生产问题定界，不改实现。先确认 Railway CLI 登录、project / environment / service 上下文，再围绕用户提供的线上任务 `tsk_16766f3eca299ecfed4070e4` 拉生产日志；由于原始任务已被清理、数据库与 task_events 无法回补，再补 1 条前端线上复现和 2 条受控 API 复现，最终把 `collecting -> terminated` 的真实原因收敛为 `heartbeat_timeout`，并排除 `risk_control_threshold_exceeded`、collect / summary 上游失败误终止和 cleanup / compensation 误伤。
+- 修改文件:
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `railway whoami`；`railway list`；`railway link -p Mimir-api -e production`；`railway service link mimir-api`；`railway status`；`railway service status --all`
+  - 已运行: `railway logs --service mimir-api --environment production --lines 200/300 --json --filter 'tsk_16766f3eca299ecfed4070e4'` 与同类命令查询新复现 task；原始 task 的 HTTP / app 日志只看到 `events`、单次 `heartbeat`、`clarification` 请求，没有后续 heartbeat
+  - 已运行: 通过 Railway Postgres public URL 只读查询 `research_tasks` / `task_events`；确认原始 task 已被 cleanup 删除，无法直接回补原始终态事件
+  - 已运行: 使用生产 Web `https://research.robiniflore.com` 创建线上复现任务 `tsk_fe2684213f35474a05a92c3e`，在 UI 中完整进入 `collecting`，观察到页面仍显示 `SSE=open / connected`，但状态已变为 `terminated`
+  - 已运行: 浏览器网络日志确认 UI 复现任务只发出了 2 次 `POST /heartbeat`，澄清提交后没有继续发 heartbeat；与后端 `client_heartbeat_timeout_seconds=45` 的超时窗口吻合
+  - 已运行: 受控 API 复现任务 `tsk_e107a0f0f854ed2c3414e8c9`，在 `clarifying` 阶段只发送 1 次 heartbeat 后停止，事件流返回 `task.terminated`，payload 为 `{\"reason\":\"heartbeat_timeout\"}`
+  - 已运行: 受控 API 复现任务 `tsk_2d9d95b09479b5842f801ae9`，正常提交澄清、进入 `collecting` 后停止 heartbeat，事件流在 `collector.search/fetch` 已经发生的情况下返回 `task.terminated`，payload 为 `{\"reason\":\"heartbeat_timeout\"}`，且终止前已进入 `collecting`
+  - 未运行: 任何实现修补、阈值调整、deploy config 改动；按 triage 约束保持只读定界
+- 验收结论: accepted；已明确证明线上 `collecting -> terminated` 的真实终止 reason 是 `heartbeat_timeout`。后端是在 broker 心跳超时分支正确终止，不是 UI 纯显示问题；UI 的“已连接”只代表 SSE 仍然打开，并不代表客户端 heartbeat 仍在持续上报。
+- blocker / 风险:
+  - 原始用户任务 `tsk_16766f3eca299ecfed4070e4` 在排查时已经被 cleanup 删除，因此无法从数据库直接取回它自己的 `task_events`；最终结论依赖“原始 task HTTP 日志 + 前端线上复现 + 受控 API 复现”三段证据链
+  - 当前 triage 只定界到“客户端 heartbeat 在澄清后 / collecting 前后停止发送”，尚未进入 fix 包精确定位是哪段前端状态切换导致 heartbeat loop 被停掉
+- 下一步建议:
+  - 下发一个最小实现修正任务包，重点检查 `apps/web/features/research/hooks/use-heartbeat-loop.ts` 与任务会话 / SSE 状态切换的耦合，找出为何在 `collecting` 期间 `sseState=open` 但 heartbeat 停止发送
+  - 在后续 fix 包中补一条前端 integration / e2e 回归：任务进入 `collecting` 后 heartbeat 必须持续发送，直到终态事件到达
+  - 若需要进一步增强生产可观测性，可在独立任务包中为 `heartbeat_timeout` 增加结构化日志，包含 `task_id`、`last_client_seen_at`、`phase` 和最近一次 heartbeat request id
+
+## R1-010 Frontend Heartbeat Continuity During Collecting
+
+- 日期时间: 2026-03-18 23:15:00 CST (+0800)
+- 任务包编号: R1-010
+- session 标识: codex-20260318-r1-010-frontend-heartbeat-continuity
+- 目标摘要: 只修复前端 heartbeat 在澄清提交后和长 `collecting` 阶段停止发送的问题，不改后端 timeout、不改 SSE 协议。先补 integration 红测锁定 `clarifying -> analyzing_requirement -> planning_collection -> collecting` 期间 interval 被 phase churn 反复 teardown 的场景，再把 heartbeat hook 的依赖从整个 `snapshot` 收敛到稳定的 `snapshot.status`，确保 `SSE=open` 且任务仍需保活时，heartbeat 会持续发送直到终态。
+- 修改文件:
+  - `apps/web/features/research/hooks/use-heartbeat-loop.ts`
+  - `apps/web/tests/integration/task-stream-lifecycle.spec.tsx`
+  - `apps/web/tests/integration/clarification-flow.spec.tsx`
+  - `docs/Release_Readiness_Checklist.md`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/integration/task-stream-lifecycle.spec.tsx tests/integration/clarification-flow.spec.tsx`
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/integration/task-stream-lifecycle.spec.tsx tests/integration/clarification-flow.spec.tsx tests/integration/research-transparency.spec.tsx` -> `23 passed`
+  - 已运行: `cd apps/web && pnpm test:integration`
+  - 结果: 本次新增 heartbeat 连续性相关测试通过；完整 integration 回归额外暴露 `tests/integration/report-delivery-flow.spec.tsx` 的 artifact refresh 失败，表现为 `access_token_invalid` 后未触发 `GET /api/v1/tasks/{task_id}` refresh，该失败不在本次 heartbeat 修补写入范围内
+- 验收结论: accepted；前端已不再因 `snapshot` / `phase` churn 反复 teardown heartbeat interval。自然澄清提交后、进入 `analyzing_requirement / planning_collection / collecting` 后，以及 `collecting` 期间持续接收事件流时，heartbeat 仍会继续发送；终态停止与 404/409 收口语义保持不变。
+- blocker / 风险:
+  - `pnpm test:integration` 仍存在与本任务无关的额外失败：`tests/integration/report-delivery-flow.spec.tsx` 中 artifact refresh 路径未触发 `GET /tasks/{id}`；需要独立任务包处理，不应在本次 heartbeat 修补中顺手扩张
+  - 当前验证主要覆盖前端 integration / typecheck；若要进一步增强发布把关，可在真实 smoke 中补一条“`collecting` 超过 1 个 heartbeat interval 仍持续保活”的人工记录
+- 下一步建议:
+  - 下发一个独立的小任务包，专门定界并修复 `report-delivery-flow` 的 artifact refresh 失败，不与 heartbeat 问题耦合处理
+  - 发布前按 `docs/Release_Readiness_Checklist.md` 增加一条真实 smoke，确认 `collecting` 长耗时阶段仍稳定发送 heartbeat，避免再次出现 `heartbeat_timeout`
