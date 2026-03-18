@@ -73,10 +73,15 @@ def test_planner_prompt_semantic_lock_keeps_role_limits_and_transcript_order() -
     assert "2026-03-16T15:00:00+00:00" in prompt.user_prompt
     assert "分析中国 AI 搜索产品的竞争格局与机会" in prompt.user_prompt
     assert "当前 collect_agent 已使用次数: 3" in prompt.user_prompt
-    assert [message.role for message in prompt.transcript] == ["tool", "tool"]
-    assert [message.tool_call_id for message in prompt.transcript] == ["call_1", "call_2"]
-    assert "收集目标 1" in prompt.transcript[0].content
-    assert "收集目标 2" in prompt.transcript[1].content
+    assert [message.role for message in prompt.transcript] == ["assistant", "tool", "tool"]
+    assistant_msg = prompt.transcript[0]
+    assert assistant_msg.tool_calls is not None
+    assert len(assistant_msg.tool_calls) == 2
+    assert [tc["id"] for tc in assistant_msg.tool_calls] == ["call_1", "call_2"]
+    tool_msgs = [m for m in prompt.transcript if m.role == "tool"]
+    assert [m.tool_call_id for m in tool_msgs] == ["call_1", "call_2"]
+    assert "收集目标 1" in tool_msgs[0].content
+    assert "收集目标 2" in tool_msgs[1].content
 
 
 def test_collector_prompt_semantic_lock_keeps_tool_range_and_limits() -> None:
