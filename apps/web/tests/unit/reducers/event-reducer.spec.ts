@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 
 import { reduceResearchSessionEvent } from "@/features/research/reducers/event-reducer";
 import { makeResearchSessionState } from "@/tests/fixtures/builders";
@@ -24,6 +24,16 @@ import {
 } from "@/tests/fixtures/builders";
 
 describe("reduceResearchSessionEvent", () => {
+  const originalApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  afterEach(() => {
+    if (originalApiBaseUrl !== undefined) {
+      process.env.NEXT_PUBLIC_API_BASE_URL = originalApiBaseUrl;
+    } else {
+      delete process.env.NEXT_PUBLIC_API_BASE_URL;
+    }
+  });
+
   test("handles task.created by replacing the snapshot from the authoritative event", () => {
     const state = makeResearchSessionState({
       remote: {
@@ -229,6 +239,7 @@ describe("reduceResearchSessionEvent", () => {
   });
 
   test("handles artifact.ready by appending artifacts into the stream", () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.com";
     const existingArtifact = makeArtifactReadyEvent().payload.artifact;
     const state = makeResearchSessionState({
       stream: {
@@ -249,12 +260,16 @@ describe("reduceResearchSessionEvent", () => {
 
     expect(result.stream.artifacts).toEqual([
       existingArtifact,
-      event.payload.artifact,
+      {
+        ...event.payload.artifact,
+        url: "https://api.example.com/api/v1/tasks/tsk_stage0/artifacts/art_stage0_chart?access_token=stage0",
+      },
     ]);
     expect(result.stream.lastEventSeq).toBe(event.seq);
   });
 
   test("handles report.completed by updating the current delivery payload", () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.com";
     const state = makeResearchSessionState({
       remote: {
         delivery: null,
@@ -264,7 +279,18 @@ describe("reduceResearchSessionEvent", () => {
 
     const result = reduceResearchSessionEvent(state, event);
 
-    expect(result.remote.delivery).toEqual(event.payload.delivery);
+    expect(result.remote.delivery).toMatchObject({
+      ...event.payload.delivery,
+      markdown_zip_url:
+        "https://api.example.com/api/v1/tasks/tsk_stage0/downloads/markdown.zip?access_token=zip_stage0",
+      pdf_url:
+        "https://api.example.com/api/v1/tasks/tsk_stage0/downloads/report.pdf?access_token=pdf_stage0",
+      artifacts: [
+        expect.objectContaining({
+          url: "https://api.example.com/api/v1/tasks/tsk_stage0/artifacts/art_stage0_chart?access_token=stage0",
+        }),
+      ],
+    });
     expect(result.stream.lastEventSeq).toBe(event.seq);
   });
 
