@@ -301,7 +301,9 @@ describe("Stage 6 report canvas and delivery flow", () => {
     expect(
       await screen.findByAltText("chart_market_share.png"),
     ).toBeInTheDocument();
-    expect(store.getState().remote.delivery?.artifacts[0]?.url).toBe(freshArtifactUrl);
+    expect(store.getState().remote.delivery?.artifacts[0]?.url).toBe(
+      new URL(freshArtifactUrl, window.location.origin).toString(),
+    );
 
     await act(async () => {
       taskEventSource.emit(
