@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import os
 
+from app.core.database_url import resolve_database_url_from_env
 
 @dataclass(frozen=True, slots=True)
 class Settings:
@@ -71,11 +72,7 @@ class Settings:
         settings = cls(
             service_name=os.getenv("MIMIR_SERVICE_NAME", "mimir-api"),
             service_version=os.getenv("MIMIR_SERVICE_VERSION", "v1"),
-            database_url=(
-                os.getenv("MIMIR_DATABASE_URL")
-                or os.getenv("DATABASE_URL")
-                or "postgresql+psycopg://postgres@127.0.0.1:5432/postgres"
-            ),
+            database_url=resolve_database_url_from_env(),
             cors_allow_origins=cors_allow_origins or ("http://localhost:3000",),
             task_token_secret=os.getenv("MIMIR_TASK_TOKEN_SECRET", "task-secret"),
             access_token_secret=os.getenv(

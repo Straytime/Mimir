@@ -1490,3 +1490,14 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 由发布负责人先完成 checklist 第 2 节“待拍板决策”
   - 真正上线前，再以本清单为主索引执行一次完整人工预演
+## 2026-03-18 18:28 CST - Railway Database URL driver normalization
+
+- Context: first production-style Railway deploy failed twice during Alembic pre-deploy. The initial failure was caused by `env.py` only reading `MIMIR_DATABASE_URL`; after that variable was added in Railway, deploy still failed because Railway-provided Postgres URLs did not include an explicit SQLAlchemy driver and Alembic/runtime attempted to import `psycopg2`, which is not installed in the production image.
+- Changes:
+  - added shared database URL normalization in `services/api/app/core/database_url.py`
+  - updated `Settings.from_env()` to resolve and normalize `MIMIR_DATABASE_URL` / `DATABASE_URL`
+  - updated `services/api/app/infrastructure/db/migrations/env.py` to use the same normalization and fallback precedence
+  - added unit coverage for Railway-style `postgresql://...` / `postgres://...` inputs and `MIMIR_DATABASE_URL` precedence
+- Validation:
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/integration/db/test_migrations.py -q` -> `6 passed`
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit tests/contract tests/integration -q` -> `133 passed`

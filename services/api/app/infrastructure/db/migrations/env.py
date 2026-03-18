@@ -4,6 +4,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import create_engine, engine_from_config, pool
 
+from app.core.database_url import DEFAULT_DATABASE_URL, normalize_database_url
 from app.infrastructure.db.base import Base
 from app.infrastructure.db import models  # noqa: F401
 
@@ -14,11 +15,13 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-_DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres@127.0.0.1:5432/postgres"
-
 
 def _get_database_url() -> str:
-    return os.getenv("MIMIR_DATABASE_URL", _DEFAULT_DATABASE_URL)
+    return normalize_database_url(
+        os.getenv("MIMIR_DATABASE_URL")
+        or os.getenv("DATABASE_URL")
+        or DEFAULT_DATABASE_URL
+    )
 
 
 def run_migrations_offline() -> None:
