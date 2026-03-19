@@ -327,12 +327,12 @@ async def test_feedback_revision_still_respects_collect_agent_limit_after_counte
         response_body = feedback_response.json()
         new_revision_id = response_body["revision_id"]
 
-        def _task_failed() -> bool:
+        def _task_delivered() -> bool:
             db_session.expire_all()
             task = db_session.get(ResearchTaskRecord, seeded.task_id)
-            return task is not None and task.status == "failed"
+            return task is not None and task.phase == "delivered"
 
-        await _wait_for_condition(_task_failed, timeout=2.0)
+        await _wait_for_condition(_task_delivered, timeout=2.0)
 
         db_session.expire_all()
         task = db_session.get(ResearchTaskRecord, seeded.task_id)
@@ -340,8 +340,7 @@ async def test_feedback_revision_still_respects_collect_agent_limit_after_counte
 
         assert feedback_response.status_code == 202
         assert task is not None
-        assert task.status == "failed"
-        assert task.phase == "planning_collection"
+        # PRD: 配额耗尽 → merge → delivery，不 fail
+        assert task.status != "failed"
         assert new_revision is not None
         assert new_revision.collect_agent_calls_used == 5
-        assert new_revision.revision_status == "failed"

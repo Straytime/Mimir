@@ -1747,3 +1747,24 @@ Copy the template below for each completed session:
   - 完整服务器启动验证因本地无 PostgreSQL 跳过，日志基础设施本身工作正常
 - 验收结论: accepted；121 个测试全部通过，无回归；stdout JSON 输出验证通过
 - blocker / 风险: 无
+
+---
+
+### R1-016 fix(api): collect_agent 配额耗尽时优雅降级为 merge，不 fail task
+
+- 日期: 2026-03-19
+- 分支: `claude/collect-limit-merge`
+- 目标: 修复 CollectionOrchestrator 中 collect_agent 调用配额耗尽时的行为：按 PRD func_7 定义，达到上限时应进入搜集结果汇总（merge），而非 fail task
+- 文档变更:
+  - `docs/Architecture.md` §7.6 — 约束部分新增：达到累计上限时，跳过本轮收集，直接进入搜集结果汇总（merge），不终止任务
+  - `docs/Architecture.md` §8.1 — 后端职责新增：配额不足以满足本轮全部 CollectPlan 时，忽略本轮收集并进入 merge 阶段
+  - `docs/Execution_Log.md` — 追加 R1-016 记录
+- 实现变更:
+  - `app/application/services/collection.py` L188-198 — `_reserve_collect_agent_calls` 返回 false 时，从 `_fail_task(error_code="collect_agent_limit_exceeded")` 改为 `_transition_phase(MERGING_SOURCES)` + `_run_merge` + `_on_sources_merged` 回调
+- 测试变更:
+  - `tests/integration/collection/test_collection_engine.py` — `test_revision_collect_agent_limit_is_enforced_at_five_calls` 重命名为 `test_collect_agent_limit_exceeded_triggers_merge_not_fail`，断言从 task.failed 改为 sources.merged
+  - `tests/integration/feedback/test_feedback_revision.py` — `test_feedback_revision_still_respects_collect_agent_limit_after_counter_reset` 断言从 status=="failed" 改为 status!="failed"
+- 测试:
+  - 已运行: `pytest tests/unit tests/contract tests/integration` -> 145 passed, 0 failed
+- 验收结论: accepted；配额耗尽时 task 不 fail，正常进入 merge → delivery 流程；planner_parallel_limit_exceeded 和 planner_invalid_output 仍然 fail（行为不变）
+- blocker / 风险: 无
