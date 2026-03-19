@@ -1768,3 +1768,22 @@ Copy the template below for each completed session:
   - 已运行: `pytest tests/unit tests/contract tests/integration` -> 145 passed, 0 failed
 - 验收结论: accepted；配额耗尽时 task 不 fail，正常进入 merge → delivery 流程；planner_parallel_limit_exceeded 和 planner_invalid_output 仍然 fail（行为不变）
 - blocker / 风险: 无
+
+---
+
+### R1-017 fix(api): planner 空 plans 优雅降级
+
+- 日期: 2026-03-19
+- 分支: `claude/planner-empty-plans-merge`
+- 目标: planner 返回 stop=false 但 plans 为空时，若已有搜集数据（非首轮），优雅降级到 merge 而非 fail task
+- 文档变更:
+  - `docs/Architecture.md` §7.6 — 约束新增：planner 返回空 plans（stop=false）且已有搜集数据时，视为隐式停止，进入搜集结果汇总；首轮空 plans 仍终止任务
+  - `docs/Execution_Log.md` — 追加 R1-017 记录
+- 实现变更:
+  - `app/application/services/collection.py` L172-188 — `not planner_decision.plans` 分支拆为两条路径：summaries 非空时 merge，summaries 为空时 fail
+- 测试变更:
+  - `tests/integration/collection/test_collection_engine.py` — 新增 `test_planner_empty_plans_with_existing_data_triggers_merge`（非首轮空 plans → merge）和 `test_planner_empty_plans_first_round_still_fails`（首轮空 plans → fail）
+- 测试:
+  - 已运行: `pytest tests/unit tests/contract tests/integration` -> 147 passed, 0 failed
+- 验收结论: accepted；非首轮空 plans 优雅降级到 merge；首轮空 plans 仍 fail；日志包含预期信息
+- blocker / 风险: 无

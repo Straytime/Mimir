@@ -608,6 +608,7 @@ master agent 发给 sub agent 的标准结构。
 - 单轮最多 3 个 `CollectPlan`
 - 单个 Revision 累计最多 5 次 `collect_agent` 调用
 - 达到累计上限时，跳过本轮收集，直接进入搜集结果汇总（merge），不终止任务
+- planner 返回空 plans（stop=false）且已有搜集数据时，视为隐式停止，进入搜集结果汇总（merge）；首轮空 plans 仍终止任务
 
 ## 7.7 CollectResult
 

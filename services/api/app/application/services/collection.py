@@ -170,6 +170,20 @@ class CollectionOrchestrator:
                 return
 
             if not planner_decision.plans:
+                if summaries:
+                    # Non-first round with existing data: treat as implicit stop
+                    logger.info(
+                        "planner returned empty plans with existing data, skipping to merge",
+                        extra={"task_id": task_id},
+                    )
+                    await self._transition_phase(
+                        task_id=task_id,
+                        target_phase=TaskPhase.MERGING_SOURCES,
+                    )
+                    await self._run_merge(task_id=task_id, revision_id=revision.revision_id)
+                    if self._on_sources_merged is not None:
+                        await self._on_sources_merged(task_id)
+                    return
                 await self._fail_task(
                     task_id=task_id,
                     error_code="planner_invalid_output",

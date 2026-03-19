@@ -43,6 +43,7 @@ from app.domain.schemas import CollectPlan
 from app.infrastructure.db.models import (
     AgentRunRecord,
     CollectedSourceRecord,
+    ResearchTaskRecord,
     TaskRevisionRecord,
     TaskToolCallRecord,
 )
@@ -790,3 +791,113 @@ async def test_sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result(
     assert collector_completed_payload["payload"]["status"] == "partial"
     assert len(tool_calls) == 10
     assert merged_name == "sources.merged"
+
+
+@pytest.mark.asyncio
+async def test_planner_empty_plans_with_existing_data_triggers_merge(
+    make_stage5_client,
+    db_session: Session,
+) -> None:
+    """Non-first round: planner returns empty plans → merge, not fail."""
+    planner = ScriptedPlannerAgent(
+        rounds=[
+            # Round 1: normal plans
+            PlannerDecision(
+                reasoning_deltas=("第一轮搜集。",),
+                plans=(
+                    CollectPlan(
+                        tool_call_id="call_1",
+                        revision_id="rev_placeholder",
+                        collect_target="目标 1",
+                        additional_info="说明 1",
+                        freshness_requirement=FreshnessRequirement.HIGH,
+                    ),
+                ),
+                stop=False,
+            ),
+            # Round 2: empty plans, but data already collected → merge
+            PlannerDecision(
+                reasoning_deltas=("没有更多需要搜集的了。",),
+                plans=(),
+                stop=False,
+            ),
+        ]
+    )
+    collector = ScriptedCollectorAgent(
+        query_by_tool_call={"call_1": ("q1",)}
+    )
+    summarizer = ScriptedSummaryAgent()
+    search = ScriptedWebSearchClient(
+        SearchScenario(
+            results_by_query={
+                "q1": (SearchHit(title="1", link="https://example.com/1", snippet="1"),),
+            }
+        )
+    )
+    fetch = ScriptedWebFetchClient(
+        content_by_url={
+            "https://example.com/1": FetchResponse(
+                url="https://example.com/1",
+                success=True,
+                title="1",
+                content="内容 1",
+            ),
+        }
+    )
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=collector,
+        summary_agent=summarizer,
+        web_search_client=search,
+        web_fetch_client=fetch,
+    )
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_collection_flow(client)
+        _, merged_name, _ = await read_until_event(lines, {"sources.merged"})
+        await _close_stream(stream_context, response)
+
+    assert merged_name == "sources.merged"
+    assert len(collector.invocations) == 1
+
+    db_session.expire_all()
+    task = db_session.get(
+        ResearchTaskRecord,
+        create_body["task_id"],
+    )
+    assert task is not None
+    assert task.status != "failed"
+
+
+@pytest.mark.asyncio
+async def test_planner_empty_plans_first_round_still_fails(
+    make_stage5_client,
+) -> None:
+    """First round: planner returns empty plans → fail (no data to merge)."""
+    planner = ScriptedPlannerAgent(
+        rounds=[
+            PlannerDecision(
+                reasoning_deltas=("不知道该搜什么。",),
+                plans=(),
+                stop=False,
+            ),
+        ]
+    )
+    collector = ScriptedCollectorAgent(query_by_tool_call={})
+    summarizer = ScriptedSummaryAgent()
+    search = ScriptedWebSearchClient(SearchScenario(results_by_query={}))
+    fetch = ScriptedWebFetchClient(content_by_url={})
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=collector,
+        summary_agent=summarizer,
+        web_search_client=search,
+        web_fetch_client=fetch,
+    )
+    async with client:
+        _, (stream_context, response, lines) = await _start_collection_flow(client)
+        _, failed_name, failed_payload = await read_until_event(lines, {"task.failed"})
+        await assert_stream_closed(lines)
+        await _close_stream(stream_context, response)
+
+    assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "planner_invalid_output"
