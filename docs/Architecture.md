@@ -607,6 +607,7 @@ master agent 发给 sub agent 的标准结构。
 
 - 单轮最多 3 个 `CollectPlan`
 - 单个 Revision 累计最多 5 次 `collect_agent` 调用
+- 达到累计上限时，跳过本轮收集，直接进入搜集结果汇总（merge），不终止任务
 
 ## 7.7 CollectResult
 
@@ -826,6 +827,7 @@ Writer 阶段最终交付结构。
 
 - 按 Revision 维度累计 `collect_agent` 总调用次数
 - 校验同轮并发数不超过 3
+- 配额不足以满足本轮全部 CollectPlan 时，忽略本轮收集并进入 merge 阶段
 - 把每个 tool call 映射为一个 `SubTask`
 
 ## 8.2 Sub Agent Loop

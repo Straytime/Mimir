@@ -190,11 +190,18 @@ class CollectionOrchestrator:
                 additional_calls=len(planner_decision.plans),
             )
             if not reserved:
-                await self._fail_task(
-                    task_id=task_id,
-                    error_code="collect_agent_limit_exceeded",
-                    message="当前 revision 已达到 collect_agent 调用上限。",
+                # PRD func_7: 达到调用次数上限 → 进入搜集结果汇总
+                logger.info(
+                    "collect_agent limit reached, skipping to merge",
+                    extra={"task_id": task_id},
                 )
+                await self._transition_phase(
+                    task_id=task_id,
+                    target_phase=TaskPhase.MERGING_SOURCES,
+                )
+                await self._run_merge(task_id=task_id, revision_id=revision.revision_id)
+                if self._on_sources_merged is not None:
+                    await self._on_sources_merged(task_id)
                 return
 
             await self._transition_phase(task_id=task_id, target_phase=TaskPhase.COLLECTING)

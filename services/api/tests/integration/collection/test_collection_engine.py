@@ -577,10 +577,11 @@ async def test_risk_control_threshold_terminates_task_after_two_risk_blocked_sum
 
 
 @pytest.mark.asyncio
-async def test_revision_collect_agent_limit_is_enforced_at_five_calls(
+async def test_collect_agent_limit_exceeded_triggers_merge_not_fail(
     make_stage5_client,
     db_session: Session,
 ) -> None:
+    """PRD func_7: 达到调用次数上限 → 进入搜集结果汇总，不终止任务。"""
     planner = ScriptedPlannerAgent(
         rounds=[
             PlannerDecision(
@@ -610,6 +611,7 @@ async def test_revision_collect_agent_limit_is_enforced_at_five_calls(
                 ),
                 stop=False,
             ),
+            # Round 2: planner asks for 2 more, but limit is 5 → 3+2=5 OK
             PlannerDecision(
                 reasoning_deltas=("第二轮补充。",),
                 plans=(
@@ -630,6 +632,7 @@ async def test_revision_collect_agent_limit_is_enforced_at_five_calls(
                 ),
                 stop=False,
             ),
+            # Round 3: planner asks for 1 more, but 5+1=6 > 5 → limit reached → merge
             PlannerDecision(
                 reasoning_deltas=("第三轮继续。",),
                 plans=(
@@ -686,13 +689,21 @@ async def test_revision_collect_agent_limit_is_enforced_at_five_calls(
     )
     async with client:
         create_body, (stream_context, response, lines) = await _start_collection_flow(client)
-        _, failed_name, failed_payload = await read_until_event(lines, {"task.failed"})
-        await assert_stream_closed(lines)
+        # Should merge, NOT fail
+        _, merged_name, merged_payload = await read_until_event(lines, {"sources.merged"})
         await _close_stream(stream_context, response)
 
-    assert failed_name == "task.failed"
-    assert failed_payload["payload"]["error"]["code"] == "collect_agent_limit_exceeded"
+    assert merged_name == "sources.merged"
+    # 5 collector invocations from rounds 1+2; round 3 skipped due to limit
     assert len(collector.invocations) == 5
+
+    db_session.expire_all()
+    revision = db_session.get(
+        TaskRevisionRecord,
+        create_body["snapshot"]["active_revision_id"],
+    )
+    assert revision is not None
+    assert revision.collect_agent_calls_used == 5
 
 
 @pytest.mark.asyncio
