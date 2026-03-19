@@ -18,18 +18,18 @@ class JinaWebFetchClient:
     def __init__(
         self,
         *,
-        api_key: str,
+        api_key: str | None = None,
         base_url: str = _DEFAULT_BASE_URL,
         timeout_seconds: float = 30.0,
         transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/") + "/"
+        headers: dict[str, str] = {"Accept": "text/plain"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         self._client = httpx.AsyncClient(
             timeout=timeout_seconds,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Accept": "text/plain",
-            },
+            headers=headers,
             transport=transport,
         )
 

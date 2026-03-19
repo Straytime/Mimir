@@ -150,7 +150,7 @@ def build_provider_runtime(settings: Settings) -> ProviderRuntime:
 
     if web_fetch_mode == "real":
         web_fetch_client = JinaWebFetchClient(
-            api_key=settings.jina_api_key or "",
+            api_key=settings.jina_api_key,
             base_url=settings.jina_base_url,
             timeout_seconds=settings.web_fetch_timeout_seconds,
         )

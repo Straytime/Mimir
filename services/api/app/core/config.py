@@ -244,10 +244,8 @@ class Settings:
             raise ValueError(
                 "ZHIPU_API_KEY (or MIMIR_ZHIPU_API_KEY) is required when real providers are enabled."
             )
-        if self.resolved_web_fetch_provider_mode() == "real" and not self.jina_api_key:
-            raise ValueError(
-                "JINA_API_KEY (or MIMIR_JINA_API_KEY) is required when real web_fetch provider is enabled."
-            )
+        # JINA_API_KEY is optional: when empty, JinaWebFetchClient runs in
+        # free unauthenticated mode (lower RPM limit but no token needed).
         if self.resolved_e2b_provider_mode() == "real" and not self.e2b_api_key:
             raise ValueError(
                 "E2B_API_KEY (or MIMIR_E2B_API_KEY) is required when real E2B provider is enabled."

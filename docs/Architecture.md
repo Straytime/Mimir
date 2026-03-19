@@ -1013,7 +1013,7 @@ PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": 
 
 - 正式请求形态采用 `GET https://r.jina.ai/{url}`
 - Header:
-  - `Authorization: Bearer {JINA_API_KEY}`
+  - `Authorization: Bearer {JINA_API_KEY}`（当 `JINA_API_KEY` 非空时携带；为空时不携带，以免费无认证模式调用，受 RPM 限制）
   - `Accept: text/plain`
 
 调整理由：
@@ -1501,7 +1501,7 @@ SSE 保活与断连判定：
 
 - `DATABASE_URL`
 - `ZHIPU_API_KEY`
-- `JINA_API_KEY`
+- `JINA_API_KEY`（optional；为空时 web_fetch 降级为免费无认证模式，受 RPM 限制）
 - `E2B_API_KEY`
 - `ALLOWED_ORIGINS`
 - `ARTIFACT_SIGNING_SECRET`

@@ -69,7 +69,7 @@ Mimir 仓库的 M0 ~ M4 实施阶段已全部完成，R1-001 真实 provider ada
 ### Provider Mode
 
 - 默认 `MIMIR_PROVIDER_MODE=stub`，所有外部 adapter 使用 deterministic local stub
-- `MIMIR_PROVIDER_MODE=real` 切换到真实 provider（需 `ZHIPU_API_KEY` + `JINA_API_KEY`）
+- `MIMIR_PROVIDER_MODE=real` 切换到真实 provider（需 `ZHIPU_API_KEY`；`JINA_API_KEY` 可选，为空时 web_fetch 以免费无认证模式运行）
 - 可通过 `MIMIR_LLM_PROVIDER_MODE` / `MIMIR_WEB_SEARCH_PROVIDER_MODE` / `MIMIR_WEB_FETCH_PROVIDER_MODE` 单独覆盖
 - stub 是 CI 和日常开发的默认路径；切换到 real 前必须确认环境变量与 API key 已就绪
 - 详见 [`services/api/.env.example`](services/api/.env.example)

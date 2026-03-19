@@ -391,9 +391,10 @@ snapshot 规则：
    - body 动态字段只允许 `search_query` 与 `search_recency_filter`
 2. Jina Reader `web_fetch`：
    - `GET https://r.jina.ai/{url}`
-   - `Authorization: Bearer ...`
+   - `Authorization: Bearer ...`（仅当 `JINA_API_KEY` 非空时携带；为空时不携带，以免费无认证模式调用）
    - `Accept: text/plain`
-   - 不再接受“POST + JSON body”作为正式契约
+   - 不再接受”POST + JSON body”作为正式契约
+   - contract test 拆分为两个 case：key 非空时携带 header / key 为空时不携带 header
 3. `python_interpreter`：
    - tool request 只允许 `code`
    - tool result 不得回灌 raw binary
