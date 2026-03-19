@@ -31,7 +31,7 @@ async def test_retrying_operation_invoker_retries_transient_failures_before_succ
 
     assert result == "ok"
     assert failures == 3
-    assert delays == [2.0, 2.0]
+    assert delays == [2.0, 4.0]  # exponential backoff: 2*2^0=2, 2*2^1=4
 
 
 @pytest.mark.asyncio

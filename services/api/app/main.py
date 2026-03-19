@@ -130,12 +130,16 @@ def create_app(
         retry_policy=RetryPolicy(
             max_retries=resolved_settings.llm_retry_max_retries,
             wait_seconds=resolved_settings.llm_retry_wait_seconds,
+            backoff_multiplier=resolved_settings.llm_retry_backoff_multiplier,
+            max_wait_seconds=resolved_settings.llm_retry_max_wait_seconds,
         )
     )
     operation_invoker = RetryingOperationInvoker[object](
         retry_policy=RetryPolicy(
             max_retries=resolved_settings.llm_retry_max_retries,
             wait_seconds=resolved_settings.llm_retry_wait_seconds,
+            backoff_multiplier=resolved_settings.llm_retry_backoff_multiplier,
+            max_wait_seconds=resolved_settings.llm_retry_max_wait_seconds,
         )
     )
     delivery_orchestrator = DeliveryOrchestrator(

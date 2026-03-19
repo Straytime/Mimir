@@ -23,6 +23,8 @@ class Settings:
     clarification_backend_timeout_seconds: int = 60
     llm_retry_max_retries: int = 3
     llm_retry_wait_seconds: int = 3
+    llm_retry_backoff_multiplier: float = 2.0
+    llm_retry_max_wait_seconds: float = 60.0
     provider_mode: str = "stub"
     llm_provider_mode: str | None = None
     web_search_provider_mode: str | None = None
@@ -112,6 +114,12 @@ class Settings:
             ),
             llm_retry_wait_seconds=int(
                 os.getenv("MIMIR_LLM_RETRY_WAIT_SECONDS", "3")
+            ),
+            llm_retry_backoff_multiplier=float(
+                os.getenv("MIMIR_LLM_RETRY_BACKOFF_MULTIPLIER", "2.0")
+            ),
+            llm_retry_max_wait_seconds=float(
+                os.getenv("MIMIR_LLM_RETRY_MAX_WAIT_SECONDS", "60.0")
             ),
             provider_mode=os.getenv("MIMIR_PROVIDER_MODE", "stub"),
             llm_provider_mode=os.getenv("MIMIR_LLM_PROVIDER_MODE"),
