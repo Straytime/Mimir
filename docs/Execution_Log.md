@@ -1787,3 +1787,26 @@ Copy the template below for each completed session:
   - 已运行: `pytest tests/unit tests/contract tests/integration` -> 147 passed, 0 failed
 - 验收结论: accepted；非首轮空 plans 优雅降级到 merge；首轮空 plans 仍 fail；日志包含预期信息
 - blocker / 风险: 无
+
+---
+
+### R1-018 feat(api): RetryPolicy 指数退避
+
+- 日期: 2026-03-19
+- 分支: `claude/retry-exponential-backoff`
+- 目标: 将 RetryPolicy 从固定等待升级为指数退避，使 429 限流等瞬态错误有更合理的恢复窗口
+- 文档变更:
+  - `docs/Architecture.md` §11.1 — 重写 retry 策略说明：max_retries=3, base_wait=3s, backoff_multiplier=2.0, delay 序列 3s→6s→12s, max_wait_seconds=60s 上限保护, 列出 4 个环境变量
+  - `docs/Execution_Log.md` — 追加 R1-018 记录
+- 实现变更:
+  - `app/core/retry.py` — RetryPolicy 新增 backoff_multiplier(default=2.0) 和 max_wait_seconds(default=60.0) 参数；delay 计算改为 min(wait_seconds * backoff_multiplier^(failures-1), max_wait_seconds)；参数校验
+  - `app/core/config.py` — 新增 llm_retry_backoff_multiplier(default=2.0, env=MIMIR_LLM_RETRY_BACKOFF_MULTIPLIER) 和 llm_retry_max_wait_seconds(default=60.0, env=MIMIR_LLM_RETRY_MAX_WAIT_SECONDS)
+  - `app/main.py` — 两处 RetryPolicy 构造传入 backoff_multiplier 和 max_wait_seconds
+- 测试变更:
+  - `tests/unit/core/test_retry.py` — 重写：6 个用例覆盖默认指数退避序列、multiplier=1.0 固定间隔、max_wait_seconds 上限、自定义配置、参数校验
+  - `tests/unit/application/test_retrying_operations.py` — delay 断言从 [2.0, 2.0] 改为 [2.0, 4.0]
+  - `tests/unit/application/test_retrying_llm.py` — delay 断言从 [2.0, 2.0] 改为 [2.0, 4.0]
+- 测试:
+  - 已运行: `pytest tests/unit tests/contract tests/integration` -> 151 passed, 0 failed
+- 验收结论: accepted；默认配置产生 3s→6s→12s 退避序列；multiplier=1.0 退化为固定间隔；max_wait_seconds 上限生效；无新增外部依赖
+- blocker / 风险: 无

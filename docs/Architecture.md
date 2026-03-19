@@ -1520,10 +1520,12 @@ SSE 保活与断连判定：
 
 按 PRD func_16：
 
-- 固定等待 3 秒
-- 最多重试 3 次
+- 最多重试 3 次（`max_retries=3`，总共 4 次尝试）
+- 采用指数退避：`base_wait=3s`，`backoff_multiplier=2.0`，delay 序列为 3s → 6s → 12s（总最大等待 21s）
+- `max_wait_seconds=60.0` 做上限保护，防止极端配置下 delay 失控
 - 成功则继续
 - 超限则终止任务，并允许前端查看原始错误摘要
+- 可通过环境变量覆盖：`MIMIR_LLM_RETRY_MAX_RETRIES`、`MIMIR_LLM_RETRY_WAIT_SECONDS`、`MIMIR_LLM_RETRY_BACKOFF_MULTIPLIER`、`MIMIR_LLM_RETRY_MAX_WAIT_SECONDS`
 
 实现建议：
 

@@ -37,7 +37,7 @@ async def test_retrying_llm_invoker_retries_transient_failures_before_success() 
 
     assert result.full_text == "ok"
     assert failures == 3
-    assert recorded_delays == [2.0, 2.0]
+    assert recorded_delays == [2.0, 4.0]  # exponential backoff: 2*2^0=2, 2*2^1=4
 
 
 @pytest.mark.asyncio
