@@ -22,7 +22,12 @@ from app.application.services.llm import RetryableLLMError, TextGeneration
 from app.core.config import Settings
 from app.domain.enums import FreshnessRequirement, OutputFormat
 from app.domain.schemas import RequirementDetail
-from app.infrastructure.llm.zhipu import ZhipuClarificationGenerator
+from app.infrastructure.llm.zhipu import (
+    ZhipuClarificationGenerator,
+    _extract_response_with_diagnostics,
+    _extract_stream_with_diagnostics,
+    _safe_repr,
+)
 from app.infrastructure.research.jina import JinaWebFetchClient
 from app.infrastructure.research.real_http import ZhipuPlannerAgent, ZhipuWebSearchClient
 
@@ -341,3 +346,265 @@ async def test_jina_web_fetch_maps_timeout_to_retryable_operation_error() -> Non
 
     with pytest.raises(RetryableOperationError):
         await adapter.fetch("https://example.com/article")
+
+
+# --- Diagnostic extraction tests ---
+
+
+class TestExtractResponseWithDiagnostics:
+    def test_normal_response_returns_text_and_diagnostics(self) -> None:
+        response = SimpleNamespace(
+            id="req_123",
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=20),
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content="hello world"),
+                )
+            ],
+        )
+        text, diag = _extract_response_with_diagnostics(response)
+        assert text == "hello world"
+        assert diag["type"] == "non_stream"
+        assert diag["request_id"] == "req_123"
+        assert diag["choices_count"] == 1
+        assert diag["finish_reason"] == "stop"
+        assert diag["content_type"] == "str"
+        assert "hello world" in diag["content_repr"]
+        assert diag["usage"] is not None
+
+    def test_empty_content_returns_diagnostics_with_finish_reason(self) -> None:
+        response = SimpleNamespace(
+            id="req_456",
+            usage=None,
+            choices=[
+                SimpleNamespace(
+                    finish_reason="length",
+                    message=SimpleNamespace(content=""),
+                )
+            ],
+        )
+        text, diag = _extract_response_with_diagnostics(response)
+        assert text == ""
+        assert diag["finish_reason"] == "length"
+        assert diag["content_type"] == "str"
+
+    def test_no_choices_returns_empty_with_type_info(self) -> None:
+        response = SimpleNamespace(id=None, usage=None, choices=[])
+        text, diag = _extract_response_with_diagnostics(response)
+        assert text == ""
+        assert diag["choices_count"] == 0
+
+    def test_dict_response_format(self) -> None:
+        response = {
+            "id": "req_dict",
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"content": "dict content"},
+                }
+            ],
+        }
+        text, diag = _extract_response_with_diagnostics(response)
+        assert text == "dict content"
+        assert diag["finish_reason"] == "stop"
+
+
+class TestExtractStreamWithDiagnostics:
+    def test_normal_stream_returns_text_and_diagnostics(self) -> None:
+        chunks = [
+            SimpleNamespace(
+                id="req_s1",
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        finish_reason=None,
+                        delta=SimpleNamespace(content="hello "),
+                    )
+                ],
+            ),
+            SimpleNamespace(
+                id="req_s1",
+                usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        delta=SimpleNamespace(content="world"),
+                    )
+                ],
+            ),
+        ]
+        text, diag = _extract_stream_with_diagnostics(iter(chunks))
+        assert text == "hello world"
+        assert diag["type"] == "stream"
+        assert diag["request_id"] == "req_s1"
+        assert diag["chunk_count"] == 2
+        assert diag["content_chunks"] == 2
+        assert diag["empty_content_chunks"] == 0
+        assert diag["no_choices_chunks"] == 0
+        assert diag["finish_reasons"] == ["stop"]
+        assert diag["usage"] is not None
+
+    def test_empty_stream_returns_diagnostics(self) -> None:
+        text, diag = _extract_stream_with_diagnostics(iter([]))
+        assert text == ""
+        assert diag["chunk_count"] == 0
+        assert diag["content_chunks"] == 0
+        assert diag["finish_reasons"] == []
+        assert diag["request_id"] is None
+
+    def test_stream_with_all_empty_content_chunks(self) -> None:
+        chunks = [
+            SimpleNamespace(
+                id="req_empty",
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        finish_reason=None,
+                        delta=SimpleNamespace(content=None),
+                    )
+                ],
+            ),
+            SimpleNamespace(
+                id="req_empty",
+                usage=SimpleNamespace(total_tokens=100),
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        delta=SimpleNamespace(content=""),
+                    )
+                ],
+            ),
+        ]
+        text, diag = _extract_stream_with_diagnostics(iter(chunks))
+        assert text == ""
+        assert diag["chunk_count"] == 2
+        assert diag["empty_content_chunks"] == 2
+        assert diag["content_chunks"] == 0
+        assert diag["finish_reasons"] == ["stop"]
+        assert diag["last_chunk"] is not None
+
+    def test_stream_dict_chunks(self) -> None:
+        chunks = [
+            {
+                "id": "req_d",
+                "usage": None,
+                "choices": [
+                    {"finish_reason": None, "delta": {"content": "part1"}},
+                ],
+            },
+            {
+                "id": "req_d",
+                "usage": {"total_tokens": 50},
+                "choices": [
+                    {"finish_reason": "stop", "delta": {"content": "part2"}},
+                ],
+            },
+        ]
+        text, diag = _extract_stream_with_diagnostics(iter(chunks))
+        assert text == "part1part2"
+        assert diag["request_id"] == "req_d"
+        assert diag["finish_reasons"] == ["stop"]
+
+    def test_stream_chunks_without_choices_are_counted(self) -> None:
+        chunks = [
+            SimpleNamespace(id="req_no", usage=None, choices=None),
+            SimpleNamespace(
+                id="req_no",
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        delta=SimpleNamespace(content="data"),
+                    )
+                ],
+            ),
+        ]
+        text, diag = _extract_stream_with_diagnostics(iter(chunks))
+        assert text == "data"
+        assert diag["chunk_count"] == 2
+        # First chunk has no choices → skipped by continue, not counted as content or empty
+        assert diag["content_chunks"] == 1
+        assert diag["empty_content_chunks"] == 0
+
+
+class TestSafeRepr:
+    def test_none_returns_none(self) -> None:
+        assert _safe_repr(None) is None
+
+    def test_short_object(self) -> None:
+        assert _safe_repr("hello") == "'hello'"
+
+    def test_truncation(self) -> None:
+        result = _safe_repr("x" * 500, max_len=50)
+        assert result is not None
+        assert len(result) == 53  # 50 + "..."
+        assert result.endswith("...")
+
+
+@pytest.mark.asyncio
+async def test_zhipu_empty_text_logs_diagnostics(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """When LLM returns empty text, the warning log must include diagnostics dict."""
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            id="req_diag",
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content=""),
+                    finish_reason="length",
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=100, completion_tokens=0),
+        )
+    )
+    adapter = ZhipuClarificationGenerator(client=raw_client, model="glm-test")
+
+    with pytest.raises(RetryableLLMError):
+        await adapter.generate_natural(
+            LLMInvocation(
+                profile=build_stage_profile(Settings(), stage="clarification_natural"),
+                prompt_bundle=PromptBundle(system_prompt=None, user_prompt="test"),
+            )
+        )
+
+    warning_records = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warning_records) >= 1
+    msg = warning_records[0].message
+    assert "diagnostics" in msg
+    assert "finish_reason" in msg
+
+
+@pytest.mark.asyncio
+async def test_zhipu_starting_log_includes_prompt_chars(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The starting log must include prompt_chars, thinking, and stream fields."""
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            id="req_pc",
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="ok"),
+                )
+            ],
+        )
+    )
+    adapter = ZhipuClarificationGenerator(client=raw_client, model="glm-test")
+
+    await adapter.generate_natural(
+        LLMInvocation(
+            profile=build_stage_profile(Settings(), stage="clarification_natural"),
+            prompt_bundle=PromptBundle(
+                system_prompt="system msg",
+                user_prompt="user msg",
+            ),
+        )
+    )
+
+    info_records = [r for r in caplog.records if r.levelname == "INFO"]
+    starting_msg = next(r.message for r in info_records if "call starting" in r.message)
+    assert "prompt_chars=" in starting_msg
+    assert "thinking=" in starting_msg
+    assert "stream=" in starting_msg

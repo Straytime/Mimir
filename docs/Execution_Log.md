@@ -1832,3 +1832,35 @@ Copy the template below for each completed session:
   - 后端: `pytest tests/unit tests/contract tests/integration` -> 153 passed, 0 failed
 - 验收结论: accepted；前端 heartbeat 立即发送消除竞态窗口；后端 clarification/feedback 操作刷新 last_client_seen_at 提供额外安全边际；诊断日志覆盖所有超时和断连路径
 - blocker / 风险: 无
+
+---
+
+### R1-020 chore(api): Zhipu LLM 空文本诊断日志
+
+- 日期: 2026-03-19
+- 分支: `claude/outline-diagnostic-logging`
+- 目标: 为 Zhipu LLM 空文本问题增加诊断日志，捕获原始 response 的 finish_reason、usage、chunk 计数、last_chunk repr 等信息，以便定位 outline 阶段连续 4 次空文本的根因
+- 背景: R1-019 部署后 heartbeat 问题已解决，但 outline 阶段 Zhipu 连续返回空文本（~1s/次，request_id=None），现有日志无法判断是 token 超限、thinking 内容未提取、还是 API 端错误。需要先加诊断再决策修复方案
+- 文档变更:
+  - `docs/Execution_Log.md` — 追加 R1-020 记录
+  - `debug/R1-020_outline_empty_text_analysis.md`（新建，已加入 .gitignore）— 生产日志时序分析和 outline prompt 结构记录
+  - `.gitignore` — 追加 `debug/` 目录
+- 实现变更:
+  - `services/api/app/infrastructure/llm/zhipu.py`:
+    - `complete()` 起始日志增加 `prompt_chars`、`thinking`、`stream` 字段
+    - 新增 `_extract_response_with_diagnostics()` — 非 stream 响应提取 text 同时收集 finish_reason、usage、content_type、content_repr
+    - 新增 `_extract_stream_with_diagnostics()` — stream 响应迭代时收集 chunk_count、no_choices_chunks、empty_content_chunks、content_chunks、finish_reasons、usage、last_chunk repr、request_id
+    - 新增 `_safe_repr()` — 安全截断 repr 工具函数
+    - `extract_response_text()` 和 `extract_stream_response_text()` 保持签名不变，内部委托给诊断版本
+    - 空文本 warning 日志改为 `"zhipu LLM returned empty text: request_id=%s, diagnostics=%s"` 输出完整诊断 dict
+- 测试变更:
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py` — 新增 14 个测试用例:
+    - `TestExtractResponseWithDiagnostics`（4 个）: 正常响应/空内容/无 choices/dict 格式的 diagnostics 正确性
+    - `TestExtractStreamWithDiagnostics`（5 个）: 正常 stream/空 stream/全空内容 chunks/dict chunks/无 choices chunks 的计数和 diagnostics 正确性
+    - `TestSafeRepr`（3 个）: None 返回 None、短对象正常 repr、超长截断
+    - `test_zhipu_empty_text_logs_diagnostics` — 验证空文本 warning 包含 diagnostics 和 finish_reason
+    - `test_zhipu_starting_log_includes_prompt_chars` — 验证起始日志包含 prompt_chars、thinking、stream
+- 测试:
+  - 后端: `pytest tests/unit tests/contract` -> 139 passed, 0 failed（较 R1-019 的 125 新增 14 个诊断测试）
+- 验收结论: accepted；诊断日志覆盖 stream 和非 stream 两条路径；现有测试全部通过无回归；部署后下次 outline 失败即可从日志获取 Zhipu 原始 response 信息
+- blocker / 风险: 无；诊断日志为只读观测，不影响业务逻辑
