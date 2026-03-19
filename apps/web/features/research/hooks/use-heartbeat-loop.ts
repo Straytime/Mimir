@@ -39,7 +39,7 @@ export function useHeartbeatLoop() {
 
     let stopped = false;
 
-    const intervalId = setInterval(() => {
+    const doSendHeartbeat = () => {
       void taskApiClient
         .sendHeartbeat({
           url: heartbeatUrl,
@@ -65,7 +65,12 @@ export function useHeartbeatLoop() {
             sseState: "failed",
           });
         });
-    }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    // Send immediately to refresh last_client_seen_at without waiting for interval
+    doSendHeartbeat();
+
+    const intervalId = setInterval(doSendHeartbeat, HEARTBEAT_INTERVAL_MS);
 
     return () => {
       stopped = true;

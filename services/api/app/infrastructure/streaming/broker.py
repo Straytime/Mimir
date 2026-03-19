@@ -1,8 +1,11 @@
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
@@ -209,11 +212,15 @@ class TaskLifecycleManager:
         payload,
     ) -> tuple[str, object]:
         self._ensure_cleanup_loop()
-        return await self._clarification_orchestrator.submit(
+        result = await self._clarification_orchestrator.submit(
             task_id=task_id,
             token=token,
             payload=payload,
         )
+        runtime = self._runtimes.get(task_id)
+        if runtime is not None:
+            runtime.last_client_seen_at = self._clock()
+        return result
 
     async def submit_feedback(
         self,
@@ -223,11 +230,15 @@ class TaskLifecycleManager:
         payload,
     ) -> tuple[str, object]:
         self._ensure_cleanup_loop()
-        return await self._feedback_orchestrator.submit(
+        result = await self._feedback_orchestrator.submit(
             task_id=task_id,
             token=token,
             payload=payload,
         )
+        runtime = self._runtimes.get(task_id)
+        if runtime is not None:
+            runtime.last_client_seen_at = self._clock()
+        return result
 
     async def transition_phase(
         self,
@@ -350,6 +361,10 @@ class TaskLifecycleManager:
                     now = self._clock()
                     status = TaskStatus(task.status)
                     if not runtime.first_connected and now >= runtime.connect_deadline_at:
+                        logger.warning(
+                            "terminating task: sse_connect_timeout",
+                            extra={"task_id": task_id, "reason": "sse_connect_timeout"},
+                        )
                         self._task_service.terminate_task(
                             session,
                             task_id=task_id,
@@ -375,6 +390,16 @@ class TaskLifecycleManager:
                                 seconds=self._settings.client_heartbeat_timeout_seconds
                             )
                         ):
+                            elapsed = (now - runtime.last_client_seen_at).total_seconds()
+                            logger.warning(
+                                "terminating task: heartbeat_timeout",
+                                extra={
+                                    "task_id": task_id,
+                                    "reason": "heartbeat_timeout",
+                                    "last_client_seen_at": runtime.last_client_seen_at.isoformat(),
+                                    "elapsed_seconds": elapsed,
+                                },
+                            )
                             self._task_service.terminate_task(
                                 session,
                                 task_id=task_id,
@@ -441,6 +466,10 @@ class TaskLifecycleManager:
         return True
 
     async def _handle_stream_disconnect(self, *, task_id: str) -> None:
+        logger.warning(
+            "terminating task: client_disconnected (stream disconnect)",
+            extra={"task_id": task_id, "reason": "client_disconnected"},
+        )
         with self._session_factory() as session:
             self._task_service.terminate_task(
                 session,
@@ -475,6 +504,10 @@ class TaskLifecycleManager:
                 TaskStatus.AWAITING_USER_INPUT,
                 TaskStatus.AWAITING_FEEDBACK,
             }:
+                logger.warning(
+                    "terminating task: client_disconnected (stream finalize)",
+                    extra={"task_id": task_id, "reason": "client_disconnected"},
+                )
                 self._task_service.terminate_task(
                     session,
                     task_id=task_id,
