@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import TaskPhase
-from app.infrastructure.db.models import ResearchTaskRecord, SystemLockRecord, TaskEventRecord
+from app.infrastructure.db.models import ResearchTaskRecord, SystemLockRecord, TaskEventRecord, TaskRevisionRecord
 from tests.contract.rest.test_task_events import assert_stream_closed, read_sse_event, read_until_event
 from tests.contract.rest.test_tasks import build_create_task_payload
 from tests.fixtures.runtime import FakeClock
@@ -177,3 +177,108 @@ async def test_task_expired_is_last_event_for_awaiting_feedback_task(
     assert event_name == "task.expired"
     assert payload["phase"] == "delivered"
     assert payload["payload"]["expired_at"] == fake_clock.now().isoformat().replace("+00:00", "Z")
+
+
+@pytest.mark.asyncio
+async def test_submit_clarification_refreshes_last_client_seen_at(
+    app_client: AsyncClient,
+    app_instance: FastAPI,
+    fake_clock: FakeClock,
+) -> None:
+    create_response = await app_client.post(
+        "/api/v1/tasks",
+        json=build_create_task_payload(clarification_mode="natural"),
+    )
+    create_body = create_response.json()
+    task_id = create_body["task_id"]
+
+    async with app_client.stream(
+        "GET",
+        f"/api/v1/tasks/{task_id}/events",
+        headers={"Authorization": f"Bearer {create_body['task_token']}"},
+    ) as response:
+        lines = response.aiter_lines()
+        await read_until_event(lines, {"clarification.natural.ready"})
+
+        lifecycle = app_instance.state.task_lifecycle
+        runtime = lifecycle._runtimes.get(task_id)
+        assert runtime is not None
+        before = runtime.last_client_seen_at
+
+        fake_clock.advance(seconds=10)
+
+        await app_client.post(
+            f"/api/v1/tasks/{task_id}/clarification",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+            json={
+                "mode": "natural",
+                "answer_text": "重点看中国市场。",
+            },
+        )
+
+        after = runtime.last_client_seen_at
+        assert after is not None
+        assert before is not None
+        assert after > before
+
+
+@pytest.mark.asyncio
+async def test_submit_feedback_refreshes_last_client_seen_at(
+    app_client: AsyncClient,
+    app_instance: FastAPI,
+    db_session: Session,
+    fake_clock: FakeClock,
+) -> None:
+    create_response = await app_client.post(
+        "/api/v1/tasks",
+        json=build_create_task_payload(clarification_mode="natural"),
+    )
+    create_body = create_response.json()
+    task_id = create_body["task_id"]
+
+    async with app_client.stream(
+        "GET",
+        f"/api/v1/tasks/{task_id}/events",
+        headers={"Authorization": f"Bearer {create_body['task_token']}"},
+    ) as response:
+        lines = response.aiter_lines()
+        await read_sse_event(lines)
+
+        # Force task into awaiting_feedback state
+        db_session.expire_all()
+        task = db_session.get(ResearchTaskRecord, task_id)
+        assert task is not None
+        task.status = "awaiting_feedback"
+        task.phase = "delivered"
+        task.updated_at = fake_clock.now()
+        task.expires_at = fake_clock.now() + timedelta(hours=24)
+
+        revision = db_session.get(TaskRevisionRecord, task.active_revision_id)
+        assert revision is not None
+        revision.requirement_detail_json = {
+            "research_goal": "test goal",
+            "domain": "technology",
+            "requirement_details": "test details",
+            "output_format": "general",
+            "freshness_requirement": "normal",
+            "language": "zh-CN",
+        }
+        db_session.commit()
+
+        lifecycle = app_instance.state.task_lifecycle
+        runtime = lifecycle._runtimes.get(task_id)
+        assert runtime is not None
+        before = runtime.last_client_seen_at
+
+        fake_clock.advance(seconds=10)
+
+        feedback_response = await app_client.post(
+            f"/api/v1/tasks/{task_id}/feedback",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+            json={"feedback_text": "请补充更多信息。"},
+        )
+
+        after = runtime.last_client_seen_at
+        assert after is not None
+        assert before is not None
+        assert after > before

@@ -1202,10 +1202,11 @@ data: {"seq":41,"event":"planner.tool_call.requested","task_id":"tsk_01H...","re
 SSE 保活与断连判定：
 
 1. 后端每 15 秒发送一个 `heartbeat` 事件。
-2. 前端在任务活跃期间每 20 秒调用一次轻量 `heartbeat` 接口，刷新 `last_client_seen_at`。
+2. 前端心跳 effect 启动时**立即发送一次** heartbeat（fire-and-forget），然后每 20 秒 setInterval 周期发送。当 `snapshotStatus` 变化导致 effect 重跑时，也会立即发送一次，消除竞态窗口。
 3. 后端若连续 45 秒未收到客户端心跳，视为前端断连并终止任务。
-4. 若 SSE 写入失败、客户端主动断开或 `sendBeacon` 上报断连，后端也立即执行同样的终止逻辑。
-5. 鉴于 PRD 明确“断连即放弃任务”，v1 不做 SSE 自动重连与断点续跑。
+4. 客户端发送 `POST /clarification` 或 `POST /feedback` 也视为心跳活动，后端在处理这些请求后刷新 `last_client_seen_at`。
+5. 若 SSE 写入失败、客户端主动断开或 `sendBeacon` 上报断连，后端也立即执行同样的终止逻辑。
+6. 鉴于 PRD 明确”断连即放弃任务”，v1 不做 SSE 自动重连与断点续跑。
 
 ### 心跳保活接口
 

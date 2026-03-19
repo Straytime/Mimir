@@ -1810,3 +1810,25 @@ Copy the template below for each completed session:
   - 已运行: `pytest tests/unit tests/contract tests/integration` -> 151 passed, 0 failed
 - 验收结论: accepted；默认配置产生 3s→6s→12s 退避序列；multiplier=1.0 退化为固定间隔；max_wait_seconds 上限生效；无新增外部依赖
 - blocker / 风险: 无
+
+---
+
+### R1-019 fix(web,api): heartbeat 竞态修复
+
+- 日期: 2026-03-19
+- 分支: `claude/heartbeat-race-fix`
+- 目标: 修复前端 snapshotStatus 变更重置 useEffect 导致首次 heartbeat 延迟超过 45s 后端超时的竞态问题；后端增加防御性 heartbeat 刷新和诊断日志
+- 文档变更:
+  - `docs/Architecture.md` SSE 心跳章节 — 重写 heartbeat 行为描述：effect 启动立即发送首次 heartbeat（不等 interval）；submit_clarification/submit_feedback 刷新 last_client_seen_at
+  - `docs/Execution_Log.md` — 追加 R1-019 记录
+- 实现变更:
+  - `apps/web/features/research/hooks/use-heartbeat-loop.ts` — 提取 `doSendHeartbeat` 函数，在 `setInterval` 前立即调用一次，消除 snapshotStatus 变更导致的 heartbeat 空窗
+  - `services/api/app/infrastructure/streaming/broker.py` — `submit_clarification` 和 `submit_feedback` 成功后刷新 `runtime.last_client_seen_at = self._clock()`；`_monitor_task` 超时路径、`_handle_stream_disconnect`、`_finalize_stream` 增加 `logger.warning` 诊断日志
+- 测试变更:
+  - `apps/web/tests/unit/use-heartbeat-loop.spec.ts`（新建） — 5 个用例：挂载立即发送、interval 后再发送、snapshotStatus 变更重新立即发送、终态不发送、SSE 非 open 不发送
+  - `services/api/tests/integration/lifecycle/test_task_stream_lifecycle.py` — 新增 `test_submit_clarification_refreshes_last_client_seen_at` 和 `test_submit_feedback_refreshes_last_client_seen_at`
+- 测试:
+  - 前端: `pnpm test:unit` -> 49 passed, 0 failed
+  - 后端: `pytest tests/unit tests/contract tests/integration` -> 153 passed, 0 failed
+- 验收结论: accepted；前端 heartbeat 立即发送消除竞态窗口；后端 clarification/feedback 操作刷新 last_client_seen_at 提供额外安全边际；诊断日志覆盖所有超时和断连路径
+- blocker / 风险: 无
