@@ -1,10 +1,13 @@
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Any, Iterable, Protocol
 
 from app.application.dto.invocation import LLMInvocation
 from app.application.services.invocation import RiskControlTriggered
 from app.application.services.llm import RetryableLLMError, TextGeneration
+
+logger = logging.getLogger(__name__)
 
 
 class ChatCompletionsAPI(Protocol):
@@ -76,23 +79,36 @@ class ZhipuChatClient:
                 for tool_schema in invocation.tool_schemas
             ]
 
+        logger.info(
+            "zhipu LLM call starting: model=%s, messages_count=%d",
+            invocation.profile.model,
+            len(messages),
+        )
         try:
             response = await asyncio.to_thread(
                 self._client.chat.completions.create,
                 **request_payload,
             )
         except Exception as exc:  # pragma: no cover - mapped by tests through helpers
+            logger.error("zhipu LLM call exception", exc_info=True)
             raise map_zhipu_exception(exc, retryable_cls=RetryableLLMError) from exc
 
         if _is_stream_response(response):
             text = await asyncio.to_thread(extract_stream_response_text, response)
         else:
             text = extract_response_text(response)
+        request_id = getattr(response, "id", None)
         if not text.strip():
+            logger.warning("zhipu LLM returned empty text, request_id=%s", request_id)
             raise RetryableLLMError("zhipu upstream request failed")
+        logger.info(
+            "zhipu LLM call completed: request_id=%s, response_length=%d",
+            request_id,
+            len(text),
+        )
         return ZhipuCompletionResult(
             text=text,
-            request_id=getattr(response, "id", None),
+            request_id=request_id,
         )
 
 

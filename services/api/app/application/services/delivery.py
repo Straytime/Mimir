@@ -1,11 +1,14 @@
 import asyncio
 import contextlib
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 from app.application.dto.delivery import (
     GeneratedArtifact,
@@ -100,6 +103,20 @@ class DeliveryOrchestrator:
 
     async def _run_delivery_loop(self, *, task_id: str) -> None:
         runtime = self._runtimes.setdefault(task_id, DeliveryRuntime())
+        try:  # noqa: SIM105
+            await self._run_delivery_loop_inner(task_id=task_id, runtime=runtime)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.critical(
+                "unhandled exception in delivery loop",
+                extra={"task_id": task_id},
+                exc_info=True,
+            )
+        finally:
+            self._runtimes.pop(task_id, None)
+
+    async def _run_delivery_loop_inner(self, *, task_id: str, runtime: DeliveryRuntime) -> None:
         try:
             with self._session_factory() as session:
                 task_with_revision = self._task_service.repository.get_task_with_revision(
@@ -196,7 +213,7 @@ class DeliveryOrchestrator:
             if not finalized:
                 return
         finally:
-            self._runtimes.pop(task_id, None)
+            pass
 
     async def _run_outline(
         self,
@@ -218,11 +235,13 @@ class DeliveryOrchestrator:
         )
         prompt_bundle = build_outline_prompt(invocation=invocation)
         invocation = replace(invocation, prompt_bundle=prompt_bundle)
+        logger.info("outline starting", extra={"task_id": task_id})
         try:
             decision = await self._invoke_operation(
                 lambda: self._outline_agent.prepare(invocation)
             )
         except RiskControlTriggered:
+            logger.error("outline risk control triggered", extra={"task_id": task_id, "error_code": "risk_control_triggered"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="risk_control_triggered",
@@ -230,12 +249,14 @@ class DeliveryOrchestrator:
             )
             return None
         except RetryableOperationError:
+            logger.error("outline upstream error after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
                 message="outline 调用失败且重试耗尽。",
             )
             return None
+        logger.info("outline completed", extra={"task_id": task_id, "sections_count": len(decision.outline.sections)})
 
         now = self._clock()
         with self._session_factory() as session:
@@ -298,9 +319,11 @@ class DeliveryOrchestrator:
         )
         prompt_bundle = build_writer_prompt(invocation=invocation)
         invocation = replace(invocation, prompt_bundle=prompt_bundle)
+        logger.info("writer starting", extra={"task_id": task_id})
         try:
             decision = await self._invoke_operation(lambda: self._writer_agent.write(invocation))
         except RiskControlTriggered:
+            logger.error("writer risk control triggered", extra={"task_id": task_id, "error_code": "risk_control_triggered"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="risk_control_triggered",
@@ -308,12 +331,14 @@ class DeliveryOrchestrator:
             )
             return None
         except RetryableOperationError:
+            logger.error("writer upstream error after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
                 message="writer 调用失败且重试耗尽。",
             )
             return None
+        logger.info("writer completed", extra={"task_id": task_id, "tool_calls_count": len(decision.tool_calls)})
 
         now = self._clock()
         with self._session_factory() as session:
@@ -390,6 +415,11 @@ class DeliveryOrchestrator:
                 generated_artifacts=result.artifacts,
             )
         except RetryableOperationError:
+            logger.error(
+                "writer tool call failed after retries",
+                extra={"task_id": task_id, "tool_call_id": tool_call.tool_call_id, "error_code": "upstream_service_error"},
+                exc_info=True,
+            )
             await self._record_tool_call(
                 task_id=task_id,
                 revision_id=revision_id,
@@ -671,6 +701,11 @@ class DeliveryOrchestrator:
             session.commit()
 
     async def _fail_task(self, *, task_id: str, error_code: str, message: str) -> None:
+        logger.error(
+            "delivery task failed: %s",
+            message,
+            extra={"task_id": task_id, "error_code": error_code},
+        )
         with self._session_factory() as session:
             self._task_service.fail_task(
                 session,

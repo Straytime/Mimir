@@ -1,11 +1,14 @@
 import asyncio
 import contextlib
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 from app.application.dto.invocation import PromptBundle, dump_prompt_bundle
 from app.application.dto.research import (
@@ -106,6 +109,18 @@ class CollectionOrchestrator:
             await self.cancel(task_id=task_id)
 
     async def _run_collection_loop(self, *, task_id: str) -> None:
+        try:
+            await self._run_collection_loop_inner(task_id=task_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.critical(
+                "unhandled exception in collection loop",
+                extra={"task_id": task_id},
+                exc_info=True,
+            )
+
+    async def _run_collection_loop_inner(self, *, task_id: str) -> None:
         summaries: list[CollectSummary] = []
         planner_call_index = 1
         runtime = self._runtimes.setdefault(task_id, CollectionRuntime())
@@ -233,6 +248,10 @@ class CollectionOrchestrator:
         collect_agent_calls_used: int,
         call_index: int,
     ):
+        logger.info(
+            "planner round starting",
+            extra={"task_id": task_id, "call_index": call_index, "summaries_count": len(summaries)},
+        )
         invocation = PlannerInvocation(
             prompt_name="planner_round",
             requirement_detail=requirement_detail,
@@ -253,6 +272,11 @@ class CollectionOrchestrator:
                 lambda: self._planner_agent.plan(invocation)
             )
         except RiskControlTriggered:
+            logger.error(
+                "planner risk control triggered",
+                extra={"task_id": task_id, "error_code": "risk_control_triggered"},
+                exc_info=True,
+            )
             await self._fail_task(
                 task_id=task_id,
                 error_code="risk_control_triggered",
@@ -260,12 +284,21 @@ class CollectionOrchestrator:
             )
             return None
         except RetryableOperationError:
+            logger.error(
+                "planner upstream error after retries",
+                extra={"task_id": task_id, "error_code": "upstream_service_error"},
+                exc_info=True,
+            )
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
                 message="planner 调用失败且重试耗尽。",
             )
             return None
+        logger.info(
+            "planner round completed",
+            extra={"task_id": task_id, "stop": decision.stop, "plans_count": len(decision.plans)},
+        )
 
         for delta in decision.reasoning_deltas:
             await self._append_event(
@@ -347,11 +380,20 @@ class CollectionOrchestrator:
         )
         prompt_bundle = build_collector_prompt(invocation=invocation)
         invocation = replace(invocation, prompt_bundle=prompt_bundle)
+        logger.info(
+            "collector subtask starting",
+            extra={"task_id": task_id, "subtask_id": subtask_id, "collect_target": plan.collect_target},
+        )
         try:
             decision = await self._invoke_operation(
                 lambda: self._collector_agent.plan(invocation)
             )
         except RiskControlTriggered:
+            logger.error(
+                "collector risk control triggered",
+                extra={"task_id": task_id, "subtask_id": subtask_id, "error_code": "risk_control_triggered"},
+                exc_info=True,
+            )
             return await self._build_risk_blocked_collect_result(
                 task_id=task_id,
                 revision_id=revision_id,
@@ -361,6 +403,11 @@ class CollectionOrchestrator:
                 reasoning_text="collector 风控",
             )
         except RetryableOperationError:
+            logger.error(
+                "collector upstream error after retries",
+                extra={"task_id": task_id, "subtask_id": subtask_id, "error_code": "upstream_service_error"},
+                exc_info=True,
+            )
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
@@ -709,8 +756,18 @@ class CollectionOrchestrator:
                 lambda: self._summary_agent.summarize(invocation)
             )
         except RiskControlTriggered:
+            logger.error(
+                "summary risk control triggered",
+                extra={"task_id": task_id, "subtask_id": result.subtask_id, "error_code": "risk_control_triggered"},
+                exc_info=True,
+            )
             decision = None
         except RetryableOperationError:
+            logger.error(
+                "summary upstream error after retries",
+                extra={"task_id": task_id, "subtask_id": result.subtask_id, "error_code": "upstream_service_error"},
+                exc_info=True,
+            )
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
@@ -892,6 +949,11 @@ class CollectionOrchestrator:
             session.commit()
 
     async def _fail_task(self, *, task_id: str, error_code: str, message: str) -> None:
+        logger.error(
+            "collection task failed: %s",
+            message,
+            extra={"task_id": task_id, "error_code": error_code},
+        )
         with self._session_factory() as session:
             self._task_service.fail_task(
                 session,

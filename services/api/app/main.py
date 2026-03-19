@@ -38,6 +38,7 @@ from app.application.services.llm import RetryingLLMInvoker
 from app.application.services.merge import SourceMergeService
 from app.application.services.tasks import TaskService
 from app.core.config import Settings
+from app.core.logging import setup_logging
 from app.core.retry import RetryPolicy
 from app.infrastructure.db.repositories import TaskRepository
 from app.infrastructure.db.session import create_session_factory
@@ -78,6 +79,7 @@ def create_app(
     artifact_store: ArtifactStore | None = None,
     report_export_service: ReportExportService | None = None,
 ) -> FastAPI:
+    setup_logging()
     resolved_settings = settings or Settings.from_env()
     engine, session_factory = create_session_factory(resolved_settings.database_url)
     resolved_clock = clock or (lambda: datetime.now(UTC))

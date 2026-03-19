@@ -1,8 +1,11 @@
 import json
+import logging
 import re
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from app.application.dto.invocation import LLMInvocation, PromptBundle
 from app.application.dto.research import (
@@ -136,6 +139,7 @@ class ZhipuWebSearchClient:
 
     async def search(self, query: str, recency_filter: str) -> SearchResponse:
         normalized_filter = normalize_recency_filter(recency_filter)
+        logger.info("web_search starting: query=%s, recency=%s", query, normalized_filter)
         try:
             response = await self._client.post(
                 self._endpoint_path,
@@ -178,6 +182,7 @@ class ZhipuWebSearchClient:
 
         if not results:
             raise RetryableOperationError("web_search returned invalid response")
+        logger.info("web_search completed: query=%s, results_count=%d", query, len(results))
         return SearchResponse(
             query=query,
             recency_filter=normalized_filter,
@@ -252,6 +257,10 @@ async def _complete_json(
         ).strip(),
         transcript=invocation.prompt_bundle.transcript,
     )
+    logger.info(
+        "research _complete_json: prompt_name=%s",
+        invocation.prompt_name,
+    )
     try:
         result = await client.complete(
             invocation=LLMInvocation(
@@ -268,6 +277,7 @@ async def _complete_json(
     try:
         parsed = json.loads(strip_markdown_code_fence(result.text))
     except json.JSONDecodeError as exc:
+        logger.error("research _complete_json: invalid JSON response", exc_info=True)
         raise RetryableOperationError("zhipu returned invalid JSON") from exc
 
     if not isinstance(parsed, dict):

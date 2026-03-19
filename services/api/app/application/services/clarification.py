@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
@@ -6,6 +7,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Awaitable
 
 from sqlalchemy.orm import Session, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 from app.api.errors import ApiError
 from app.application.dto.clarification import (
@@ -302,11 +305,13 @@ class ClarificationOrchestrator:
             ),
             prompt_bundle=prompt,
         )
+        logger.info("natural clarification starting", extra={"task_id": task_id})
         try:
             generation = await self._llm_invoker.invoke(
                 lambda: self._clarification_generator.generate_natural(invocation)
             )
         except RiskControlTriggered:
+            logger.error("clarification risk control triggered", extra={"task_id": task_id, "error_code": "risk_control_triggered"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="risk_control_triggered",
@@ -314,12 +319,14 @@ class ClarificationOrchestrator:
             )
             return
         except RetryableLLMError:
+            logger.error("clarification upstream error after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
                 message="澄清生成失败且重试耗尽。",
             )
             return
+        logger.info("natural clarification completed", extra={"task_id": task_id})
         await self._emit_deltas(task_id=task_id, event="clarification.delta", deltas=generation.deltas)
 
         runtime = self._runtimes.setdefault(task_id, ClarificationRuntime())
@@ -360,11 +367,13 @@ class ClarificationOrchestrator:
             ),
             prompt_bundle=prompt,
         )
+        logger.info("options clarification starting", extra={"task_id": task_id})
         try:
             generation = await self._llm_invoker.invoke(
                 lambda: self._clarification_generator.generate_options(invocation)
             )
         except RiskControlTriggered:
+            logger.error("clarification risk control triggered", extra={"task_id": task_id, "error_code": "risk_control_triggered"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="risk_control_triggered",
@@ -372,12 +381,14 @@ class ClarificationOrchestrator:
             )
             return
         except RetryableLLMError:
+            logger.error("clarification upstream error after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
                 message="澄清生成失败且重试耗尽。",
             )
             return
+        logger.info("options clarification completed", extra={"task_id": task_id})
         await self._emit_deltas(task_id=task_id, event="clarification.delta", deltas=generation.deltas)
 
         parser = ClarificationOptionsParser()
@@ -456,11 +467,13 @@ class ClarificationOrchestrator:
             ),
             prompt_bundle=prompt,
         )
+        logger.info("requirement analysis starting", extra={"task_id": task_id})
         try:
             generation = await self._llm_invoker.invoke(
                 lambda: self._requirement_analyzer.analyze(invocation)
             )
         except RiskControlTriggered:
+            logger.error("requirement analysis risk control triggered", extra={"task_id": task_id, "error_code": "risk_control_triggered"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="risk_control_triggered",
@@ -468,12 +481,14 @@ class ClarificationOrchestrator:
             )
             return
         except RetryableLLMError:
+            logger.error("requirement analysis upstream error after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
                 message="需求分析调用失败且重试耗尽。",
             )
             return
+        logger.info("requirement analysis completed", extra={"task_id": task_id})
         await self._emit_deltas(task_id=task_id, event="analysis.delta", deltas=generation.deltas)
 
         parser = RequirementDetailParser()
@@ -563,6 +578,11 @@ class ClarificationOrchestrator:
         error_code: str,
         message: str,
     ) -> None:
+        logger.error(
+            "clarification task failed: %s",
+            message,
+            extra={"task_id": task_id, "error_code": error_code},
+        )
         with self._session_factory() as session:
             self._task_service.fail_task(
                 session,

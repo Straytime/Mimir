@@ -121,7 +121,7 @@ Frontend required：
 - [ ] 智谱 key 已配置
 - [ ] Jina key 已配置（可选；为空时降级免费模式）
 - [ ] E2B key 已配置
-- [ ] 已确认生产日志不会打印完整密钥、token、完整 prompt 或完整网页正文
+- [ ] 已确认生产日志不会打印 API key、签名密钥、task_token 或 access_token 明文
 - [ ] 已确认 production 不会误切到 `stub`
 
 ### 3.8 Token / 安全
