@@ -1,7 +1,10 @@
 import json
+import logging
 from typing import Any
 
 from app.application.dto.invocation import LLMInvocation, PromptBundle
+
+logger = logging.getLogger(__name__)
 from app.application.dto.delivery import (
     OutlineDecision,
     OutlineInvocation,
@@ -127,6 +130,10 @@ async def _complete_json(
         ).strip(),
         transcript=invocation.prompt_bundle.transcript,
     )
+    logger.info(
+        "delivery _complete_json: prompt_name=%s",
+        invocation.prompt_name,
+    )
     try:
         result = await client.complete(
             invocation=LLMInvocation(
@@ -140,6 +147,7 @@ async def _complete_json(
     try:
         payload = json.loads(strip_markdown_code_fence(result.text))
     except json.JSONDecodeError as exc:
+        logger.error("delivery _complete_json: invalid JSON response", exc_info=True)
         raise RetryableOperationError("zhipu returned invalid JSON") from exc
     if not isinstance(payload, dict):
         raise RetryableOperationError("zhipu returned invalid JSON")

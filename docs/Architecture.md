@@ -1476,24 +1476,22 @@ SSE 保活与断连判定：
 
 ## 10.3 日志约束
 
-为满足“研究数据删除”要求，日志不能保存完整业务内容。
+日志中禁止保留：
+
+- API key（`ZHIPU_API_KEY`、`JINA_API_KEY`、`E2B_API_KEY`）
+- 签名密钥（`MIMIR_TASK_TOKEN_SECRET`、`MIMIR_ACCESS_TOKEN_SECRET`）
+- `task_token`、`access_token` 的明文值
 
 日志中允许保留：
 
-- `task_id`
-- `revision_id`
-- 状态变化
-- 时长
-- 上游 request id
-- 错误码
-
-日志中禁止保留：
-
+- `task_id`、`revision_id`、`subtask_id`
+- 状态变化、phase 流转
+- 时长、上游 request id、错误码
 - 用户完整原始输入
-- LLM 完整 prompt
-- 网页全文
+- LLM 调用完整入参（prompt）与完整出参（response）
+- 网页抓取内容
 - 报告全文
-- 图片二进制内容
+- 图片文件名和 metadata（不含二进制内容）
 
 ## 10.4 运行配置与环境变量
 

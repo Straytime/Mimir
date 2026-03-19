@@ -1715,3 +1715,35 @@ Copy the template below for each completed session:
 - 验收结论: accepted；5 个新测试全部通过，121 个测试无回归
 - blocker / 风险: 无
 - 下一步建议: 在生产环境中验证无 key 免费模式下 Jina Reader API 的实际 RPM 限制和可用性
+
+---
+
+### R1-015 feat(api): add structured JSON logging to orchestrators and infrastructure
+
+- 日期: 2026-03-19
+- 分支: `claude/structured-logging`
+- 目标: 让所有 orchestrator 的关键路径和异常路径都通过 Python logging 输出结构化 JSON 日志到 stdout，使 Railway 日志可回溯生产故障
+- 文档变更:
+  - `docs/Architecture.md` §10.3 — 日志约束重写：禁止 API key/签名密钥/token 明文；允许完整 prompt/response/用户输入/网页内容/报告全文
+  - `docs/Release_Readiness_Checklist.md` L124 — 改为"已确认生产日志不会打印 API key、签名密钥、task_token 或 access_token 明文"
+  - `docs/Execution_Log.md` — 追加 R1-015 记录
+- 实现变更:
+  - `app/core/logging.py` — 新增：JSONFormatter + setup_logging() + get_logger()
+  - `app/main.py` — create_app() 中调用 setup_logging()
+  - `app/application/services/invocation.py` — RetryingOperationInvoker: 重试时 warning，耗尽时 error + traceback
+  - `app/application/services/collection.py` — CollectionOrchestrator: _run_collection_loop 外层 critical 兜底；planner/collector/summary 异常路径 error + exc_info；_fail_task error；关键路径 info
+  - `app/application/services/delivery.py` — DeliveryOrchestrator: _run_delivery_loop 外层 critical 兜底；outline/writer/tool_call 异常路径 error；_fail_task error；关键路径 info
+  - `app/application/services/clarification.py` — ClarificationOrchestrator: natural/options/requirement_analysis 异常路径 error；_fail_task error；关键路径 info
+  - `app/application/services/feedback.py` — FeedbackOrchestrator: feedback analysis 异常路径 error；_fail_task error；关键路径 info
+  - `app/infrastructure/llm/zhipu.py` — ZhipuChatClient.complete: 调用前后 info（model、response_length）；异常 error
+  - `app/infrastructure/research/real_http.py` — _complete_json: info + JSON 错误 error；web_search: 调用前后 info
+  - `app/infrastructure/delivery/zhipu.py` — _complete_json: info + JSON 错误 error
+  - `app/infrastructure/research/jina.py` — fetch: 调用前后 info；异常 error
+- 测试:
+  - 已运行: `pytest tests/unit tests/contract` -> 121 passed, 0 failed
+  - 未运行: `tests/integration`（需本地 PostgreSQL）
+- 本地验证:
+  - `setup_logging()` + `get_logger()` 直接调用验证：stdout 每行输出合法 JSON，包含 timestamp/level/logger/message 固定字段及 task_id/phase/error_code/subtask_id/exception 可选字段
+  - 完整服务器启动验证因本地无 PostgreSQL 跳过，日志基础设施本身工作正常
+- 验收结论: accepted；121 个测试全部通过，无回归；stdout JSON 输出验证通过
+- blocker / 风险: 无

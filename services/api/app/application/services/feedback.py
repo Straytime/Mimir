@@ -1,10 +1,13 @@
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 from app.application.dto.feedback import (
     FeedbackAcceptedResponse,
@@ -134,11 +137,13 @@ class FeedbackOrchestrator:
             ),
             prompt_bundle=prompt,
         )
+        logger.info("feedback analysis starting", extra={"task_id": task_id, "revision_id": revision_id})
         try:
             generation = await self._llm_invoker.invoke(
                 lambda: self._feedback_analyzer.analyze(invocation)
             )
         except RiskControlTriggered:
+            logger.error("feedback analysis risk control triggered", extra={"task_id": task_id, "error_code": "risk_control_triggered"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="risk_control_triggered",
@@ -146,12 +151,14 @@ class FeedbackOrchestrator:
             )
             return
         except RetryableLLMError:
+            logger.error("feedback analysis upstream error after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
                 message="feedback analyzer 调用失败且重试耗尽。",
             )
             return
+        logger.info("feedback analysis completed", extra={"task_id": task_id, "revision_id": revision_id})
         await self._emit_deltas(task_id=task_id, revision_id=revision_id, deltas=generation.deltas)
 
         parser = RequirementDetailParser()
@@ -240,6 +247,11 @@ class FeedbackOrchestrator:
         error_code: str,
         message: str,
     ) -> None:
+        logger.error(
+            "feedback task failed: %s",
+            message,
+            extra={"task_id": task_id, "error_code": error_code},
+        )
         with self._session_factory() as session:
             self._task_service.fail_task(
                 session,

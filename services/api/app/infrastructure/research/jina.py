@@ -3,12 +3,15 @@
 Uses https://r.jina.ai/<url> to fetch and convert web pages to plain text / markdown.
 """
 
+import logging
 import re
 
 import httpx
 
 from app.application.dto.research import FetchResponse
 from app.application.services.invocation import RetryableOperationError
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE_URL = "https://r.jina.ai/"
 _MAX_FETCH_CONTENT_CHARS = 10000
@@ -35,9 +38,11 @@ class JinaWebFetchClient:
 
     async def fetch(self, url: str) -> FetchResponse:
         reader_url = f"{self._base_url}{url}"
+        logger.info("jina web_fetch starting: url=%s", url)
         try:
             response = await self._client.get(reader_url)
         except httpx.HTTPError:
+            logger.error("jina web_fetch request failed: url=%s", url, exc_info=True)
             raise RetryableOperationError("web_fetch upstream request failed")
 
         if response.status_code >= 500:
@@ -50,6 +55,7 @@ class JinaWebFetchClient:
             return FetchResponse(url=url, success=False, title=None, content=None)
 
         title = _extract_title(body, fallback=url)
+        logger.info("jina web_fetch completed: url=%s, status=%d, content_length=%d", url, response.status_code, len(body))
         return FetchResponse(
             url=url,
             success=True,
