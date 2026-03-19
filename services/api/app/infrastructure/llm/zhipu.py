@@ -64,6 +64,9 @@ class ZhipuChatClient:
             message.to_provider_payload()
             for message in invocation.prompt_bundle.messages
         ]
+        prompt_chars = sum(
+            len(str(m.get("content", ""))) for m in messages
+        )
         request_payload: dict[str, Any] = {
             "model": invocation.profile.model,
             "messages": messages,
@@ -80,9 +83,12 @@ class ZhipuChatClient:
             ]
 
         logger.info(
-            "zhipu LLM call starting: model=%s, messages_count=%d",
+            "zhipu LLM call starting: model=%s, messages_count=%d, prompt_chars=%d, thinking=%s, stream=%s",
             invocation.profile.model,
             len(messages),
+            prompt_chars,
+            invocation.profile.provider_thinking(),
+            invocation.profile.stream,
         )
         try:
             response = await asyncio.to_thread(
@@ -94,12 +100,18 @@ class ZhipuChatClient:
             raise map_zhipu_exception(exc, retryable_cls=RetryableLLMError) from exc
 
         if _is_stream_response(response):
-            text = await asyncio.to_thread(extract_stream_response_text, response)
+            text, diag = await asyncio.to_thread(
+                _extract_stream_with_diagnostics, response
+            )
         else:
-            text = extract_response_text(response)
-        request_id = getattr(response, "id", None)
+            text, diag = _extract_response_with_diagnostics(response)
+        request_id = getattr(response, "id", None) or diag.get("request_id")
         if not text.strip():
-            logger.warning("zhipu LLM returned empty text, request_id=%s", request_id)
+            logger.warning(
+                "zhipu LLM returned empty text: request_id=%s, diagnostics=%s",
+                request_id,
+                diag,
+            )
             raise RetryableLLMError("zhipu upstream request failed")
         logger.info(
             "zhipu LLM call completed: request_id=%s, response_length=%d",
@@ -190,31 +202,89 @@ class ZhipuFeedbackAnalyzer(_BaseTextGenerator):
 
 
 def extract_response_text(response: Any) -> str:
+    text, _ = _extract_response_with_diagnostics(response)
+    return text
+
+
+def extract_stream_response_text(response: Iterable[Any]) -> str:
+    text, _ = _extract_stream_with_diagnostics(response)
+    return text
+
+
+def _extract_response_with_diagnostics(response: Any) -> tuple[str, dict[str, Any]]:
+    diag: dict[str, Any] = {"type": "non_stream"}
     choices = getattr(response, "choices", None)
     if isinstance(response, dict):
         choices = response.get("choices")
+    diag["request_id"] = getattr(response, "id", None)
+    diag["usage"] = _safe_repr(getattr(response, "usage", None))
     if not choices:
-        return ""
+        diag["choices_count"] = 0
+        diag["raw_response_type"] = type(response).__name__
+        return "", diag
 
+    diag["choices_count"] = len(choices)
     choice = choices[0]
+    finish_reason = getattr(choice, "finish_reason", None)
+    if isinstance(choice, dict):
+        finish_reason = choice.get("finish_reason")
+    diag["finish_reason"] = finish_reason
+
     message = getattr(choice, "message", None)
     if isinstance(choice, dict):
         message = choice.get("message")
     content = getattr(message, "content", None)
     if isinstance(message, dict):
         content = message.get("content")
-    return _coerce_text(content)
+    diag["content_type"] = type(content).__name__
+    diag["content_repr"] = _safe_repr(content, max_len=500)
+    return _coerce_text(content), diag
 
 
-def extract_stream_response_text(response: Iterable[Any]) -> str:
+def _extract_stream_with_diagnostics(
+    response: Iterable[Any],
+) -> tuple[str, dict[str, Any]]:
+    diag: dict[str, Any] = {"type": "stream"}
     parts: list[str] = []
+    chunk_count = 0
+    no_choices_chunks = 0
+    empty_content_chunks = 0
+    content_chunks = 0
+    finish_reasons: list[str | None] = []
+    last_chunk_repr: str | None = None
+    usage: Any = None
+    request_id: str | None = None
+
     for chunk in response:
+        chunk_count += 1
+        last_chunk_repr = _safe_repr(chunk, max_len=800)
+
+        cid = getattr(chunk, "id", None)
+        if isinstance(chunk, dict):
+            cid = chunk.get("id")
+        if cid and not request_id:
+            request_id = str(cid)
+
+        chunk_usage = getattr(chunk, "usage", None)
+        if isinstance(chunk, dict):
+            chunk_usage = chunk.get("usage")
+        if chunk_usage is not None:
+            usage = chunk_usage
+
         choices = getattr(chunk, "choices", None)
         if isinstance(chunk, dict):
             choices = chunk.get("choices")
         if not choices:
+            no_choices_chunks += 1
             continue
         choice = choices[0]
+
+        fr = getattr(choice, "finish_reason", None)
+        if isinstance(choice, dict):
+            fr = choice.get("finish_reason")
+        if fr is not None:
+            finish_reasons.append(str(fr))
+
         delta = getattr(choice, "delta", None)
         if isinstance(choice, dict):
             delta = choice.get("delta")
@@ -224,7 +294,31 @@ def extract_stream_response_text(response: Iterable[Any]) -> str:
         part = _coerce_text(content)
         if part:
             parts.append(part)
-    return "".join(parts)
+            content_chunks += 1
+        else:
+            empty_content_chunks += 1
+
+    diag["request_id"] = request_id
+    diag["chunk_count"] = chunk_count
+    diag["no_choices_chunks"] = no_choices_chunks
+    diag["empty_content_chunks"] = empty_content_chunks
+    diag["content_chunks"] = content_chunks
+    diag["finish_reasons"] = finish_reasons
+    diag["usage"] = _safe_repr(usage)
+    diag["last_chunk"] = last_chunk_repr
+    return "".join(parts), diag
+
+
+def _safe_repr(obj: Any, *, max_len: int = 300) -> str | None:
+    if obj is None:
+        return None
+    try:
+        r = repr(obj)
+    except Exception:
+        r = f"<{type(obj).__name__}: repr failed>"
+    if len(r) > max_len:
+        return r[:max_len] + "..."
+    return r
 
 
 def _is_stream_response(response: Any) -> bool:
