@@ -57,7 +57,7 @@ Browser
 - `MIMIR_TASK_TOKEN_SECRET`
 - `MIMIR_ACCESS_TOKEN_SECRET`
 - `ZHIPU_API_KEY`
-- `JINA_API_KEY`
+- `JINA_API_KEY`（optional；为空时 web_fetch 降级为免费无认证模式，受 RPM 限制）
 - `E2B_API_KEY`
 
 强烈建议：
@@ -151,7 +151,7 @@ Browser
 - `MIMIR_PROVIDER_MODE=real`
 - 或按需设置 `MIMIR_LLM_PROVIDER_MODE` / `MIMIR_WEB_SEARCH_PROVIDER_MODE` / `MIMIR_WEB_FETCH_PROVIDER_MODE` / `MIMIR_E2B_PROVIDER_MODE`
 - `ZHIPU_API_KEY`
-- `JINA_API_KEY`
+- `JINA_API_KEY`（optional；为空时 web_fetch 降级为免费无认证模式，受 RPM 限制）
 - `E2B_API_KEY`
 - `MIMIR_DATABASE_URL` 指向本地 smoke 数据库
 - 可选 `MIMIR_ARTIFACT_ROOT_DIR=/tmp/mimir-artifacts-real`
@@ -170,7 +170,7 @@ Browser
 - `MIMIR_TASK_TOKEN_SECRET`
 - `MIMIR_ACCESS_TOKEN_SECRET`
 - `ZHIPU_API_KEY`
-- `JINA_API_KEY`
+- `JINA_API_KEY`（optional；为空时 web_fetch 降级为免费无认证模式，受 RPM 限制）
 - `E2B_API_KEY`
 
 前端：

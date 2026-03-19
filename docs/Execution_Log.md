@@ -1686,3 +1686,32 @@ Copy the template below for each completed session:
 - 验收结论: accepted；7 个新测试全部通过，已有 116 个测试无回归
 - blocker / 风险: 无
 - 下一步建议: 在真实 provider 模式下进行端到端验证，确认多轮 planner 调用正常完成
+
+---
+
+### R1-014 fix(api): make JINA_API_KEY optional for free unauthenticated mode
+
+- 日期: 2026-03-19
+- 分支: `claude/collection-fix`
+- 目标: 允许 `JINA_API_KEY` 为空，此时 `JinaWebFetchClient` 以无认证模式调用 Jina Reader API（免费 RPM 限制），避免 token 耗尽导致 web_fetch 不可用
+- 文档变更:
+  - `docs/Architecture.md` — L1016: Authorization header 改为条件性描述；L1504: JINA_API_KEY 标记 optional
+  - `docs/Backend_TDD_Plan.md` — L392-396: Jina contract test 描述拆分为两个 case（有 key / 无 key）
+  - `docs/Deploy_Contract.md` — L60, L154, L173: JINA_API_KEY 标记 optional 并注明免费降级
+  - `docs/Release_Readiness_Checklist.md` — L91: JINA_API_KEY 标记 optional；L122: Jina key 可选
+  - `CLAUDE.md` — Provider Mode 段落: JINA_API_KEY 从必需项移出
+  - `AGENTS.md` — 同步 CLAUDE.md Provider Mode 变更
+  - `services/api/.env.example` — 新增注释说明 Jina key 为可选
+- 实现变更:
+  - `services/api/app/core/config.py` — 移除 `validate_provider_configuration()` 中 jina_api_key 非空校验
+  - `services/api/app/infrastructure/research/jina.py` — `api_key` 类型改为 `str | None = None`，仅非空时设 Authorization header
+  - `services/api/app/infrastructure/providers.py` — 传递原生 `settings.jina_api_key` 而非 `or ""`
+- 测试变更:
+  - `tests/unit/infrastructure/test_jina_web_fetch.py` — 原 `test_real_web_fetch_mode_missing_jina_api_key_fails_fast` 改为 `test_real_web_fetch_mode_allows_missing_jina_api_key`；新增 3 个 auth header 条件测试
+  - `tests/unit/core/test_config_jina_optional.py` — 新增 2 个 config 校验测试
+- 测试:
+  - 已运行: `pytest tests/unit tests/contract` -> 121 passed, 0 failed
+  - 未运行: `tests/integration`（需本地 PostgreSQL）
+- 验收结论: accepted；5 个新测试全部通过，121 个测试无回归
+- blocker / 风险: 无
+- 下一步建议: 在生产环境中验证无 key 免费模式下 Jina Reader API 的实际 RPM 限制和可用性

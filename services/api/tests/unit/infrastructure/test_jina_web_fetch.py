@@ -36,15 +36,15 @@ def test_real_mode_web_fetch_uses_jina_adapter() -> None:
     assert isinstance(runtime.web_fetch_client, JinaWebFetchClient)
 
 
-def test_real_web_fetch_mode_missing_jina_api_key_fails_fast() -> None:
-    with pytest.raises(ValueError, match="JINA_API_KEY"):
-        build_provider_runtime(
-            replace(
-                Settings(),
-                web_fetch_provider_mode="real",
-                jina_api_key=None,
-            )
+def test_real_web_fetch_mode_allows_missing_jina_api_key() -> None:
+    runtime = build_provider_runtime(
+        replace(
+            Settings(),
+            web_fetch_provider_mode="real",
+            jina_api_key=None,
         )
+    )
+    assert isinstance(runtime.web_fetch_client, JinaWebFetchClient)
 
 
 # ---------------------------------------------------------------------------
@@ -164,3 +164,51 @@ async def test_jina_extracts_title_from_first_line() -> None:
 
     assert result.success is True
     assert result.title == "My Article Title"
+
+
+# ---------------------------------------------------------------------------
+# Auth header conditional presence
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_jina_request_includes_auth_header_when_key_provided() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "authorization" in request.headers
+        assert request.headers["authorization"] == "Bearer test-key"
+        return httpx.Response(status_code=200, text="# Title\n\nBody.")
+
+    adapter = JinaWebFetchClient(
+        api_key="test-key",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await adapter.fetch("https://example.com/article")
+    assert result.success is True
+
+
+@pytest.mark.asyncio
+async def test_jina_request_omits_auth_header_when_key_is_none() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "authorization" not in request.headers
+        return httpx.Response(status_code=200, text="# Title\n\nBody.")
+
+    adapter = JinaWebFetchClient(
+        api_key=None,
+        transport=httpx.MockTransport(handler),
+    )
+    result = await adapter.fetch("https://example.com/article")
+    assert result.success is True
+
+
+@pytest.mark.asyncio
+async def test_jina_request_omits_auth_header_when_key_is_empty_string() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "authorization" not in request.headers
+        return httpx.Response(status_code=200, text="# Title\n\nBody.")
+
+    adapter = JinaWebFetchClient(
+        api_key="",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await adapter.fetch("https://example.com/article")
+    assert result.success is True
