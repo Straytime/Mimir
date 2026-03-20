@@ -2106,3 +2106,63 @@ Copy the template below for each completed session:
   - 该任务只完成本地测试收敛，尚未做新的生产 smoke；如需验证真实 provider 行为，应另开生产验证任务包
 - 下一步建议:
   - 单独执行一轮 production smoke，确认 `writing_report` 失败时前端已能及时收到 `task.failed`
+
+## R1-028 Production Writer Failure Regression Verification
+
+- 日期时间: 2026-03-20 17:45:30 CST (+0800)
+- 任务包编号: R1-028
+- session 标识: `codex/r1-028-production-writer-verification`
+- 目标摘要:
+  - 验证 `R1-027` 合并并部署后，生产环境的 writer 路径不再因为 `httpx.ReadTimeout` 留下未收口异常
+  - 确认生产主链路能够越过 `writing_report`，并自然进入 delivery / `task.awaiting_feedback`
+- 生产环境:
+  - Web: `https://research.robiniflore.com`
+  - API: `https://mimir-api-production.up.railway.app`
+- 部署核对:
+  - Railway `mimir-api / production / mimir-api` 最新 deployment 为 `e96f0f40-7918-49d2-a89b-3589dfe53b70`
+  - 对应 commit 为 `90ec1725d34302a7efafa686b6d03b43927611ab`
+  - commit message: `Merge pull request #51 from Straytime/codex/r1-027-writer-timeout-hardening`
+  - Vercel 生产站点 `research.robiniflore.com` 可正常访问并用于本次主链路验证；`R1-027` 本身无前端代码变更，因此本次部署核对以 Railway API deployment commit 为主
+- 生产复验任务:
+  - `task_id`: `tsk_413068472714ef708df3ae91`
+  - 研究主题: `研究中国 AI 搜索产品竞争格局，重点关注主要玩家、商业模式、近期产品进展与未来机会。`
+  - 澄清回答: `用于竞品与市场机会分析；覆盖百度、夸克、秘塔 AI 搜索、Kimi 等主要玩家；重点看 C 端产品体验与商业化，并兼顾未来 1 到 2 年机会与风险。`
+- 修改文件:
+  - `docs/Execution_Log.md`
+- 测试 / 验证:
+  - 生产主链路:
+    - 浏览器生产链路成功走通 `create task -> SSE connect -> natural clarification -> analyzing_requirement -> planning_collection -> collecting -> summarizing_collection -> preparing_outline -> writing_report -> delivered -> task.awaiting_feedback`
+    - 前端最终状态:
+      - `Phase=delivered`
+      - `Status=awaiting_feedback`
+      - `SSE=open`
+      - `available_actions=submit_feedback, download_markdown, download_pdf`
+    - Report Canvas 显示 `第 1 轮报告 / 报告已交付 / 574 字 / 0 张配图`
+  - Railway 运行日志:
+    - `2026-03-20T09:36:28Z` `outline starting`
+    - `2026-03-20T09:38:16Z` `outline completed`
+    - `2026-03-20T09:38:16Z` `writer round 1 starting`
+    - `2026-03-20T09:44:17Z` `writer round 1 completed`
+    - 全程未出现：
+      - `unhandled exception in delivery loop`
+      - `writer upstream error after retries`
+      - `task.failed`
+  - 心跳连续性:
+    - 浏览器网络和 Railway HTTP 运行日志都显示同一 task 在 collecting、outline、writer、delivery 期间持续出现 `POST /heartbeat -> 204`
+    - 未出现 `heartbeat_timeout`
+  - 下载验证:
+    - 浏览器点击 `下载 Markdown Zip`，成功下载 `report-markdown.zip`
+    - 网络请求: `GET /api/v1/tasks/tsk_413068472714ef708df3ae91/downloads/markdown.zip?... -> 200`
+    - 浏览器点击 `下载 PDF`，成功下载 `report.pdf`
+    - 网络请求: `GET /api/v1/tasks/tsk_413068472714ef708df3ae91/downloads/report.pdf?... -> 200`
+    - 本次任务未生成图片 artifact，因此未验证 artifact 下载
+- 验收结论:
+  - `R1-027` 已解除生产环境 writer 阶段的“未收口异常” blocker
+  - 本次生产任务没有停留在 `writing_report / running / SSE=open`
+  - writer 成功推进到 delivery，并最终进入 `task.awaiting_feedback`
+  - markdown / pdf 下载链路在生产上可用
+- blocker / 风险:
+  - 无当前 writer blocker
+  - 本次任务未生成图片 artifact，因此 artifact 下载能力仍需依赖后续包含图片产物的任务另行验证
+- 下一步建议:
+  - 如需继续 release validation，可单独执行 feedback revision 生产复验，验证 `submit_feedback -> waiting_next_revision -> switching -> planning_collection`
