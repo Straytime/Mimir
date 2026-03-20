@@ -22,6 +22,7 @@ class ZhipuClientProtocol(Protocol):
 class ZhipuCompletionResult:
     text: str
     request_id: str | None = None
+    tool_calls: tuple[dict[str, Any], ...] = ()
 
 
 def create_default_zhipu_client(
@@ -100,13 +101,13 @@ class ZhipuChatClient:
             raise map_zhipu_exception(exc, retryable_cls=RetryableLLMError) from exc
 
         if _is_stream_response(response):
-            text, diag = await asyncio.to_thread(
+            text, diag, tool_calls = await asyncio.to_thread(
                 _extract_stream_with_diagnostics, response
             )
         else:
-            text, diag = _extract_response_with_diagnostics(response)
+            text, diag, tool_calls = _extract_response_with_diagnostics(response)
         request_id = getattr(response, "id", None) or diag.get("request_id")
-        if not text.strip():
+        if not text.strip() and not tool_calls:
             logger.warning(
                 "zhipu LLM returned empty text: request_id=%s, diagnostics=%s",
                 request_id,
@@ -114,13 +115,15 @@ class ZhipuChatClient:
             )
             raise RetryableLLMError("zhipu upstream request failed")
         logger.info(
-            "zhipu LLM call completed: request_id=%s, response_length=%d",
+            "zhipu LLM call completed: request_id=%s, response_length=%d, tool_calls=%d",
             request_id,
             len(text),
+            len(tool_calls),
         )
         return ZhipuCompletionResult(
             text=text,
             request_id=request_id,
+            tool_calls=tool_calls,
         )
 
 
@@ -202,16 +205,18 @@ class ZhipuFeedbackAnalyzer(_BaseTextGenerator):
 
 
 def extract_response_text(response: Any) -> str:
-    text, _ = _extract_response_with_diagnostics(response)
+    text, _, _ = _extract_response_with_diagnostics(response)
     return text
 
 
 def extract_stream_response_text(response: Iterable[Any]) -> str:
-    text, _ = _extract_stream_with_diagnostics(response)
+    text, _, _ = _extract_stream_with_diagnostics(response)
     return text
 
 
-def _extract_response_with_diagnostics(response: Any) -> tuple[str, dict[str, Any]]:
+def _extract_response_with_diagnostics(
+    response: Any,
+) -> tuple[str, dict[str, Any], tuple[dict[str, Any], ...]]:
     diag: dict[str, Any] = {"type": "non_stream"}
     choices = getattr(response, "choices", None)
     if isinstance(response, dict):
@@ -221,7 +226,7 @@ def _extract_response_with_diagnostics(response: Any) -> tuple[str, dict[str, An
     if not choices:
         diag["choices_count"] = 0
         diag["raw_response_type"] = type(response).__name__
-        return "", diag
+        return "", diag, ()
 
     diag["choices_count"] = len(choices)
     choice = choices[0]
@@ -238,12 +243,14 @@ def _extract_response_with_diagnostics(response: Any) -> tuple[str, dict[str, An
         content = message.get("content")
     diag["content_type"] = type(content).__name__
     diag["content_repr"] = _safe_repr(content, max_len=500)
-    return _coerce_text(content), diag
+
+    tool_calls = _extract_tool_calls_from_message(message)
+    return _coerce_text(content), diag, tool_calls
 
 
 def _extract_stream_with_diagnostics(
     response: Iterable[Any],
-) -> tuple[str, dict[str, Any]]:
+) -> tuple[str, dict[str, Any], tuple[dict[str, Any], ...]]:
     diag: dict[str, Any] = {"type": "stream"}
     parts: list[str] = []
     chunk_count = 0
@@ -254,6 +261,7 @@ def _extract_stream_with_diagnostics(
     last_chunk_repr: str | None = None
     usage: Any = None
     request_id: str | None = None
+    tc_builders: dict[int, dict[str, Any]] = {}
 
     for chunk in response:
         chunk_count += 1
@@ -298,6 +306,10 @@ def _extract_stream_with_diagnostics(
         else:
             empty_content_chunks += 1
 
+        _collect_stream_tool_calls(delta, tc_builders)
+
+    tool_calls = _finalize_stream_tool_calls(tc_builders)
+
     diag["request_id"] = request_id
     diag["chunk_count"] = chunk_count
     diag["no_choices_chunks"] = no_choices_chunks
@@ -306,7 +318,78 @@ def _extract_stream_with_diagnostics(
     diag["finish_reasons"] = finish_reasons
     diag["usage"] = _safe_repr(usage)
     diag["last_chunk"] = last_chunk_repr
-    return "".join(parts), diag
+    return "".join(parts), diag, tool_calls
+
+
+def _extract_tool_calls_from_message(message: Any) -> tuple[dict[str, Any], ...]:
+    raw = getattr(message, "tool_calls", None)
+    if isinstance(message, dict):
+        raw = message.get("tool_calls")
+    if not raw:
+        return ()
+    results: list[dict[str, Any]] = []
+    for tc in raw:
+        tc_id = getattr(tc, "id", None)
+        fn = getattr(tc, "function", None)
+        if isinstance(tc, dict):
+            tc_id = tc.get("id")
+            fn = tc.get("function")
+        name = getattr(fn, "name", None)
+        arguments = getattr(fn, "arguments", None)
+        if isinstance(fn, dict):
+            name = fn.get("name")
+            arguments = fn.get("arguments")
+        if name:
+            results.append({"id": tc_id or "", "name": name, "arguments": arguments or ""})
+    return tuple(results)
+
+
+def _collect_stream_tool_calls(
+    delta: Any,
+    builders: dict[int, dict[str, Any]],
+) -> None:
+    if delta is None:
+        return
+    raw = getattr(delta, "tool_calls", None)
+    if isinstance(delta, dict):
+        raw = delta.get("tool_calls")
+    if not raw:
+        return
+    for tc in raw:
+        index = getattr(tc, "index", None)
+        if isinstance(tc, dict):
+            index = tc.get("index")
+        if index is None:
+            index = 0
+        if index not in builders:
+            builders[index] = {"id": "", "name": "", "arguments": ""}
+        tc_id = getattr(tc, "id", None)
+        if isinstance(tc, dict):
+            tc_id = tc.get("id")
+        if tc_id:
+            builders[index]["id"] = tc_id
+
+        fn = getattr(tc, "function", None)
+        if isinstance(tc, dict):
+            fn = tc.get("function")
+        if fn is not None:
+            fn_name = getattr(fn, "name", None)
+            fn_args = getattr(fn, "arguments", None)
+            if isinstance(fn, dict):
+                fn_name = fn.get("name")
+                fn_args = fn.get("arguments")
+            if fn_name:
+                builders[index]["name"] = fn_name
+            if fn_args:
+                builders[index]["arguments"] += fn_args
+
+
+def _finalize_stream_tool_calls(
+    builders: dict[int, dict[str, Any]],
+) -> tuple[dict[str, Any], ...]:
+    if not builders:
+        return ()
+    return tuple(builders[i] for i in sorted(builders))
 
 
 def _safe_repr(obj: Any, *, max_len: int = 300) -> str | None:

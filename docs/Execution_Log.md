@@ -1882,3 +1882,60 @@ Copy the template below for each completed session:
   - 后端: `pytest tests/unit tests/contract tests/integration` -> 173 passed, 0 failed
 - 验收结论: accepted；_source_key 对任意长度 URL 均输出固定 64 字符哈希，远小于 varchar(512)；persist_merged_sources 的比较逻辑（通过 source_key 匹配 raw 和 merged 记录）在新哈希下行为不变；无 schema 变更，无需 migration
 - blocker / 风险: 无
+
+---
+
+### R1-022 fix(api): planner 适配 tool_calls 响应路径
+
+- 日期: 2026-03-20
+- 分支: `claude/planner-tool-calls`
+- 目标: 让 ZhipuPlannerAgent 正确处理 Zhipu API 返回 finish_reason=tool_calls 的响应，去掉与 prompt 设计矛盾的 JSON 指令追加
+- 实现变更:
+  - `app/infrastructure/llm/zhipu.py`:
+    - `ZhipuCompletionResult` 新增 `tool_calls: tuple[dict[str, Any], ...] = ()` 字段
+    - `_extract_response_with_diagnostics` 返回值从 2-tuple 改为 3-tuple，第三项为从 message.tool_calls 提取的 tool_calls
+    - `_extract_stream_with_diagnostics` 返回值从 2-tuple 改为 3-tuple，新增 `tc_builders` 按 index 分组收集增量 tool_calls 片段，最终 `_finalize_stream_tool_calls` 按 index 排序输出
+    - `complete()` 空文本判断从 `if not text.strip()` 改为 `if not text.strip() and not tool_calls`，允许空 text + 有 tool_calls 的响应
+    - 新增辅助函数：`_extract_tool_calls_from_message`、`_collect_stream_tool_calls`、`_finalize_stream_tool_calls`
+    - `extract_response_text` 和 `extract_stream_response_text` 适配 3-tuple 解包
+  - `app/infrastructure/research/real_http.py`:
+    - `ZhipuPlannerAgent.plan()` 重写：不再调用 `_complete_json`，直接构造 `LLMInvocation` 调用 `client.complete()`
+    - 响应解析分三路径：tool_calls 非空 → `_parse_tool_calls`（从 name=collect_agent 的 tool_call 提取 CollectPlan，stop=False）；text 非空 → `_parse_content_json`（JSON 解析成功走现有逻辑，JSON 解析失败视为自然语言通知 stop=True）；两者都空 → stop=True
+    - `_json_instruction_for_invocation` 删除 PlannerInvocation 分支（死代码），签名从 3 类型 union 改为 2 类型
+    - `_complete_json` 签名同步更新，不再接受 PlannerInvocation
+- 测试变更:
+  - `tests/unit/infrastructure/test_zhipu_adapters.py`:
+    - 现有 `TestExtractResponseWithDiagnostics` 4 个用例：适配 3-tuple 解包 + 新增 `test_response_with_tool_calls`（验证 non-stream tool_calls 提取）
+    - 现有 `TestExtractStreamWithDiagnostics` 5 个用例：适配 3-tuple 解包 + 新增 `test_stream_single_tool_call_incremental`（单个 tool_call 跨 chunk 增量拼接 arguments）和 `test_stream_multiple_concurrent_tool_calls`（多个并发 tool_calls 按 index 分组）
+    - `test_zhipu_planner_adapter_uses_prompt_bundle_and_tool_schema_instead_of_prompt_name`：断言改为 `"请输出合法 JSON" not in`，user_prompt 改为精确匹配
+    - 新增 `test_complete_empty_text_with_tool_calls_does_not_raise`：空 text + tool_calls → 不抛 RetryableLLMError
+    - 新增 `test_planner_parses_tool_calls_response`：2 个 collect_agent tool_calls → 2 个 CollectPlan，stop=False
+    - 新增 `test_planner_parses_content_json_response`：content JSON → 现有解析行为不变
+    - 新增 `test_planner_natural_language_text_returns_stop_true`：自然语言 → stop=True, plans=()
+    - 新增 `test_planner_skips_non_collect_agent_tool_calls`：非 collect_agent tool_call 被跳过
+- 测试:
+  - 后端: `pytest tests/unit tests/contract tests/integration` -> 181 passed, 0 failed
+- 验收结论: accepted；tool_calls 路径正确提取 CollectPlan；content JSON 路径保持兼容；自然语言通知 stop=True；stream 增量拼接按 index 分组；现有测试全部通过无回归
+- blocker / 风险: 无
+
+---
+
+### R1-023 fix(api): planner agent loop 信息完整性修复
+
+- 日期: 2026-03-20
+- 分支: `claude/planner-tool-calls`（与 R1-022 同分支）
+- 目标: 确保 planner transcript 回放完整 agent loop 历史——assistant arguments 包含真实参数，tool 消息包含完整收集上下文
+- 实现变更:
+  - `app/domain/schemas.py` — CollectSummary 新增 `additional_info: str | None = None` 和 `freshness_requirement: str | None = None`，可选字段不影响 validate_shape
+  - `app/application/services/collection.py` — L797（partial）和 L814（正常路径）两个 CollectSummary 构造点增加 `additional_info=plan.additional_info, freshness_requirement=plan.freshness_requirement.value`；L720 和 L807（risk_blocked）不传（无 plan 上下文）
+  - `app/application/prompts/collection.py` — assistant_tool_calls 的 arguments 从 `"{}"` 改为 `json.dumps({...}, ensure_ascii=False)`，包含 collect_target/additional_info/freshness_requirement 的真实值，None 值字段通过 dict comprehension 排除
+- 测试变更:
+  - `tests/unit/application/prompts/test_planner_prompt.py`:
+    - `_summary` helper 增加 additional_info 和 freshness_requirement 参数
+    - 新增 `_risk_blocked_summary` helper
+    - 新增 `test_planner_prompt_arguments_contain_real_parameters`：断言 arguments JSON 包含 collect_target、additional_info、freshness_requirement 的真实值
+    - 新增 `test_planner_prompt_risk_blocked_arguments_exclude_none`：断言 risk_blocked summary 的 arguments 中所有值非 None
+- 测试:
+  - 后端: `pytest tests/unit tests/contract tests/integration` -> 183 passed, 0 failed
+- 验收结论: accepted；transcript arguments 包含完整参数；risk_blocked 场景 None 值被排除；现有测试全部通过无回归
+- blocker / 风险: 无

@@ -28,6 +28,17 @@ def _summary(tool_call_id: str, subtask_id: str) -> CollectSummary:
         status=CollectSummaryStatus.COMPLETED,
         search_queries=["query"],
         key_findings_markdown="- finding",
+        additional_info="补充信息",
+        freshness_requirement="high",
+    )
+
+
+def _risk_blocked_summary(tool_call_id: str, subtask_id: str) -> CollectSummary:
+    return CollectSummary(
+        tool_call_id=tool_call_id,
+        subtask_id=subtask_id,
+        status=CollectSummaryStatus.RISK_BLOCKED,
+        message="触发风控敏感，请重新规划",
     )
 
 
@@ -102,3 +113,49 @@ def test_planner_prompt_tool_call_ids_match() -> None:
         assert tc["id"] == tm.tool_call_id
         assert tc["type"] == "function"
         assert tc["function"]["name"] == "collect_agent"
+
+
+def test_planner_prompt_arguments_contain_real_parameters() -> None:
+    """The assistant tool_calls arguments must contain collect_target,
+    additional_info, and freshness_requirement from the summary."""
+    import json
+
+    summaries = (_summary("call_x", "sub_x"),)
+    bundle = build_planner_prompt(
+        invocation=PlannerInvocation(
+            prompt_name="planner_round",
+            requirement_detail=_requirement(),
+            summaries=summaries,
+            call_index=2,
+            collect_agent_calls_used=1,
+            now=NOW,
+        )
+    )
+    messages = bundle.messages
+    assistant_msg = messages[2]
+    args = json.loads(assistant_msg.tool_calls[0]["function"]["arguments"])
+    assert args["collect_target"] == "目标 sub_x"
+    assert args["additional_info"] == "补充信息"
+    assert args["freshness_requirement"] == "high"
+
+
+def test_planner_prompt_risk_blocked_arguments_exclude_none() -> None:
+    """For risk_blocked summaries, arguments should not contain None-valued fields."""
+    import json
+
+    summaries = (_risk_blocked_summary("call_rb", "sub_rb"),)
+    bundle = build_planner_prompt(
+        invocation=PlannerInvocation(
+            prompt_name="planner_round",
+            requirement_detail=_requirement(),
+            summaries=summaries,
+            call_index=2,
+            collect_agent_calls_used=1,
+            now=NOW,
+        )
+    )
+    messages = bundle.messages
+    assistant_msg = messages[2]
+    args = json.loads(assistant_msg.tool_calls[0]["function"]["arguments"])
+    for value in args.values():
+        assert value is not None
