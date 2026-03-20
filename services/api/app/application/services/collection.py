@@ -801,6 +801,8 @@ class CollectionOrchestrator:
                 collect_target=plan.collect_target,
                 search_queries=list(result.search_queries),
                 key_findings_markdown="- summary 调用失败，结果不完整。",
+                additional_info=plan.additional_info,
+                freshness_requirement=plan.freshness_requirement.value,
             )
 
         if decision is None:
@@ -819,6 +821,8 @@ class CollectionOrchestrator:
                 search_queries=list(result.search_queries),
                 key_findings_markdown=decision.key_findings_markdown,
                 message=decision.message,
+                additional_info=plan.additional_info,
+                freshness_requirement=plan.freshness_requirement.value,
             )
 
         with self._session_factory() as session:

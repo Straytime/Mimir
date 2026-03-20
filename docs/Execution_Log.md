@@ -1917,3 +1917,25 @@ Copy the template below for each completed session:
   - 后端: `pytest tests/unit tests/contract tests/integration` -> 181 passed, 0 failed
 - 验收结论: accepted；tool_calls 路径正确提取 CollectPlan；content JSON 路径保持兼容；自然语言通知 stop=True；stream 增量拼接按 index 分组；现有测试全部通过无回归
 - blocker / 风险: 无
+
+---
+
+### R1-023 fix(api): planner agent loop 信息完整性修复
+
+- 日期: 2026-03-20
+- 分支: `claude/planner-tool-calls`（与 R1-022 同分支）
+- 目标: 确保 planner transcript 回放完整 agent loop 历史——assistant arguments 包含真实参数，tool 消息包含完整收集上下文
+- 实现变更:
+  - `app/domain/schemas.py` — CollectSummary 新增 `additional_info: str | None = None` 和 `freshness_requirement: str | None = None`，可选字段不影响 validate_shape
+  - `app/application/services/collection.py` — L797（partial）和 L814（正常路径）两个 CollectSummary 构造点增加 `additional_info=plan.additional_info, freshness_requirement=plan.freshness_requirement.value`；L720 和 L807（risk_blocked）不传（无 plan 上下文）
+  - `app/application/prompts/collection.py` — assistant_tool_calls 的 arguments 从 `"{}"` 改为 `json.dumps({...}, ensure_ascii=False)`，包含 collect_target/additional_info/freshness_requirement 的真实值，None 值字段通过 dict comprehension 排除
+- 测试变更:
+  - `tests/unit/application/prompts/test_planner_prompt.py`:
+    - `_summary` helper 增加 additional_info 和 freshness_requirement 参数
+    - 新增 `_risk_blocked_summary` helper
+    - 新增 `test_planner_prompt_arguments_contain_real_parameters`：断言 arguments JSON 包含 collect_target、additional_info、freshness_requirement 的真实值
+    - 新增 `test_planner_prompt_risk_blocked_arguments_exclude_none`：断言 risk_blocked summary 的 arguments 中所有值非 None
+- 测试:
+  - 后端: `pytest tests/unit tests/contract tests/integration` -> 183 passed, 0 failed
+- 验收结论: accepted；transcript arguments 包含完整参数；risk_blocked 场景 None 值被排除；现有测试全部通过无回归
+- blocker / 风险: 无

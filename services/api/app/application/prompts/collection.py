@@ -27,7 +27,21 @@ def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
             {
                 "id": summary.tool_call_id,
                 "type": "function",
-                "function": {"name": "collect_agent", "arguments": "{}"},
+                "function": {
+                    "name": "collect_agent",
+                    "arguments": json.dumps(
+                        {
+                            k: v
+                            for k, v in {
+                                "collect_target": summary.collect_target,
+                                "additional_info": summary.additional_info,
+                                "freshness_requirement": summary.freshness_requirement,
+                            }.items()
+                            if v is not None
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
             }
             for summary in invocation.summaries
         )

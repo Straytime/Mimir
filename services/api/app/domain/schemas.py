@@ -83,6 +83,8 @@ class CollectSummary(DomainModel):
     search_queries: list[str] = Field(default_factory=list)
     key_findings_markdown: str | None = None
     message: str | None = None
+    additional_info: str | None = None
+    freshness_requirement: str | None = None
 
     @model_validator(mode="after")
     def validate_shape(self) -> "CollectSummary":
