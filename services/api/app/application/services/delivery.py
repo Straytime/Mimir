@@ -19,7 +19,7 @@ from app.application.dto.delivery import (
     WriterInvocation,
     WriterToolCall,
 )
-from app.application.dto.invocation import dump_prompt_bundle
+from app.application.dto.invocation import PromptMessage, dump_prompt_bundle
 from app.application.invocation_contracts import (
     build_python_interpreter_tool_schema,
     build_stage_profile,
@@ -161,29 +161,20 @@ class DeliveryOrchestrator:
                 target_phase=TaskPhase.WRITING_REPORT,
             )
 
-            writer_decision = await self._run_writer(
+            writer_result = await self._run_writer_loop(
                 task_id=task_id,
                 revision_id=revision.revision_id,
+                runtime=runtime,
                 requirement_detail=requirement_detail,
                 formatted_sources=formatted_sources,
                 outline=outline_decision.outline,
             )
-            if writer_decision is None or await self._is_terminal(task_id=task_id):
+            if writer_result is None or await self._is_terminal(task_id=task_id):
                 return
 
-            ready_artifacts: list = []
-            for tool_call in writer_decision.tool_calls:
-                stored_artifacts = await self._run_writer_tool_call(
-                    task_id=task_id,
-                    revision_id=revision.revision_id,
-                    runtime=runtime,
-                    tool_call=tool_call,
-                )
-                if stored_artifacts is None or await self._is_terminal(task_id=task_id):
-                    return
-                ready_artifacts.extend(stored_artifacts)
+            final_markdown, ready_artifacts = writer_result
 
-            for delta in writer_decision.content_deltas:
+            for delta in _split_markdown_deltas(final_markdown):
                 await self._append_event(
                     task_id=task_id,
                     event="writer.delta",
@@ -208,7 +199,7 @@ class DeliveryOrchestrator:
                 task_id=task_id,
                 revision_id=revision.revision_id,
                 runtime=runtime,
-                final_markdown=writer_decision.final_markdown,
+                final_markdown=final_markdown,
             )
             if not finalized:
                 return
@@ -295,14 +286,96 @@ class DeliveryOrchestrator:
         )
         return decision
 
-    async def _run_writer(
+    async def _run_writer_loop(
         self,
         *,
         task_id: str,
         revision_id: str,
+        runtime: DeliveryRuntime,
         requirement_detail: RequirementDetail,
         formatted_sources,
         outline: ResearchOutline,
+    ) -> tuple[str, list] | None:
+        """Multi-round writer agent loop with tool call transcript feedback."""
+        await self._append_event(
+            task_id=task_id,
+            event="writer.reasoning.delta",
+            payload={"delta": "\u6b63\u5728\u64b0\u5199..."},
+        )
+
+        transcript: list[PromptMessage] = []
+        all_artifacts: list = []
+        max_rounds = self._settings.writer_max_rounds
+
+        for round_num in range(1, max_rounds + 1):
+            if await self._is_terminal(task_id=task_id):
+                return None
+
+            decision = await self._run_writer_round(
+                task_id=task_id,
+                revision_id=revision_id,
+                round_num=round_num,
+                requirement_detail=requirement_detail,
+                formatted_sources=formatted_sources,
+                outline=outline,
+                transcript=tuple(transcript),
+            )
+            if decision is None:
+                return None
+
+            if not decision.tool_calls or round_num == max_rounds:
+                if decision.tool_calls and round_num == max_rounds:
+                    logger.warning(
+                        "writer max rounds reached, ignoring remaining tool calls",
+                        extra={"task_id": task_id, "max_rounds": max_rounds},
+                    )
+                return (decision.text, all_artifacts)
+
+            tc_payloads = tuple(
+                {
+                    "id": tc.tool_call_id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.tool_name,
+                        "arguments": json.dumps({"code": tc.code}),
+                    },
+                }
+                for tc in decision.tool_calls
+            )
+            transcript.append(PromptMessage(
+                role="assistant",
+                content=decision.text,
+                tool_calls=tc_payloads,
+            ))
+
+            for tc in decision.tool_calls:
+                stored = await self._run_writer_tool_call(
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    runtime=runtime,
+                    tool_call=tc,
+                )
+                if stored is None:
+                    return None
+                all_artifacts.extend(stored)
+                transcript.append(PromptMessage(
+                    role="tool",
+                    content="Tool execution completed successfully.",
+                    tool_call_id=tc.tool_call_id,
+                ))
+
+        return None  # unreachable
+
+    async def _run_writer_round(
+        self,
+        *,
+        task_id: str,
+        revision_id: str,
+        round_num: int,
+        requirement_detail: RequirementDetail,
+        formatted_sources,
+        outline: ResearchOutline,
+        transcript: tuple[PromptMessage, ...] = (),
     ) -> WriterDecision | None:
         invocation = WriterInvocation(
             prompt_name="writer_round",
@@ -317,8 +390,10 @@ class DeliveryOrchestrator:
             tool_schemas=(build_python_interpreter_tool_schema(),),
         )
         prompt_bundle = build_writer_prompt(invocation=invocation)
+        if transcript:
+            prompt_bundle = replace(prompt_bundle, transcript=transcript)
         invocation = replace(invocation, prompt_bundle=prompt_bundle)
-        logger.info("writer starting", extra={"task_id": task_id})
+        logger.info("writer round %d starting", round_num, extra={"task_id": task_id})
         try:
             decision = await self._invoke_operation(lambda: self._writer_agent.write(invocation))
         except RiskControlTriggered:
@@ -326,7 +401,7 @@ class DeliveryOrchestrator:
             await self._fail_task(
                 task_id=task_id,
                 error_code="risk_control_triggered",
-                message="writer 阶段触发风控。",
+                message="writer \u9636\u6bb5\u89e6\u53d1\u98ce\u63a7\u3002",
             )
             return None
         except RetryableOperationError:
@@ -334,10 +409,10 @@ class DeliveryOrchestrator:
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
-                message="writer 调用失败且重试耗尽。",
+                message="writer \u8c03\u7528\u5931\u8d25\u4e14\u91cd\u8bd5\u8017\u5c3d\u3002",
             )
             return None
-        logger.info("writer completed", extra={"task_id": task_id, "tool_calls_count": len(decision.tool_calls)})
+        logger.info("writer round %d completed", round_num, extra={"task_id": task_id, "tool_calls_count": len(decision.tool_calls)})
 
         now = self._clock()
         with self._session_factory() as session:
@@ -349,11 +424,12 @@ class DeliveryOrchestrator:
                 agent_type="writer",
                 prompt_name=invocation.prompt_name,
                 status="completed",
-                reasoning_text="\n".join(decision.reasoning_deltas),
+                reasoning_text="",
                 content_text=json.dumps(
                     {
                         "prompt_bundle": dump_prompt_bundle(prompt_bundle),
-                        "final_markdown": decision.final_markdown,
+                        "text": decision.text,
+                        "round": round_num,
                         "tool_calls": [
                             {
                                 "tool_call_id": tool_call.tool_call_id,
@@ -378,13 +454,6 @@ class DeliveryOrchestrator:
                 updated_at=now,
             )
             session.commit()
-
-        for delta in decision.reasoning_deltas:
-            await self._append_event(
-                task_id=task_id,
-                event="writer.reasoning.delta",
-                payload={"delta": delta},
-            )
         return decision
 
     async def _run_writer_tool_call(
@@ -744,3 +813,15 @@ def _outline_to_payload(outline: ResearchOutline) -> dict[str, object]:
         ],
         "entities": list(outline.entities),
     }
+
+
+def _split_markdown_deltas(markdown: str, *, chunk_size: int = 200) -> list[str]:
+    """Split markdown text into chunks for SSE streaming."""
+    if not markdown:
+        return []
+    chunks: list[str] = []
+    for i in range(0, len(markdown), chunk_size):
+        chunk = markdown[i : i + chunk_size]
+        if chunk:
+            chunks.append(chunk)
+    return chunks or [markdown]

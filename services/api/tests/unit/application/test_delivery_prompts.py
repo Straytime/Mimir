@@ -104,9 +104,10 @@ def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() ->
         )
     )
 
-    assert "你是一个资深研究员" in prompt.system_prompt
-    assert "绝对不要超过一万字" in prompt.system_prompt
-    assert "根据实际使用的参考信息创建脚注参考" in prompt.system_prompt
+    assert "\u4f60\u662f\u4e00\u4e2a\u8d44\u6df1\u7814\u7a76\u5458" in prompt.system_prompt
+    assert "**\u4fdd\u8bc1\u7814\u7a76\u5185\u5bb9\u524d\u540e\u903b\u8f91\u8fde\u8d2f\u3001\u5408\u7406\u4e14\u6e05\u6670\u3001\u4e0a\u4e0b\u6587\u5b9e\u4f53\u4e00\u81f4\u65e0\u51b2\u7a81\u3002**" in prompt.system_prompt
+    assert "**\uff01\u91cd\u8981\uff01\u7edd\u5bf9\u4e0d\u8981\u8d85\u8fc7\u4e00\u4e07\u5b57\uff01**" in prompt.system_prompt
+    assert "\u6839\u636e\u5b9e\u9645\u4f7f\u7528\u7684\u53c2\u8003\u4fe1\u606f\u521b\u5efa\u811a\u6ce8\u53c2\u8003" in prompt.system_prompt
     assert "python_interpreter" in prompt.system_prompt
     assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
     assert "<参考信息>" in prompt.user_prompt

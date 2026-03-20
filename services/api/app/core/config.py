@@ -59,6 +59,7 @@ class Settings:
     subtask_tool_call_limit: int = 10
     collect_risk_block_threshold: int = 2
     fetched_content_limit: int = 10000
+    writer_max_rounds: int = 5
     cleanup_scan_interval_seconds: float = 60.0
 
     @classmethod

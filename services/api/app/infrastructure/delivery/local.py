@@ -43,26 +43,33 @@ class LocalStubOutlineAgent:
 
 class LocalStubWriterAgent:
     async def write(self, invocation: WriterInvocation) -> WriterDecision:
-        return WriterDecision(
-            reasoning_deltas=("先完成正文，再补一张图表。",),
-            content_deltas=(
-                "## 一、研究背景与问题定义\n",
-                "## 二、竞争格局与主要玩家\n",
-            ),
-            tool_calls=(
-                WriterToolCall(
-                    tool_call_id="call_writer_local_1",
-                    tool_name="python_interpreter",
-                    code="plot_local_market_share",
+        has_transcript = (
+            invocation.prompt_bundle is not None
+            and len(invocation.prompt_bundle.transcript) > 0
+        )
+        if not has_transcript:
+            return WriterDecision(
+                text="",
+                tool_calls=(
+                    WriterToolCall(
+                        tool_call_id="call_writer_local_1",
+                        tool_name="python_interpreter",
+                        code="plot_local_market_share",
+                    ),
                 ),
-            ),
-            final_markdown=(
+            )
+        return WriterDecision(
+            text=(
                 f"# {invocation.outline.title}\n\n"
-                "## 一、研究背景与问题定义\n"
-                "中国 AI 搜索市场在近两年快速演进。\n\n"
-                "## 二、竞争格局与主要玩家\n"
-                "核心玩家围绕搜索体验、模型能力与商业化路径展开竞争。\n"
+                "## \u4e00\u3001\u7814\u7a76\u80cc\u666f\u4e0e\u95ee\u9898\u5b9a\u4e49\n"
+                "\u4e2d\u56fd AI \u641c\u7d22\u5e02\u573a\u5728\u8fd1\u4e24\u5e74"
+                "\u5feb\u901f\u6f14\u8fdb\u3002\n\n"
+                "## \u4e8c\u3001\u7ade\u4e89\u683c\u5c40\u4e0e\u4e3b\u8981\u73a9\u5bb6\n"
+                "\u6838\u5fc3\u73a9\u5bb6\u56f4\u7ed5\u641c\u7d22\u4f53\u9a8c\u3001"
+                "\u6a21\u578b\u80fd\u529b\u4e0e\u5546\u4e1a\u5316\u8def\u5f84"
+                "\u5c55\u5f00\u7ade\u4e89\u3002\n"
             ),
+            tool_calls=(),
         )
 
 
