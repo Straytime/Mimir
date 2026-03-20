@@ -1864,3 +1864,21 @@ Copy the template below for each completed session:
   - 后端: `pytest tests/unit tests/contract` -> 139 passed, 0 failed（较 R1-019 的 125 新增 14 个诊断测试）
 - 验收结论: accepted；诊断日志覆盖 stream 和非 stream 两条路径；现有测试全部通过无回归；部署后下次 outline 失败即可从日志获取 Zhipu 原始 response 信息
 - blocker / 风险: 无；诊断日志为只读观测，不影响业务逻辑
+
+---
+
+### R1-021 fix(api): source_key 超长 URL 溢出修复
+
+- 日期: 2026-03-20
+- 分支: `claude/source-key-hash`
+- 目标: 将 collected_sources.source_key 从原始 URL 改为 SHA-256 哈希，解决超长 URL 写入 varchar(512) 时的 StringDataRightTruncation 崩溃
+- 实现变更:
+  - `app/infrastructure/db/repositories.py` — `_source_key(link)` 从 `link.strip().lower()` 改为 `hashlib.sha256(link.strip().lower().encode()).hexdigest()`，输出固定 64 字符 hex digest；新增 `import hashlib`
+- fixture 变更:
+  - `tests/fixtures/tasks.py` — 3 处 source_key 硬编码值从原始 URL 改为对应 SHA-256 哈希值
+- 测试变更:
+  - `tests/unit/infrastructure/test_source_key.py`（新建） — 6 个用例：正常 URL 返回 64 字符 hex digest、超长 URL（2000+ 字符）返回 64 字符、空字符串返回 64 字符、strip+lowercase 后再哈希、同 URL 幂等、不同 URL 不同哈希
+- 测试:
+  - 后端: `pytest tests/unit tests/contract tests/integration` -> 173 passed, 0 failed
+- 验收结论: accepted；_source_key 对任意长度 URL 均输出固定 64 字符哈希，远小于 varchar(512)；persist_merged_sources 的比较逻辑（通过 source_key 匹配 raw 和 merged 记录）在新哈希下行为不变；无 schema 变更，无需 migration
+- blocker / 风险: 无
