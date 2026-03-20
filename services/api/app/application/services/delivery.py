@@ -113,6 +113,19 @@ class DeliveryOrchestrator:
                 extra={"task_id": task_id},
                 exc_info=True,
             )
+            if not await self._is_terminal(task_id=task_id):
+                try:
+                    await self._fail_task(
+                        task_id=task_id,
+                        error_code="upstream_service_error",
+                        message="delivery 阶段发生未处理异常。",
+                    )
+                except Exception:  # pragma: no cover - defensive fallback
+                    logger.critical(
+                        "delivery loop failure finalization crashed",
+                        extra={"task_id": task_id},
+                        exc_info=True,
+                    )
         finally:
             self._runtimes.pop(task_id, None)
 

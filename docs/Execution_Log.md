@@ -2021,3 +2021,41 @@ Copy the template below for each completed session:
   - 后端: `pytest tests/unit tests/contract tests/integration` -> 203 passed, 0 failed
 - 验收结论: accepted；Writer 去除 JSON 包装改为直接 markdown 输出；API tool_calls 替代 JSON payload 提取；多轮 agent loop 实现完毕；system_prompt 与 PRD func_13 原文对齐；全量测试通过无回归
 - blocker / 风险: 无
+
+## R1-027 Writer Timeout Hardening + Failure Finalization
+
+- 日期时间: 2026-03-20 17:07:39 CST (+0800)
+- 任务包编号: R1-027
+- session 标识: `codex/r1-027-writer-timeout-hardening`
+- 目标摘要:
+  - 修复 writer 真实 provider 在流式响应阶段抛出 `httpx.ReadTimeout` 时没有进入既有 retry / `upstream_service_error` 语义的问题
+  - 修复 delivery loop 最外层异常只打日志、不做失败收口，导致前端停留在 `writing_report / running / SSE=open` 的问题
+- 修改文件:
+  - `services/api/app/infrastructure/llm/zhipu.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/delivery/test_report_delivery.py -k 'stream_read_timeout or writer_retry_exhaustion or unhandled_writer_exception'`
+    - 初次结果: 2 failed, 1 passed
+    - 失败点:
+      - Zhipu stream response 提取阶段 `ReadTimeout` 直接外泄，未映射为 `RetryableLLMError`
+      - delivery loop 外层 `unhandled exception` 只写 critical log，没有发出 `task.failed`
+  - 定向回归:
+    - 同一命令修补后重跑: `3 passed`
+  - delivery 相关回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `38 passed`
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_delivery_prompts.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `11 passed`
+- 验收结论:
+  - `httpx.ReadTimeout` 在 writer 流式响应提取阶段已被映射到 `RetryableLLMError -> RetryableOperationError -> upstream_service_error`
+  - writer retry 耗尽后会发出 `task.failed` 并关闭 stream
+  - 即便仍有未预期异常越过 writer 路径，delivery loop 最外层也会把任务收口为明确失败事件，不再遗留 `running`
+  - 未修改 heartbeat / planner / collector / outline / 前端契约
+- blocker / 风险:
+  - 无当前 blocker
+  - 该任务只完成本地测试收敛，尚未做新的生产 smoke；如需验证真实 provider 行为，应另开生产验证任务包
+- 下一步建议:
+  - 单独执行一轮 production smoke，确认 `writing_report` 失败时前端已能及时收到 `task.failed`

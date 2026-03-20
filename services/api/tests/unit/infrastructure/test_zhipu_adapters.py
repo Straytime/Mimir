@@ -59,6 +59,14 @@ class FakeStatusError(Exception):
         self.body = body
 
 
+class RaisingStreamResponse:
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        raise httpx.ReadTimeout("timed out while streaming")
+
+
 def _build_requirement_detail() -> RequirementDetail:
     return RequirementDetail(
         research_goal="分析中国 AI 搜索产品竞争格局",
@@ -232,6 +240,22 @@ async def test_zhipu_llm_adapter_maps_retryable_failures_without_leaking_secret_
 
     assert "secret-key" not in caplog.text
     assert "private prompt" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_zhipu_llm_adapter_maps_stream_read_timeout_to_retryable_error() -> None:
+    adapter = ZhipuClarificationGenerator(
+        client=FakeZhipuClient(response=RaisingStreamResponse()),
+        model="glm-test",
+    )
+
+    with pytest.raises(RetryableLLMError):
+        await adapter.generate_natural(
+            LLMInvocation(
+                profile=build_stage_profile(Settings(), stage="clarification_natural"),
+                prompt_bundle=PromptBundle(system_prompt=None, user_prompt="private prompt"),
+            )
+        )
 
 
 @pytest.mark.asyncio

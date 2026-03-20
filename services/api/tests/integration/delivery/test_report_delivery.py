@@ -35,7 +35,7 @@ from app.domain.enums import AccessTokenResourceType
 from app.infrastructure.db.models import ArtifactRecord, TaskRevisionRecord, TaskToolCallRecord
 from app.infrastructure.delivery.local import LocalArtifactStore, LocalReportExportService
 from app.main import create_app
-from tests.contract.rest.test_task_events import read_sse_event, read_until_event
+from tests.contract.rest.test_task_events import assert_stream_closed, read_sse_event, read_until_event
 from tests.contract.rest.test_tasks import build_create_task_payload
 from tests.fixtures.app import StreamingASGITransport
 from tests.fixtures.runtime import FakeClock
@@ -67,6 +67,16 @@ class ScriptedWriterAgent(WriterAgent):
         if has_transcript:
             return WriterDecision(text=self.decision.text, tool_calls=())
         return self.decision
+
+
+class FailingWriterAgent(WriterAgent):
+    def __init__(self, *, error: Exception) -> None:
+        self.error = error
+        self.invocations: list[WriterInvocation] = []
+
+    async def write(self, invocation: WriterInvocation) -> WriterDecision:
+        self.invocations.append(invocation)
+        raise self.error
 
 
 @dataclass(slots=True)
@@ -473,3 +483,61 @@ async def test_artifact_upload_retry_exhaustion_fails_revision_without_silent_de
     assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
     assert len(scenario.created_ids) == 1
     assert len(scenario.destroyed_ids) == 1
+
+
+@pytest.mark.asyncio
+async def test_writer_retry_exhaustion_fails_task_and_closes_stream(
+    make_stage6_client,
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=FailingWriterAgent(
+            error=RetryableOperationError("temporary writer timeout"),
+        ),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        _, failed_name, failed_payload = await read_until_event(
+            lines,
+            {"task.failed"},
+            timeout=2.0,
+        )
+        await assert_stream_closed(lines)
+        await _close_stream(stream_context, response)
+
+    assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
+
+
+@pytest.mark.asyncio
+async def test_unhandled_writer_exception_fails_task_instead_of_leaking_running_state(
+    make_stage6_client,
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=FailingWriterAgent(
+            error=RuntimeError("writer stream crashed"),
+        ),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        _, failed_name, failed_payload = await read_until_event(
+            lines,
+            {"task.failed"},
+            timeout=2.0,
+        )
+        await assert_stream_closed(lines)
+        await _close_stream(stream_context, response)
+
+    assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
