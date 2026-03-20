@@ -2166,3 +2166,58 @@ Copy the template below for each completed session:
   - 本次任务未生成图片 artifact，因此 artifact 下载能力仍需依赖后续包含图片产物的任务另行验证
 - 下一步建议:
   - 如需继续 release validation，可单独执行 feedback revision 生产复验，验证 `submit_feedback -> waiting_next_revision -> switching -> planning_collection`
+
+## R1-029 Production Artifact + Feedback Revision Smoke
+
+- 日期时间: 2026-03-20 18:14:12 CST (+0800)
+- 任务包编号: R1-029
+- session 标识: `codex/r1-029-production-artifact-feedback-smoke`
+- 目标摘要:
+  - 在生产环境补齐最后两条未验证链路：`artifact` 生成/访问，以及 `feedback revision` 切换
+  - 如主链路不能闭环，则精确定界最早 blocker，不现场修复
+- 生产环境:
+  - Web: `https://research.robiniflore.com`
+  - API: `https://mimir-api-production.up.railway.app`
+- 生产 smoke 任务:
+  - `task_id`: `tsk_259afe576e5e7e3f91ff49f2`
+  - 研究主题: `研究中国 AI 搜索产品竞争格局与商业化机会，重点对比百度、夸克、秘塔 AI 搜索、Kimi、豆包。请在报告中生成至少一张可视化图表或矩阵图，例如玩家定位矩阵、市场规模趋势图或商业模式对比图，并提供可下载的图像制品。`
+  - 澄清回答: `用于内部战略与竞品分析；商业化重点看 C 端订阅、广告/搜索植入、B 端 API 三条路径；图表优先要用户规模-商业化成熟度象限图或玩家定位矩阵，并尽量生成至少一张图像制品；以百度、夸克、秘塔 AI 搜索、Kimi、豆包为主，可把传统搜索 AI 化能力当参照；需要包含未来 1 到 3 年趋势判断。`
+- 修改文件:
+  - `docs/Execution_Log.md`
+- 测试 / 验证:
+  - 生产页面与网络:
+    - 同一任务成功走过 `clarifying -> analyzing_requirement -> planning_collection -> collecting -> summarizing_collection`
+    - 由于资料缺口，planner 继续发起多轮补充搜集；前端时间线可见第三轮之后又进入一轮补充规划
+    - 在整个运行窗口内，浏览器网络持续出现 `POST /api/v1/tasks/{task_id}/heartbeat -> 204`
+    - 失败收口时前端状态为：
+      - `Phase=preparing_outline`
+      - `Status=failed`
+      - `SSE=open`
+      - 终态 banner: `任务已失败，旧任务操作已禁用。`
+  - Railway 运行日志:
+    - `2026-03-20T10:11:48Z` `collect_agent limit reached, skipping to merge`
+    - `2026-03-20T10:11:48Z` `outline starting`
+    - `2026-03-20T10:11:49Z` `operation failed (attempt 1), retrying in 3.0s`
+    - `2026-03-20T10:11:54Z` `operation failed (attempt 2), retrying in 6.0s`
+    - `2026-03-20T10:12:02Z` `operation failed (attempt 3), retrying in 12.0s`
+    - `2026-03-20T10:12:15Z` `operation retry exhausted after 4 failures`
+    - `2026-03-20T10:12:15Z` `outline upstream error after retries`
+    - `2026-03-20T10:12:15Z` `delivery task failed: outline 调用失败且重试耗尽。`
+    - 失败根因栈为 `app.infrastructure.llm.zhipu` 抛出的 `zai.core._errors.APIReachLimitError: 429`，错误文本为 `您的账户已达到速率限制，请您控制请求频率`
+  - artifact / feedback 验证结果:
+    - 未进入 `task.awaiting_feedback`
+    - Artifact Gallery 始终为 `0 张`
+    - 未出现 artifact URL，无法验证 artifact 打开/访问
+    - 无法提交 feedback，因此无法验证 `waiting_next_revision -> switching -> planning_collection`
+- 验收结论:
+  - 本次生产 smoke 未完成 artifact 与 feedback revision 的闭环验证
+  - 最早 blocker 不是前端下载或 revision 切换，而是 `outline` 在真实 provider 上因 `429 APIReachLimitError` 重试耗尽后失败
+  - 前端失败收口是正确的：没有卡在 `running`，而是自然进入 `failed`
+  - heartbeat 在失败前持续正常，说明本次阻塞与 heartbeat 无关
+- blocker / 风险:
+  - 当前最高优先级 blocker: 生产 `outline` 路径在高轮次深度研究后触发 Zhipu rate limit (`429`)，导致 delivery 之前即失败
+  - 在该 blocker 解除前，无法继续验证生产 `artifact` 访问与 `feedback revision` 切换
+  - 本次未创建第二条真实任务，避免在已明确出现 provider rate limit 的情况下继续消耗真实配额
+- 下一步建议:
+  - 单独下发实现/验证任务包，处理生产 `outline` 阶段的 provider 限流韧性（并发/节流/重试/配额策略）
+  - 待该 blocker 解除后，再重跑一轮 focused smoke 验证 `artifact` 与 `feedback revision`
