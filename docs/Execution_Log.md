@@ -2021,3 +2021,50 @@ Copy the template below for each completed session:
   - 后端: `pytest tests/unit tests/contract tests/integration` -> 203 passed, 0 failed
 - 验收结论: accepted；Writer 去除 JSON 包装改为直接 markdown 输出；API tool_calls 替代 JSON payload 提取；多轮 agent loop 实现完毕；system_prompt 与 PRD func_13 原文对齐；全量测试通过无回归
 - blocker / 风险: 无
+
+## R1-026 Production Full-Chain Smoke
+
+- 日期时间: 2026-03-20 16:54:58 CST (+0800)
+- 任务包编号: R1-026
+- 分支: `codex/r1-026-production-full-chain-smoke`
+- 目标摘要: 在当前 `main` 基线下对生产环境执行一轮完整主链路 smoke，验证真实 Railway + Vercel + real provider 链路是否闭环，并识别最早失败点
+- 生产环境:
+  - Web: `https://research.robiniflore.com`
+  - API: `https://mimir-api-production.up.railway.app`
+- 部署核对:
+  - Railway `mimir-api / production` 最新 deployment commit 为 `e52ccc586cdbcdff50fd93ae6c2c4f5de75a0747`
+  - Vercel production bundle `/_next/static/chunks/app/page-d0d52bc1462850dc.js` 的 `last-modified` 为 `2026-03-20 08:14:05 GMT`，与 `origin/main` 最新提交窗口一致
+- 生产 smoke task:
+  - `task_id`: `tsk_d7f17111c568aef81fbf4c4e`
+  - 研究主题: `2025 年中国 AI 搜索产品竞争格局`
+- 修改文件:
+  - `docs/Execution_Log.md`
+- 测试 / 验证:
+  - 浏览器主链路验证:
+    - 成功完成 `create task -> SSE connect -> natural clarification -> requirement analysis -> planning_collection -> collecting -> summarizing_collection -> sources.merged -> preparing_outline -> writing_report`
+    - 证据来自生产页面时间线、阶段切换、报告大纲渲染、浏览器网络与 Railway 运行日志
+  - 心跳连续性:
+    - 浏览器网络中同一 task 持续出现 `POST /heartbeat -> 204`
+    - Railway 日志显示从 collecting 到 outline / writer 阶段 heartbeat 持续上报，无 `heartbeat_timeout`
+  - 真实 provider 行为:
+    - collecting 阶段使用了 `web_search real` 与 `Jina web_fetch`
+    - outline 阶段成功完成
+    - writer 阶段开始后，Zhipu 流式输出在后端抛出 `httpx.ReadTimeout`
+- 验收结论:
+  - 本次 production smoke 未闭环到 delivery / downloads / feedback revision
+  - 主链路最远推进到 `writer round 1`
+  - 当前生产环境已越过 collecting / heartbeat 阻塞线，但尚未越过 writer / delivery 阻塞线
+- blocker / 风险:
+  - 最早失败点是 `writer`
+  - 直接证据:
+    - Railway 日志 `2026-03-20T08:49:55Z`：`writer round 1 starting`
+    - Railway 日志 `2026-03-20T08:52:23Z`：`unhandled exception in delivery loop`
+    - 异常栈: `app.application.services.delivery -> app.infrastructure.delivery.zhipu -> app.infrastructure.llm.zhipu -> httpx.ReadTimeout`
+  - 次级现象:
+    - 异常后前端仍显示 `Phase=writing_report`、`Status=running`、`SSE=open`
+    - 浏览器仍持续发送 heartbeat，说明失败没有及时收口到前端状态
+  - 结论口径:
+    - 唯一优先级最高的下一修复点是 `writer real-provider timeout / failure finalization`
+- 下一步建议:
+  - 下发单独 triage / fix 任务包，优先处理 `writer` 真实 provider 流式超时
+  - 同时核对 delivery loop 异常后的任务终态落库 / SSE 失败事件传播，避免出现“后端已异常但前端仍 running”的假运行状态
