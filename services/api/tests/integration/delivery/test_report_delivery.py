@@ -162,7 +162,7 @@ async def make_stage6_client(
 
 def build_outline_decision() -> OutlineDecision:
     return OutlineDecision(
-        deltas=("{\n  \"research_outline\": {",),
+        deltas=(),
         outline=ResearchOutline(
             title="中国 AI 搜索产品竞争格局研究",
             sections=(

@@ -30,35 +30,56 @@ class ZhipuOutlineAgent:
         self._model = model
 
     async def prepare(self, invocation: OutlineInvocation) -> OutlineDecision:
-        payload = await _complete_json(
-            client=self._client,
-            invocation=invocation,
-        )
+        if invocation.prompt_bundle is None or invocation.profile is None:
+            raise RetryableOperationError("zhipu invocation contract is incomplete")
+        try:
+            result = await self._client.complete(
+                invocation=LLMInvocation(
+                    profile=invocation.profile,
+                    prompt_bundle=invocation.prompt_bundle,
+                    tool_schemas=invocation.tool_schemas,
+                )
+            )
+        except RetryableLLMError as exc:
+            raise RetryableOperationError("zhipu upstream request failed") from exc
+        try:
+            payload = json.loads(strip_markdown_code_fence(result.text))
+        except json.JSONDecodeError as exc:
+            logger.error("outline: invalid JSON response", exc_info=True)
+            raise RetryableOperationError("zhipu returned invalid JSON") from exc
+        if not isinstance(payload, dict):
+            raise RetryableOperationError("zhipu returned invalid outline JSON")
+
         outline_payload = payload.get("research_outline")
         if not isinstance(outline_payload, dict):
             raise RetryableOperationError("zhipu returned invalid outline JSON")
-        raw_sections = outline_payload.get("sections")
-        if not isinstance(raw_sections, list):
-            raise RetryableOperationError("zhipu returned invalid outline JSON")
-        sections = []
-        for index, item in enumerate(raw_sections, start=1):
-            if not isinstance(item, dict):
+
+        title = "研究报告"
+        sections: list[OutlineSection] = []
+        order = 0
+        for key, value in outline_payload.items():
+            if not isinstance(value, dict):
                 continue
-            title = _coerce_optional_string(item.get("title"))
-            description = _coerce_optional_string(item.get("description"))
-            if not title or not description:
+            if key == "标题":
+                title = str(value.get("title") or "研究报告").strip()
                 continue
+            item_title = _coerce_optional_string(value.get("title"))
+            item_desc = _coerce_optional_string(value.get("description"))
+            if not item_title or not item_desc:
+                continue
+            order += 1
             sections.append(
                 OutlineSection(
-                    section_id=str(item.get("section_id") or f"sec_{index}"),
-                    title=title,
-                    description=description,
-                    order=int(item.get("order", index)),
+                    section_id=key,
+                    title=item_title,
+                    description=item_desc,
+                    order=order,
                 )
             )
         if not sections:
             raise RetryableOperationError("zhipu returned invalid outline JSON")
-        entities = outline_payload.get("entities")
+
+        entities = payload.get("entities")
         if isinstance(entities, (list, tuple)):
             entity_values = tuple(
                 str(item).strip() for item in entities if str(item).strip()
@@ -66,9 +87,9 @@ class ZhipuOutlineAgent:
         else:
             entity_values = ()
         return OutlineDecision(
-            deltas=_coerce_string_tuple(payload.get("deltas")),
+            deltas=(),
             outline=ResearchOutline(
-                title=str(outline_payload.get("title") or "研究报告").strip(),
+                title=title,
                 sections=tuple(sections),
                 entities=entity_values,
             ),
@@ -117,7 +138,7 @@ class ZhipuWriterAgent:
 async def _complete_json(
     *,
     client: ZhipuChatClient,
-    invocation: OutlineInvocation | WriterInvocation,
+    invocation: WriterInvocation,
 ) -> dict[str, Any]:
     if invocation.prompt_bundle is None or invocation.profile is None:
         raise RetryableOperationError("zhipu invocation contract is incomplete")
@@ -126,7 +147,7 @@ async def _complete_json(
         user_prompt=(
             invocation.prompt_bundle.user_prompt
             + "\n\n"
-            + _json_instruction_for_invocation(invocation)
+            + _json_instruction_for_writer()
         ).strip(),
         transcript=invocation.prompt_bundle.transcript,
     )
@@ -171,16 +192,7 @@ def _coerce_chat_client(
     return ZhipuChatClient(client=client)
 
 
-def _json_instruction_for_invocation(
-    invocation: OutlineInvocation | WriterInvocation,
-) -> str:
-    if isinstance(invocation, OutlineInvocation):
-        return (
-            '请输出合法 JSON：{"deltas": string[], "research_outline": {"title": string, '
-            '"sections": [{"section_id": string, "title": string, "description": string, '
-            '"order": number}], "entities": string[]}}。'
-            "不要输出 Markdown 代码块，不要输出额外解释。"
-        )
+def _json_instruction_for_writer() -> str:
     return (
         '请输出合法 JSON：{"reasoning_deltas": string[], "content_deltas": string[], '
         '"tool_calls": [{"tool_call_id": string, "tool_name": "python_interpreter", "code": string}], '

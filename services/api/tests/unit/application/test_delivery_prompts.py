@@ -78,8 +78,14 @@ def test_outline_prompt_semantic_lock_keeps_role_and_output_constraints() -> Non
     )
 
     assert "你是一个深度研究架构师" in prompt.system_prompt
-    assert "你绝对不能撰写具体内容" in prompt.system_prompt
-    assert "实体约束与大纲必须严格考量信息获取结果" in prompt.system_prompt
+    assert "你**绝对不能**撰写具体内容" in prompt.system_prompt
+    assert "章节描述内容**必须**满足以下要求" in prompt.system_prompt
+    assert "\uff08\u5982 \u201c92%\u201d\uff09" in prompt.system_prompt
+    assert '应使用\u201c选取代表性XX\u201d、\u201c对比主流XX\u201d等抽象化表述。' in prompt.system_prompt
+    assert "**实体约束与大纲必须严格考量信息获取结果，保证已有信息可支撑**" in prompt.system_prompt
+    assert '"标题"' in prompt.system_prompt
+    assert '"section_1"' in prompt.system_prompt
+    assert '"参考来源"' in prompt.system_prompt
     assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
     assert "<用户研究需求>" in prompt.user_prompt
     assert "分析中国 AI 搜索产品的竞争格局与未来机会" in prompt.user_prompt

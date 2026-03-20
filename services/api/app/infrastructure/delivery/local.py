@@ -19,7 +19,7 @@ from app.application.dto.delivery import (
 class LocalStubOutlineAgent:
     async def prepare(self, invocation: OutlineInvocation) -> OutlineDecision:
         return OutlineDecision(
-            deltas=("{\n  \"research_outline\": {",),
+            deltas=(),
             outline=ResearchOutline(
                 title=f"{invocation.requirement_detail.research_goal}研究",
                 sections=(

@@ -1939,3 +1939,33 @@ Copy the template below for each completed session:
   - 后端: `pytest tests/unit tests/contract tests/integration` -> 183 passed, 0 failed
 - 验收结论: accepted；transcript arguments 包含完整参数；risk_blocked 场景 None 值被排除；现有测试全部通过无回归
 - blocker / 风险: 无
+
+---
+
+### R1-024 fix(api): outline prompt PRD 对齐 + 去除追加 JSON 指令
+
+- 日期: 2026-03-20
+- 分支: `claude/outline-prd-align`
+- 目标: outline system_prompt 对齐 PRD func_12 原文（7 处文本差异 + 输出格式由 flat sections 改为 key-value）；ZhipuOutlineAgent 直接调用 client.complete() 解析 PRD key-value 格式；去除 outline 分支的追加 JSON 指令；outline.delta 改为无条件单条事件
+- 实现变更:
+  - `app/application/prompts/delivery.py` — system_prompt 完全对齐 PRD func_12：加粗标记（`**绝对不能**`、`**必须**`、`**功能**`/`**范围**`/`**结果**`、`**实体约束...**`）；增加示例 `（如 "92%"）`；增加抽象化表述指导 `应使用"选取代表性XX"、"对比主流XX"等抽象化表述`；输出格式改为 PRD key-value 结构（标题/section_1...section_n/参考来源 + 顶层 entities）；使用字符串拼接替代 f-string 避免 Python 3.12 confusable character 语法错误
+  - `app/infrastructure/delivery/zhipu.py` — ZhipuOutlineAgent.prepare() 直接调用 client.complete() + json.loads(strip_markdown_code_fence(result.text))，不再经过 _complete_json；解析 PRD key-value 格式：`标题` key 提取 title，其余 key 按顺序构建 sections，entities 从顶层提取；deltas 固定返回 ()；_json_instruction_for_invocation 删除 outline 分支，重命名为 _json_instruction_for_writer()，_complete_json 签名收窄为仅接受 WriterInvocation
+  - `app/application/services/delivery.py` — _run_outline 中 reasoning_text 改为 ""（不再 join decision.deltas）；outline.delta 事件改为无条件发送单条 `{"delta": "正在构思..."}`，不再循环 decision.deltas
+  - `app/infrastructure/delivery/local.py` — LocalStubOutlineAgent.deltas 从 `("{\n  \"research_outline\": {",)` 改为 `()`
+- 测试变更:
+  - `tests/unit/application/test_delivery_prompts.py`:
+    - `test_outline_prompt_semantic_lock_keeps_role_and_output_constraints` 断言更新：验证加粗标记、示例、抽象化表述、key-value 输出格式（标题/section_1/参考来源）
+  - `tests/unit/infrastructure/test_zhipu_outline_agent.py`（新增）:
+    - `test_parse_prd_key_value_format`：3 sections（section_1 + section_2 + 参考来源），标题提取正确，entities 顶层提取，deltas=()
+    - `test_parse_prd_format_skips_title_key_in_sections`：标题 key 不作为 section
+    - `test_parse_prd_format_entities_at_top_level`：entities 从顶层提取
+    - `test_parse_prd_format_missing_research_outline_raises`：缺少 research_outline → RetryableOperationError
+    - `test_parse_prd_format_no_sections_raises`：只有标题无 section → RetryableOperationError
+    - `test_outline_agent_does_not_append_json_instruction`：user_prompt 不含 "请输出合法 JSON"
+    - `test_parse_prd_format_with_markdown_fence`：markdown code fence 包裹仍可解析
+  - `tests/integration/delivery/test_report_delivery.py`:
+    - `build_outline_decision()` 的 deltas 改为 ()
+- 测试:
+  - 后端: `pytest tests/unit tests/contract tests/integration` -> 190 passed, 0 failed
+- 验收结论: accepted；system_prompt 与 PRD func_12 原文完全对齐；ZhipuOutlineAgent 正确解析 PRD key-value 格式；outline.delta 无条件单条；_json_instruction outline 分支已删除；全量测试通过无回归
+- blocker / 风险: 无
