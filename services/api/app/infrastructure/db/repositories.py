@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from datetime import UTC, datetime
@@ -768,7 +769,7 @@ def _as_utc(value: datetime | None) -> datetime | None:
 
 
 def _source_key(link: str) -> str:
-    return link.strip().lower()
+    return hashlib.sha256(link.strip().lower().encode()).hexdigest()
 
 
 def _natural_sort_key(value: str | None) -> tuple[object, ...]:
