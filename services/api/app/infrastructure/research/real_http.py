@@ -30,6 +30,7 @@ from app.domain.schemas import CollectPlan
 from app.infrastructure.llm.zhipu import (
     ZhipuChatClient,
     ZhipuClientProtocol,
+    ZhipuCompletionResult,
 )
 
 
@@ -43,13 +44,85 @@ class ZhipuPlannerAgent:
         self._model = model
 
     async def plan(self, invocation: PlannerInvocation) -> PlannerDecision:
-        payload = await _complete_json(
-            client=self._client,
-            invocation=invocation,
+        if invocation.prompt_bundle is None or invocation.profile is None:
+            raise RetryableOperationError("zhipu invocation contract is incomplete")
+        try:
+            result = await self._client.complete(
+                invocation=LLMInvocation(
+                    profile=invocation.profile,
+                    prompt_bundle=invocation.prompt_bundle,
+                    tool_schemas=invocation.tool_schemas,
+                )
+            )
+        except RiskControlTriggered:
+            raise
+        except RetryableLLMError as exc:
+            raise RetryableOperationError("zhipu upstream request failed") from exc
+
+        if result.tool_calls:
+            return self._parse_tool_calls(result, invocation)
+        if result.text.strip():
+            return self._parse_content_json(result, invocation)
+        return PlannerDecision(reasoning_deltas=(), plans=(), stop=True)
+
+    def _parse_tool_calls(
+        self,
+        result: "ZhipuCompletionResult",
+        invocation: PlannerInvocation,
+    ) -> PlannerDecision:
+        plans: list[CollectPlan] = []
+        for index, tc in enumerate(result.tool_calls, start=1):
+            if tc["name"] != "collect_agent":
+                continue
+            try:
+                args = json.loads(tc["arguments"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(args, dict):
+                continue
+            try:
+                freshness_value = str(
+                    args.get("freshness_requirement", "high")
+                ).lower()
+                plans.append(
+                    CollectPlan(
+                        tool_call_id=tc.get("id") or f"call_plan_{invocation.call_index}_{index}",
+                        revision_id="rev_pending",
+                        collect_target=str(args["collect_target"]).strip(),
+                        additional_info=str(args["additional_info"]).strip(),
+                        freshness_requirement=FreshnessRequirement(freshness_value),
+                    )
+                )
+            except (KeyError, ValueError):
+                continue
+        reasoning_text = result.text.strip()
+        reasoning_deltas = (reasoning_text,) if reasoning_text else ()
+        return PlannerDecision(
+            reasoning_deltas=reasoning_deltas,
+            plans=tuple(plans),
+            stop=False,
         )
-        reasoning_deltas = _coerce_string_tuple(payload.get("reasoning_deltas"))
-        stop = bool(payload.get("stop", False))
-        raw_plans = payload.get("plans") or ()
+
+    @staticmethod
+    def _parse_content_json(
+        result: "ZhipuCompletionResult",
+        invocation: PlannerInvocation,
+    ) -> PlannerDecision:
+        try:
+            parsed = json.loads(strip_markdown_code_fence(result.text))
+        except json.JSONDecodeError:
+            logger.info(
+                "planner returned non-JSON text, treating as stop: request_id=%s",
+                result.request_id,
+            )
+            return PlannerDecision(reasoning_deltas=(), plans=(), stop=True)
+
+        if not isinstance(parsed, dict):
+            return PlannerDecision(reasoning_deltas=(), plans=(), stop=True)
+
+        reasoning_deltas = _coerce_string_tuple(parsed.get("reasoning_deltas"))
+        stop = bool(parsed.get("stop", False))
+        raw_plans = parsed.get("plans") or ()
         plans: list[CollectPlan] = []
         for index, item in enumerate(raw_plans, start=1):
             if not isinstance(item, dict):
@@ -244,7 +317,7 @@ class HttpWebFetchClient:
 async def _complete_json(
     *,
     client: ZhipuChatClient,
-    invocation: PlannerInvocation | CollectorInvocation | SummaryInvocation,
+    invocation: CollectorInvocation | SummaryInvocation,
 ) -> dict[str, Any]:
     if invocation.prompt_bundle is None or invocation.profile is None:
         raise RetryableOperationError("zhipu invocation contract is incomplete")
@@ -294,14 +367,8 @@ def _coerce_chat_client(
 
 
 def _json_instruction_for_invocation(
-    invocation: PlannerInvocation | CollectorInvocation | SummaryInvocation,
+    invocation: CollectorInvocation | SummaryInvocation,
 ) -> str:
-    if isinstance(invocation, PlannerInvocation):
-        return (
-            '请输出合法 JSON：{"reasoning_deltas": string[], "stop": boolean, '
-            '"plans": [{"collect_target": string, "additional_info": string, '
-            '"freshness_requirement": "low|high"}]}。不要输出 Markdown 代码块，不要输出额外解释。'
-        )
     if isinstance(invocation, CollectorInvocation):
         return (
             '请输出合法 JSON：{"reasoning_deltas": string[], "search_queries": string[], '

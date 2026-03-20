@@ -173,8 +173,8 @@ async def test_zhipu_planner_adapter_uses_prompt_bundle_and_tool_schema_instead_
     assert call["stream"] is True
     assert [message["role"] for message in call["messages"]] == ["system", "user", "tool"]
     assert call["messages"][0]["content"] == "system-visible-planner"
-    assert call["messages"][1]["content"].startswith("user-visible-planner")
-    assert "请输出合法 JSON" in call["messages"][1]["content"]
+    assert call["messages"][1]["content"] == "user-visible-planner"
+    assert "请输出合法 JSON" not in call["messages"][1]["content"]
     assert call["messages"][2]["tool_call_id"] == "call_1"
     assert call["messages"][2]["name"] == "collect_agent"
     assert all("planner_round" not in message["content"] for message in call["messages"])
@@ -363,7 +363,7 @@ class TestExtractResponseWithDiagnostics:
                 )
             ],
         )
-        text, diag = _extract_response_with_diagnostics(response)
+        text, diag, tool_calls = _extract_response_with_diagnostics(response)
         assert text == "hello world"
         assert diag["type"] == "non_stream"
         assert diag["request_id"] == "req_123"
@@ -372,6 +372,7 @@ class TestExtractResponseWithDiagnostics:
         assert diag["content_type"] == "str"
         assert "hello world" in diag["content_repr"]
         assert diag["usage"] is not None
+        assert tool_calls == ()
 
     def test_empty_content_returns_diagnostics_with_finish_reason(self) -> None:
         response = SimpleNamespace(
@@ -384,16 +385,17 @@ class TestExtractResponseWithDiagnostics:
                 )
             ],
         )
-        text, diag = _extract_response_with_diagnostics(response)
+        text, diag, _ = _extract_response_with_diagnostics(response)
         assert text == ""
         assert diag["finish_reason"] == "length"
         assert diag["content_type"] == "str"
 
     def test_no_choices_returns_empty_with_type_info(self) -> None:
         response = SimpleNamespace(id=None, usage=None, choices=[])
-        text, diag = _extract_response_with_diagnostics(response)
+        text, diag, tool_calls = _extract_response_with_diagnostics(response)
         assert text == ""
         assert diag["choices_count"] == 0
+        assert tool_calls == ()
 
     def test_dict_response_format(self) -> None:
         response = {
@@ -405,9 +407,39 @@ class TestExtractResponseWithDiagnostics:
                 }
             ],
         }
-        text, diag = _extract_response_with_diagnostics(response)
+        text, diag, _ = _extract_response_with_diagnostics(response)
         assert text == "dict content"
         assert diag["finish_reason"] == "stop"
+
+    def test_response_with_tool_calls(self) -> None:
+        response = SimpleNamespace(
+            id="req_tc",
+            usage=None,
+            choices=[
+                SimpleNamespace(
+                    finish_reason="tool_calls",
+                    message=SimpleNamespace(
+                        content="",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_1",
+                                function=SimpleNamespace(
+                                    name="collect_agent",
+                                    arguments='{"collect_target":"目标"}',
+                                ),
+                            )
+                        ],
+                    ),
+                )
+            ],
+        )
+        text, diag, tool_calls = _extract_response_with_diagnostics(response)
+        assert text == ""
+        assert diag["finish_reason"] == "tool_calls"
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["id"] == "call_1"
+        assert tool_calls[0]["name"] == "collect_agent"
+        assert tool_calls[0]["arguments"] == '{"collect_target":"目标"}'
 
 
 class TestExtractStreamWithDiagnostics:
@@ -434,7 +466,7 @@ class TestExtractStreamWithDiagnostics:
                 ],
             ),
         ]
-        text, diag = _extract_stream_with_diagnostics(iter(chunks))
+        text, diag, tool_calls = _extract_stream_with_diagnostics(iter(chunks))
         assert text == "hello world"
         assert diag["type"] == "stream"
         assert diag["request_id"] == "req_s1"
@@ -444,14 +476,16 @@ class TestExtractStreamWithDiagnostics:
         assert diag["no_choices_chunks"] == 0
         assert diag["finish_reasons"] == ["stop"]
         assert diag["usage"] is not None
+        assert tool_calls == ()
 
     def test_empty_stream_returns_diagnostics(self) -> None:
-        text, diag = _extract_stream_with_diagnostics(iter([]))
+        text, diag, tool_calls = _extract_stream_with_diagnostics(iter([]))
         assert text == ""
         assert diag["chunk_count"] == 0
         assert diag["content_chunks"] == 0
         assert diag["finish_reasons"] == []
         assert diag["request_id"] is None
+        assert tool_calls == ()
 
     def test_stream_with_all_empty_content_chunks(self) -> None:
         chunks = [
@@ -476,7 +510,7 @@ class TestExtractStreamWithDiagnostics:
                 ],
             ),
         ]
-        text, diag = _extract_stream_with_diagnostics(iter(chunks))
+        text, diag, _ = _extract_stream_with_diagnostics(iter(chunks))
         assert text == ""
         assert diag["chunk_count"] == 2
         assert diag["empty_content_chunks"] == 2
@@ -501,7 +535,7 @@ class TestExtractStreamWithDiagnostics:
                 ],
             },
         ]
-        text, diag = _extract_stream_with_diagnostics(iter(chunks))
+        text, diag, _ = _extract_stream_with_diagnostics(iter(chunks))
         assert text == "part1part2"
         assert diag["request_id"] == "req_d"
         assert diag["finish_reasons"] == ["stop"]
@@ -520,12 +554,115 @@ class TestExtractStreamWithDiagnostics:
                 ],
             ),
         ]
-        text, diag = _extract_stream_with_diagnostics(iter(chunks))
+        text, diag, _ = _extract_stream_with_diagnostics(iter(chunks))
         assert text == "data"
         assert diag["chunk_count"] == 2
         # First chunk has no choices → skipped by continue, not counted as content or empty
         assert diag["content_chunks"] == 1
         assert diag["empty_content_chunks"] == 0
+
+    def test_stream_single_tool_call_incremental(self) -> None:
+        chunks = [
+            SimpleNamespace(
+                id="req_tc",
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        finish_reason=None,
+                        delta=SimpleNamespace(
+                            content=None,
+                            tool_calls=[
+                                SimpleNamespace(
+                                    index=0,
+                                    id="call_1",
+                                    function=SimpleNamespace(
+                                        name="collect_agent",
+                                        arguments='{"collect_',
+                                    ),
+                                )
+                            ],
+                        ),
+                    )
+                ],
+            ),
+            SimpleNamespace(
+                id="req_tc",
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        finish_reason=None,
+                        delta=SimpleNamespace(
+                            content=None,
+                            tool_calls=[
+                                SimpleNamespace(
+                                    index=0,
+                                    id=None,
+                                    function=SimpleNamespace(
+                                        name=None,
+                                        arguments='target":"目标"}',
+                                    ),
+                                )
+                            ],
+                        ),
+                    )
+                ],
+            ),
+            SimpleNamespace(
+                id="req_tc",
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="tool_calls",
+                        delta=SimpleNamespace(content=None),
+                    )
+                ],
+            ),
+        ]
+        text, diag, tool_calls = _extract_stream_with_diagnostics(iter(chunks))
+        assert text == ""
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["id"] == "call_1"
+        assert tool_calls[0]["name"] == "collect_agent"
+        assert tool_calls[0]["arguments"] == '{"collect_target":"目标"}'
+        assert diag["finish_reasons"] == ["tool_calls"]
+
+    def test_stream_multiple_concurrent_tool_calls(self) -> None:
+        chunks = [
+            SimpleNamespace(
+                id="req_mc",
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        finish_reason=None,
+                        delta=SimpleNamespace(
+                            content=None,
+                            tool_calls=[
+                                SimpleNamespace(
+                                    index=0,
+                                    id="call_a",
+                                    function=SimpleNamespace(
+                                        name="collect_agent",
+                                        arguments='{"collect_target":"A","additional_info":"a","freshness_requirement":"high"}',
+                                    ),
+                                ),
+                                SimpleNamespace(
+                                    index=1,
+                                    id="call_b",
+                                    function=SimpleNamespace(
+                                        name="collect_agent",
+                                        arguments='{"collect_target":"B","additional_info":"b","freshness_requirement":"high"}',
+                                    ),
+                                ),
+                            ],
+                        ),
+                    )
+                ],
+            ),
+        ]
+        text, diag, tool_calls = _extract_stream_with_diagnostics(iter(chunks))
+        assert len(tool_calls) == 2
+        assert tool_calls[0]["id"] == "call_a"
+        assert tool_calls[1]["id"] == "call_b"
 
 
 class TestSafeRepr:
@@ -608,3 +745,205 @@ async def test_zhipu_starting_log_includes_prompt_chars(
     assert "prompt_chars=" in starting_msg
     assert "thinking=" in starting_msg
     assert "stream=" in starting_msg
+
+
+@pytest.mark.asyncio
+async def test_complete_empty_text_with_tool_calls_does_not_raise() -> None:
+    """When text is empty but tool_calls are present, complete() should not raise."""
+    from app.infrastructure.llm.zhipu import ZhipuChatClient, ZhipuCompletionResult
+
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            id="req_tc_ok",
+            choices=[
+                SimpleNamespace(
+                    finish_reason="tool_calls",
+                    message=SimpleNamespace(
+                        content="",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_1",
+                                function=SimpleNamespace(
+                                    name="collect_agent",
+                                    arguments='{"collect_target":"X"}',
+                                ),
+                            )
+                        ],
+                    ),
+                )
+            ],
+        )
+    )
+    client = ZhipuChatClient(client=raw_client)
+    result = await client.complete(
+        invocation=LLMInvocation(
+            profile=build_stage_profile(Settings(), stage="clarification_natural"),
+            prompt_bundle=PromptBundle(system_prompt=None, user_prompt="test"),
+        )
+    )
+    assert isinstance(result, ZhipuCompletionResult)
+    assert result.text == ""
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0]["name"] == "collect_agent"
+
+
+def _build_planner_invocation(*, call_index: int = 1) -> PlannerInvocation:
+    return PlannerInvocation(
+        prompt_name="planner_round",
+        requirement_detail=_build_requirement_detail(),
+        summaries=(),
+        call_index=call_index,
+        collect_agent_calls_used=0,
+        now=SimpleNamespace(isoformat=lambda: "2026-03-16T15:00:00+00:00"),
+        profile=build_stage_profile(Settings(), stage="planner"),
+        prompt_bundle=PromptBundle(
+            system_prompt="system",
+            user_prompt="user",
+        ),
+        tool_schemas=(build_collect_agent_tool_schema(),),
+    )
+
+
+@pytest.mark.asyncio
+async def test_planner_parses_tool_calls_response() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            id="req_plan_tc",
+            choices=[
+                SimpleNamespace(
+                    finish_reason="tool_calls",
+                    message=SimpleNamespace(
+                        content="",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_tc_1",
+                                function=SimpleNamespace(
+                                    name="collect_agent",
+                                    arguments=json.dumps({
+                                        "collect_target": "中国 AI 市场",
+                                        "additional_info": "聚焦 2025 年",
+                                        "freshness_requirement": "high",
+                                    }, ensure_ascii=False),
+                                ),
+                            ),
+                            SimpleNamespace(
+                                id="call_tc_2",
+                                function=SimpleNamespace(
+                                    name="collect_agent",
+                                    arguments=json.dumps({
+                                        "collect_target": "竞品分析",
+                                        "additional_info": "对比主要竞争者",
+                                    }, ensure_ascii=False),
+                                ),
+                            ),
+                        ],
+                    ),
+                )
+            ],
+        )
+    )
+    adapter = ZhipuPlannerAgent(client=raw_client, model="glm-test")
+    decision = await adapter.plan(_build_planner_invocation())
+
+    assert decision.stop is False
+    assert len(decision.plans) == 2
+    assert decision.plans[0].tool_call_id == "call_tc_1"
+    assert decision.plans[0].collect_target == "中国 AI 市场"
+    assert decision.plans[0].freshness_requirement == FreshnessRequirement.HIGH
+    assert decision.plans[1].tool_call_id == "call_tc_2"
+    assert decision.plans[1].collect_target == "竞品分析"
+    assert decision.plans[1].freshness_requirement == FreshnessRequirement.HIGH
+
+
+@pytest.mark.asyncio
+async def test_planner_parses_content_json_response() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=json.dumps({
+                            "reasoning_deltas": ["先补公开资料"],
+                            "stop": False,
+                            "plans": [
+                                {
+                                    "collect_target": "目标 A",
+                                    "additional_info": "补充 A",
+                                    "freshness_requirement": "high",
+                                }
+                            ],
+                        }, ensure_ascii=False)
+                    )
+                )
+            ]
+        )
+    )
+    adapter = ZhipuPlannerAgent(client=raw_client, model="glm-test")
+    decision = await adapter.plan(_build_planner_invocation())
+
+    assert decision.stop is False
+    assert len(decision.plans) == 1
+    assert decision.plans[0].collect_target == "目标 A"
+    assert decision.reasoning_deltas == ("先补公开资料",)
+
+
+@pytest.mark.asyncio
+async def test_planner_natural_language_text_returns_stop_true() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="已经完成了所有信息收集，无需继续。"
+                    )
+                )
+            ]
+        )
+    )
+    adapter = ZhipuPlannerAgent(client=raw_client, model="glm-test")
+    decision = await adapter.plan(_build_planner_invocation())
+
+    assert decision.stop is True
+    assert decision.plans == ()
+
+
+@pytest.mark.asyncio
+async def test_planner_skips_non_collect_agent_tool_calls() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            id="req_skip",
+            choices=[
+                SimpleNamespace(
+                    finish_reason="tool_calls",
+                    message=SimpleNamespace(
+                        content="",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_other",
+                                function=SimpleNamespace(
+                                    name="some_other_tool",
+                                    arguments='{"key":"value"}',
+                                ),
+                            ),
+                            SimpleNamespace(
+                                id="call_valid",
+                                function=SimpleNamespace(
+                                    name="collect_agent",
+                                    arguments=json.dumps({
+                                        "collect_target": "有效目标",
+                                        "additional_info": "补充",
+                                    }, ensure_ascii=False),
+                                ),
+                            ),
+                        ],
+                    ),
+                )
+            ],
+        )
+    )
+    adapter = ZhipuPlannerAgent(client=raw_client, model="glm-test")
+    decision = await adapter.plan(_build_planner_invocation())
+
+    assert len(decision.plans) == 1
+    assert decision.plans[0].collect_target == "有效目标"
+    assert decision.plans[0].tool_call_id == "call_valid"
