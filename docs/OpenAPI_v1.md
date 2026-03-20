@@ -1152,7 +1152,7 @@ payload:
 
 ```json
 {
-  "delta": "{\n  \"research_outline\": {"
+  "delta": "正在构思..."
 }
 ```
 

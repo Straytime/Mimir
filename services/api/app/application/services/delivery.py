@@ -268,7 +268,7 @@ class DeliveryOrchestrator:
                 agent_type="outliner",
                 prompt_name=invocation.prompt_name,
                 status="completed",
-                reasoning_text="\n".join(decision.deltas),
+                reasoning_text="",
                 content_text=json.dumps(
                     {
                         "prompt_bundle": dump_prompt_bundle(prompt_bundle),
@@ -283,12 +283,11 @@ class DeliveryOrchestrator:
             )
             session.commit()
 
-        for delta in decision.deltas:
-            await self._append_event(
-                task_id=task_id,
-                event="outline.delta",
-                payload={"delta": delta},
-            )
+        await self._append_event(
+            task_id=task_id,
+            event="outline.delta",
+            payload={"delta": "正在构思..."},
+        )
         await self._append_event(
             task_id=task_id,
             event="outline.completed",
