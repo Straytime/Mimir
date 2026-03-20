@@ -52,12 +52,20 @@ class ScriptedOutlineAgent(OutlineAgent):
 
 
 class ScriptedWriterAgent(WriterAgent):
+    """Returns tool_calls on first call, then text-only on subsequent calls."""
+
     def __init__(self, decision: WriterDecision) -> None:
         self.decision = decision
         self.invocations: list[WriterInvocation] = []
 
     async def write(self, invocation: WriterInvocation) -> WriterDecision:
         self.invocations.append(invocation)
+        has_transcript = (
+            invocation.prompt_bundle is not None
+            and len(invocation.prompt_bundle.transcript) > 0
+        )
+        if has_transcript:
+            return WriterDecision(text=self.decision.text, tool_calls=())
         return self.decision
 
 
@@ -186,11 +194,7 @@ def build_outline_decision() -> OutlineDecision:
 
 def build_writer_decision(*, tool_call_count: int = 1) -> WriterDecision:
     return WriterDecision(
-        reasoning_deltas=("先完成正文，再补图表。",),
-        content_deltas=(
-            "## 一、研究背景与问题定义\n",
-            "## 二、竞争格局与主要玩家\n",
-        ),
+        text="# \u4e2d\u56fd AI \u641c\u7d22\u4ea7\u54c1\u7ade\u4e89\u683c\u5c40\u7814\u7a76\n\n## \u4e00\u3001\u7814\u7a76\u80cc\u666f\u4e0e\u95ee\u9898\u5b9a\u4e49\n\u6b63\u6587\u3002\n",
         tool_calls=tuple(
             WriterToolCall(
                 tool_call_id=f"call_writer_{index}",
@@ -199,7 +203,6 @@ def build_writer_decision(*, tool_call_count: int = 1) -> WriterDecision:
             )
             for index in range(1, tool_call_count + 1)
         ),
-        final_markdown="# 中国 AI 搜索产品竞争格局研究\n\n## 一、研究背景与问题定义\n正文。\n",
     )
 
 

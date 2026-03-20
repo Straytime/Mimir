@@ -72,7 +72,5 @@ class SandboxExecutionResult:
 
 @dataclass(frozen=True, slots=True)
 class WriterDecision:
-    reasoning_deltas: tuple[str, ...]
-    content_deltas: tuple[str, ...]
+    text: str
     tool_calls: tuple[WriterToolCall, ...]
-    final_markdown: str

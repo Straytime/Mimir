@@ -1969,3 +1969,55 @@ Copy the template below for each completed session:
   - 后端: `pytest tests/unit tests/contract tests/integration` -> 190 passed, 0 failed
 - 验收结论: accepted；system_prompt 与 PRD func_12 原文完全对齐；ZhipuOutlineAgent 正确解析 PRD key-value 格式；outline.delta 无条件单条；_json_instruction outline 分支已删除；全量测试通过无回归
 - blocker / 风险: 无
+
+## R1-025 Writer Agent PRD 对齐 — 去除 JSON 包装 + API Tool Calls + Agent Loop
+
+- 日期时间: 2026-03-20 15:50:00 CST (+0800)
+- 任务包编号: R1-025
+- 分支: `claude/writer-prd-align`
+- 关联文档: `docs/Mimir_v1.0.0_prd_0.3.md` func_13 (Writer system_prompt + agent loop)
+- 变更摘要:
+
+  **1. WriterDecision DTO 简化** (`app/application/dto/delivery.py`)
+  - 从 4 字段 `{reasoning_deltas, content_deltas, tool_calls, final_markdown}` 简化为 2 字段 `{text, tool_calls}`
+  - Writer 直接输出 markdown，不再 JSON 包装
+
+  **2. ZhipuWriterAgent 重写** (`app/infrastructure/delivery/zhipu.py`)
+  - `write()` 使用 `client.complete()` 直接调用 + API `result.tool_calls` 解析
+  - 仅保留 `python_interpreter` tool calls，跳过空 code 和 malformed JSON
+  - 删除 `_complete_json()`、`_json_instruction_for_writer()`、`_coerce_string_tuple()` 等旧方法
+
+  **3. Agent Loop 实现** (`app/application/services/delivery.py`)
+  - 新增 `_run_writer_loop()`: 多轮 writer 调用，通过 `PromptBundle.transcript` 反馈 tool call 结果
+  - 重构 `_run_writer()` 为 `_run_writer_round()`: 单轮调用 + 错误处理 + agent_run 持久化
+  - 新增 `_split_markdown_deltas()`: 将最终 markdown 切分为 SSE 流式 chunks
+  - `writer.reasoning.delta` 改为无条件单条 "正在撰写..."
+  - 最大轮次 `settings.writer_max_rounds` (默认 5)，超限时忽略剩余 tool_calls
+
+  **4. Writer system_prompt PRD 对齐** (`app/application/prompts/delivery.py`)
+  - "保证研究内容前后逻辑连贯..." 加粗标记
+  - "绝对不要超过一万字。" → "**！重要！绝对不要超过一万字！**。"
+
+  **5. LocalStubWriterAgent 适配** (`app/infrastructure/delivery/local.py`)
+  - 基于 transcript 判断轮次: 无 transcript → 返回 tool_calls; 有 transcript → 返回 text
+  - 不再使用 `_call_count` 计数器（避免跨测试状态泄漏）
+
+  **6. 测试更新**
+  - 新增 `tests/unit/infrastructure/test_zhipu_writer_agent.py` (8 tests):
+    - text 直接返回、API tool_calls 解析、跳过非 python_interpreter、跳过空 code、fallback id、malformed JSON、whitespace strip、incomplete invocation
+  - 新增 `tests/unit/application/test_split_markdown_deltas.py` (5 tests):
+    - 空字符串、短文本、分块、精确边界、默认 chunk_size
+  - 更新 `tests/unit/application/test_delivery_prompts.py`:
+    - 加粗标记断言: `**保证...无冲突。**` + `**！重要！...一万字！**`
+  - 更新 `tests/integration/delivery/test_report_delivery.py`:
+    - `build_writer_decision()` 使用新 DTO 字段 `text` + `tool_calls`
+    - `ScriptedWriterAgent` 基于 transcript 切换行为
+  - 更新 `tests/integration/collection/test_collection_engine.py`:
+    - `NoopWriterAgent` 使用新 DTO 字段
+
+- 新增配置: `Settings.writer_max_rounds` (默认 5, 环境变量未暴露 — 仅内部使用)
+- SSE 事件兼容性: writer.reasoning.delta / writer.tool_call.requested / writer.tool_call.completed / writer.delta / artifact.ready 事件序列与 payload 结构不变
+- 测试:
+  - 后端: `pytest tests/unit tests/contract tests/integration` -> 203 passed, 0 failed
+- 验收结论: accepted；Writer 去除 JSON 包装改为直接 markdown 输出；API tool_calls 替代 JSON payload 提取；多轮 agent loop 实现完毕；system_prompt 与 PRD func_13 原文对齐；全量测试通过无回归
+- blocker / 风险: 无

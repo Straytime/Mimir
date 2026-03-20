@@ -1,8 +1,7 @@
 import json
 import logging
-from typing import Any
 
-from app.application.dto.invocation import LLMInvocation, PromptBundle
+from app.application.dto.invocation import LLMInvocation
 
 logger = logging.getLogger(__name__)
 from app.application.dto.delivery import (
@@ -102,86 +101,43 @@ class ZhipuWriterAgent:
         self._model = model
 
     async def write(self, invocation: WriterInvocation) -> WriterDecision:
-        payload = await _complete_json(
-            client=self._client,
-            invocation=invocation,
-        )
-        raw_tool_calls = payload.get("tool_calls") or ()
+        if invocation.prompt_bundle is None or invocation.profile is None:
+            raise RetryableOperationError("zhipu invocation contract is incomplete")
+        logger.info("writer round starting: prompt_name=%s", invocation.prompt_name)
+        try:
+            result = await self._client.complete(
+                invocation=LLMInvocation(
+                    profile=invocation.profile,
+                    prompt_bundle=invocation.prompt_bundle,
+                    tool_schemas=invocation.tool_schemas,
+                )
+            )
+        except RetryableLLMError as exc:
+            raise RetryableOperationError("zhipu upstream request failed") from exc
+
         tool_calls: list[WriterToolCall] = []
-        for index, item in enumerate(raw_tool_calls, start=1):
-            if not isinstance(item, dict):
+        for index, tc in enumerate(result.tool_calls, start=1):
+            name = tc.get("name", "")
+            if name != "python_interpreter":
                 continue
-            tool_name = str(item.get("tool_name") or "").strip()
-            code = _coerce_optional_string(item.get("code"))
-            if tool_name != "python_interpreter" or not code:
+            try:
+                args = json.loads(tc.get("arguments", "{}"))
+            except json.JSONDecodeError:
+                continue
+            code = args.get("code", "").strip()
+            if not code:
                 continue
             tool_calls.append(
                 WriterToolCall(
-                    tool_call_id=str(
-                        item.get("tool_call_id") or f"writer_tool_{index}"
-                    ),
-                    tool_name=tool_name,
+                    tool_call_id=tc.get("id") or f"writer_tool_{index}",
+                    tool_name="python_interpreter",
                     code=code,
                 )
             )
-        final_markdown = _coerce_optional_string(payload.get("final_markdown"))
-        if final_markdown is None:
-            raise RetryableOperationError("zhipu returned invalid writer JSON")
         return WriterDecision(
-            reasoning_deltas=_coerce_string_tuple(payload.get("reasoning_deltas")),
-            content_deltas=_coerce_string_tuple(payload.get("content_deltas")),
+            text=result.text.strip(),
             tool_calls=tuple(tool_calls),
-            final_markdown=final_markdown,
         )
-
-
-async def _complete_json(
-    *,
-    client: ZhipuChatClient,
-    invocation: WriterInvocation,
-) -> dict[str, Any]:
-    if invocation.prompt_bundle is None or invocation.profile is None:
-        raise RetryableOperationError("zhipu invocation contract is incomplete")
-    prompt_bundle = PromptBundle(
-        system_prompt=invocation.prompt_bundle.system_prompt,
-        user_prompt=(
-            invocation.prompt_bundle.user_prompt
-            + "\n\n"
-            + _json_instruction_for_writer()
-        ).strip(),
-        transcript=invocation.prompt_bundle.transcript,
-    )
-    logger.info(
-        "delivery _complete_json: prompt_name=%s",
-        invocation.prompt_name,
-    )
-    try:
-        result = await client.complete(
-            invocation=LLMInvocation(
-                profile=invocation.profile,
-                prompt_bundle=prompt_bundle,
-                tool_schemas=invocation.tool_schemas,
-            )
-        )
-    except RetryableLLMError as exc:
-        raise RetryableOperationError("zhipu upstream request failed") from exc
-    try:
-        payload = json.loads(strip_markdown_code_fence(result.text))
-    except json.JSONDecodeError as exc:
-        logger.error("delivery _complete_json: invalid JSON response", exc_info=True)
-        raise RetryableOperationError("zhipu returned invalid JSON") from exc
-    if not isinstance(payload, dict):
-        raise RetryableOperationError("zhipu returned invalid JSON")
-    return payload
-
-
-def _coerce_string_tuple(value: Any) -> tuple[str, ...]:
-    if isinstance(value, str):
-        cleaned = value.strip()
-        return (cleaned,) if cleaned else ()
-    if isinstance(value, (list, tuple)):
-        return tuple(str(item).strip() for item in value if str(item).strip())
-    return ()
 
 
 def _coerce_chat_client(
@@ -190,11 +146,3 @@ def _coerce_chat_client(
     if isinstance(client, ZhipuChatClient):
         return client
     return ZhipuChatClient(client=client)
-
-
-def _json_instruction_for_writer() -> str:
-    return (
-        '请输出合法 JSON：{"reasoning_deltas": string[], "content_deltas": string[], '
-        '"tool_calls": [{"tool_call_id": string, "tool_name": "python_interpreter", "code": string}], '
-        '"final_markdown": string}。不要输出 Markdown 代码块，不要输出额外解释。'
-    )

@@ -160,10 +160,8 @@ class NoopOutlineAgent(OutlineAgent):
 class NoopWriterAgent(WriterAgent):
     async def write(self, invocation: WriterInvocation) -> WriterDecision:
         return WriterDecision(
-            reasoning_deltas=(),
-            content_deltas=(),
+            text="noop",
             tool_calls=(),
-            final_markdown="noop",
         )
 
 
