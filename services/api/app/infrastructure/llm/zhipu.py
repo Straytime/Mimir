@@ -100,12 +100,16 @@ class ZhipuChatClient:
             logger.error("zhipu LLM call exception", exc_info=True)
             raise map_zhipu_exception(exc, retryable_cls=RetryableLLMError) from exc
 
-        if _is_stream_response(response):
-            text, diag, tool_calls = await asyncio.to_thread(
-                _extract_stream_with_diagnostics, response
-            )
-        else:
-            text, diag, tool_calls = _extract_response_with_diagnostics(response)
+        try:
+            if _is_stream_response(response):
+                text, diag, tool_calls = await asyncio.to_thread(
+                    _extract_stream_with_diagnostics, response
+                )
+            else:
+                text, diag, tool_calls = _extract_response_with_diagnostics(response)
+        except Exception as exc:  # pragma: no cover - mapped by tests through helpers
+            logger.error("zhipu LLM response extraction exception", exc_info=True)
+            raise map_zhipu_exception(exc, retryable_cls=RetryableLLMError) from exc
         request_id = getattr(response, "id", None) or diag.get("request_id")
         if not text.strip() and not tool_calls:
             logger.warning(
