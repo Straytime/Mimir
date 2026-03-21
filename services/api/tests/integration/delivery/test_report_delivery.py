@@ -109,6 +109,39 @@ class FailingWriterAgent(WriterAgent):
         raise self.error
 
 
+class PersistentToolCallWriterAgent(WriterAgent):
+    def __init__(self, *, code: str = "plot_forever", text: str = "") -> None:
+        self.code = code
+        self.text = text
+        self.invocations: list[WriterInvocation] = []
+
+    async def write(self, invocation: WriterInvocation) -> WriterDecision:
+        self.invocations.append(invocation)
+        return WriterDecision(
+            text=self.text,
+            tool_calls=(
+                WriterToolCall(
+                    tool_call_id=f"call_writer_round_{len(self.invocations)}",
+                    tool_name="python_interpreter",
+                    code=self.code,
+                ),
+            ),
+        )
+
+
+class EmptyTextWriterAgent(WriterAgent):
+    def __init__(self, *, text: str = "   \n\t") -> None:
+        self.text = text
+        self.invocations: list[WriterInvocation] = []
+
+    async def write(self, invocation: WriterInvocation) -> WriterDecision:
+        self.invocations.append(invocation)
+        return WriterDecision(
+            text=self.text,
+            tool_calls=(),
+        )
+
+
 @dataclass(slots=True)
 class SandboxScenario:
     create_failures_remaining: int = 0
@@ -185,8 +218,13 @@ async def make_stage6_client(
         sandbox_client: E2BSandboxClient,
         artifact_store: ArtifactStore | None = None,
         report_export_service: ReportExportService | None = None,
+        writer_max_rounds: int | None = None,
     ) -> AsyncClient:
-        test_settings = replace(settings, llm_retry_wait_seconds=0)
+        test_settings = replace(
+            settings,
+            llm_retry_wait_seconds=0,
+            writer_max_rounds=writer_max_rounds or settings.writer_max_rounds,
+        )
         app = create_app(
             settings=test_settings,
             clock=fake_clock.now,
@@ -275,6 +313,20 @@ async def _start_delivery_flow(client: AsyncClient) -> tuple[dict[str, object], 
 async def _close_stream(stream_context, response) -> None:
     await stream_context.__aexit__(None, None, None)
     await response.aclose()
+
+
+async def _read_events_until(
+    lines,
+    *,
+    stop_names: set[str],
+    timeout: float = 2.0,
+) -> list[tuple[str | None, str | None, dict[str, object]]]:
+    events: list[tuple[str | None, str | None, dict[str, object]]] = []
+    while True:
+        event = await read_sse_event(lines, timeout=timeout)
+        events.append(event)
+        if event[1] in stop_names:
+            return events
 
 
 @pytest.mark.asyncio
@@ -725,4 +777,59 @@ async def test_unhandled_writer_exception_fails_task_instead_of_leaking_running_
         await _close_stream(stream_context, response)
 
     assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
+
+
+@pytest.mark.asyncio
+async def test_writer_max_rounds_exhausted_with_pending_tool_calls_fails_without_report_completed(
+    make_stage6_client,
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=PersistentToolCallWriterAgent(text="中间稿。"),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+        writer_max_rounds=2,
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        events = await _read_events_until(lines, stop_names={"task.failed"}, timeout=2.0)
+        await assert_stream_closed(lines)
+        await _close_stream(stream_context, response)
+
+    event_names = [event_name for _, event_name, _ in events]
+    failed_payload = next(payload for _, event_name, payload in events if event_name == "task.failed")
+
+    assert "report.completed" not in event_names
+    assert "task.awaiting_feedback" not in event_names
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
+
+
+@pytest.mark.asyncio
+async def test_writer_blank_markdown_fails_without_report_completed(
+    make_stage6_client,
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=EmptyTextWriterAgent(),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        events = await _read_events_until(lines, stop_names={"task.failed"}, timeout=2.0)
+        await assert_stream_closed(lines)
+        await _close_stream(stream_context, response)
+
+    event_names = [event_name for _, event_name, _ in events]
+    failed_payload = next(payload for _, event_name, payload in events if event_name == "task.failed")
+
+    assert "report.completed" not in event_names
+    assert "task.awaiting_feedback" not in event_names
     assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
