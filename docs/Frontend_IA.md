@@ -221,11 +221,12 @@ apps/web/
 
 规则：
 
-1. 只允许 `/api/v1/tasks/{当前task_id}/artifacts/` 路径下的图片 URL。
+1. 正文 markdown 的唯一 canonical 图片引用格式是 `mimir://artifact/{artifact_id}`；前端不把 `delivery.artifacts[].url` 直接当作正文 source of truth。
 2. 渲染前先从 markdown `src` 中解析 `artifact_id`；若能解析出 `artifact_id`，优先使用 `stream.artifacts` 与 `remote.delivery.artifacts` 中该 `artifact_id` 对应的最新 URL，而不是直接使用正文里的旧 `access_token` URL。
 3. 图片加载期间显示 skeleton，占位尺寸使用固定宽高比卡片，避免正文跳动。
 4. 图片请求若返回 `401 access_token_invalid`，组件触发一次 `use-delivery-refresh`；刷新成功后通过 `artifact_id -> latest url` 映射重渲染，不直接修改 `reportMarkdown` 原文。
-5. 若刷新后仍无法加载，显示错误占位和“交付链接已失效”提示，不无限重试。
+5. 若 `src` 不是 canonical artifact path，或刷新后仍无法加载，显示错误占位和“交付链接已失效”提示，不无限重试。
+6. `markdown zip` 的离线重写由后端导出层负责；前端在线渲染不消费 `artifacts/{filename}` 这种离线路径。
 
 ### 5.4.2 Report Canvas 滚动与渲染策略
 

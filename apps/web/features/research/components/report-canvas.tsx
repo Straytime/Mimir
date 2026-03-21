@@ -2,8 +2,8 @@
 
 import { Children, isValidElement, useDeferredValue } from "react";
 import type { ComponentPropsWithoutRef } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 
 import type { ArtifactSummary } from "@/lib/contracts";
 
@@ -13,6 +13,22 @@ import { findLatestArtifactBySource } from "../utils/task-artifact";
 import { TaskArtifactImage } from "./task-artifact-image";
 
 const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
+const CANONICAL_ARTIFACT_PATH_PATTERN = /^mimir:\/\/artifact\/[^/?#]+$/;
+const REPORT_MARKDOWN_SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  protocols: {
+    ...defaultSchema.protocols,
+    src: [...(defaultSchema.protocols?.src ?? []), "mimir"],
+  },
+};
+
+function allowCanonicalArtifactPath(url: string) {
+  if (CANONICAL_ARTIFACT_PATH_PATTERN.test(url)) {
+    return url;
+  }
+
+  return defaultUrlTransform(url);
+}
 
 function ReportMarkdownImage(props: ComponentPropsWithoutRef<"img">) {
   const taskId = useResearchSessionStore((state) => state.session.taskId);
@@ -192,8 +208,9 @@ export function ReportCanvas() {
                   img: ReportMarkdownImage,
                   p: ReportParagraph,
                 }}
-                rehypePlugins={[rehypeSanitize]}
+                rehypePlugins={[[rehypeSanitize, REPORT_MARKDOWN_SANITIZE_SCHEMA]]}
                 skipHtml
+                urlTransform={allowCanonicalArtifactPath}
               >
                 {deferredReportMarkdown}
               </ReactMarkdown>

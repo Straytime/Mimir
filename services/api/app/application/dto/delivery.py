@@ -64,6 +64,24 @@ class GeneratedArtifact:
     content: bytes
 
 
+def build_canonical_artifact_path(artifact_id: str) -> str:
+    return f"mimir://artifact/{artifact_id}"
+
+
+@dataclass(frozen=True, slots=True)
+class ToolResultArtifact:
+    artifact_id: str
+    filename: str
+    mime_type: str
+    canonical_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class PythonToolResult:
+    summary: str
+    artifacts: tuple[ToolResultArtifact, ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class SandboxExecutionResult:
     stdout: str

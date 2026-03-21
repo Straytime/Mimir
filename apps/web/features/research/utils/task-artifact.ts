@@ -9,6 +9,10 @@ type ArtifactUrlMatch = {
   normalizedUrl: string;
 };
 
+type CanonicalArtifactMatch = {
+  artifactId: string;
+};
+
 function resolveUrl(url: string) {
   return new URL(resolveApiUrl(url), resolveApiBaseUrl());
 }
@@ -32,6 +36,17 @@ export function parseArtifactUrl(url: string): ArtifactUrlMatch | null {
   } catch {
     return null;
   }
+}
+
+function parseCanonicalArtifactPath(src: string): CanonicalArtifactMatch | null {
+  const match = src.match(/^mimir:\/\/artifact\/([^/?#]+)$/);
+  if (match === null) {
+    return null;
+  }
+
+  return {
+    artifactId: match[1]!,
+  };
 }
 
 export function isAllowedArtifactUrl(url: string, taskId: string) {
@@ -58,6 +73,19 @@ export function findLatestArtifactBySource(args: {
   streamArtifacts: ArtifactSummary[];
   deliveryArtifacts: ArtifactSummary[];
 }) {
+  const canonicalSource = parseCanonicalArtifactPath(args.src);
+  if (canonicalSource !== null) {
+    return (
+      args.deliveryArtifacts.find(
+        (artifact) => artifact.artifact_id === canonicalSource.artifactId,
+      ) ??
+      args.streamArtifacts.find(
+        (artifact) => artifact.artifact_id === canonicalSource.artifactId,
+      ) ??
+      null
+    );
+  }
+
   const parsedSource = parseArtifactUrl(args.src);
 
   if (parsedSource === null || parsedSource.taskId !== args.taskId) {

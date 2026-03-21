@@ -109,6 +109,7 @@ def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() ->
     assert "**\uff01\u91cd\u8981\uff01\u7edd\u5bf9\u4e0d\u8981\u8d85\u8fc7\u4e00\u4e07\u5b57\uff01**" in prompt.system_prompt
     assert "\u6839\u636e\u5b9e\u9645\u4f7f\u7528\u7684\u53c2\u8003\u4fe1\u606f\u521b\u5efa\u811a\u6ce8\u53c2\u8003" in prompt.system_prompt
     assert "python_interpreter" in prompt.system_prompt
+    assert "canonical_path" in prompt.system_prompt
     assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
     assert "<参考信息>" in prompt.user_prompt
     assert "ref_1" in prompt.user_prompt

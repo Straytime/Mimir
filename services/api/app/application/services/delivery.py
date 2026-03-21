@@ -14,10 +14,13 @@ from app.application.dto.delivery import (
     GeneratedArtifact,
     OutlineDecision,
     OutlineInvocation,
+    PythonToolResult,
     ResearchOutline,
+    ToolResultArtifact,
     WriterDecision,
     WriterInvocation,
     WriterToolCall,
+    build_canonical_artifact_path,
 )
 from app.application.dto.invocation import PromptMessage, dump_prompt_bundle
 from app.application.invocation_contracts import (
@@ -50,6 +53,12 @@ class DeliveryRuntime:
     sandbox_id: str | None = None
     revision_id: str | None = None
     cancelled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _WriterToolCallResult:
+    artifact_records: list
+    tool_result: PythonToolResult
 
 
 class DeliveryOrchestrator:
@@ -362,18 +371,21 @@ class DeliveryOrchestrator:
             ))
 
             for tc in decision.tool_calls:
-                stored = await self._run_writer_tool_call(
+                tool_result = await self._run_writer_tool_call(
                     task_id=task_id,
                     revision_id=revision_id,
                     runtime=runtime,
                     tool_call=tc,
                 )
-                if stored is None:
+                if tool_result is None:
                     return None
-                all_artifacts.extend(stored)
+                all_artifacts.extend(tool_result.artifact_records)
                 transcript.append(PromptMessage(
                     role="tool",
-                    content="Tool execution completed successfully.",
+                    content=json.dumps(
+                        _python_tool_result_to_payload(tool_result.tool_result),
+                        ensure_ascii=False,
+                    ),
                     tool_call_id=tc.tool_call_id,
                 ))
 
@@ -476,7 +488,7 @@ class DeliveryOrchestrator:
         revision_id: str,
         runtime: DeliveryRuntime,
         tool_call: WriterToolCall,
-    ):
+    ) -> "_WriterToolCallResult | None":
         await self._append_event(
             task_id=task_id,
             event="writer.tool_call.requested",
@@ -526,16 +538,18 @@ class DeliveryOrchestrator:
             await self._destroy_sandbox(runtime=runtime)
             return None
 
+        tool_result = _build_python_tool_result(
+            summary=_normalize_python_summary(result.stdout),
+            stored_artifacts=stored_artifacts,
+        )
+
         await self._record_tool_call(
             task_id=task_id,
             revision_id=revision_id,
             tool_call=tool_call,
             status="completed",
             error_code=None,
-            response_json={
-                "stdout": result.stdout,
-                "artifact_count": len(stored_artifacts),
-            },
+            response_json=_python_tool_result_to_payload(tool_result),
         )
         await self._append_event(
             task_id=task_id,
@@ -546,7 +560,10 @@ class DeliveryOrchestrator:
                 "success": True,
             },
         )
-        return stored_artifacts
+        return _WriterToolCallResult(
+            artifact_records=stored_artifacts,
+            tool_result=tool_result,
+        )
 
     async def _store_generated_artifacts(
         self,
@@ -611,11 +628,15 @@ class DeliveryOrchestrator:
                 )
             )
         generated_artifacts = tuple(generated_artifacts_list)
+        zip_markdown = _rewrite_markdown_artifact_refs_for_zip(
+            markdown=final_markdown,
+            stored_artifacts=image_artifacts,
+        )
 
         try:
             markdown_zip_bytes = await self._invoke_operation(
                 lambda: self._report_export_service.build_markdown_zip(
-                    markdown=final_markdown,
+                    markdown=zip_markdown,
                     artifacts=generated_artifacts,
                 )
             )
@@ -838,3 +859,50 @@ def _split_markdown_deltas(markdown: str, *, chunk_size: int = 200) -> list[str]
         if chunk:
             chunks.append(chunk)
     return chunks or [markdown]
+
+
+def _normalize_python_summary(stdout: str) -> str:
+    summary = stdout.strip()
+    if summary:
+        return summary
+    return "Python execution completed without textual output."
+
+
+def _build_python_tool_result(*, summary: str, stored_artifacts: list) -> PythonToolResult:
+    return PythonToolResult(
+        summary=summary,
+        artifacts=tuple(
+            ToolResultArtifact(
+                artifact_id=artifact.artifact_id,
+                filename=artifact.filename,
+                mime_type=artifact.mime_type,
+                canonical_path=build_canonical_artifact_path(artifact.artifact_id),
+            )
+            for artifact in stored_artifacts
+        ),
+    )
+
+
+def _python_tool_result_to_payload(tool_result: PythonToolResult) -> dict[str, object]:
+    return {
+        "summary": tool_result.summary,
+        "artifacts": [
+            {
+                "artifact_id": artifact.artifact_id,
+                "filename": artifact.filename,
+                "mime_type": artifact.mime_type,
+                "canonical_path": artifact.canonical_path,
+            }
+            for artifact in tool_result.artifacts
+        ],
+    }
+
+
+def _rewrite_markdown_artifact_refs_for_zip(*, markdown: str, stored_artifacts: list) -> str:
+    rewritten = markdown
+    for artifact in stored_artifacts:
+        rewritten = rewritten.replace(
+            build_canonical_artifact_path(artifact.artifact_id),
+            f"artifacts/{artifact.filename}",
+        )
+    return rewritten

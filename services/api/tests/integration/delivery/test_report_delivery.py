@@ -2,6 +2,7 @@ import zipfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from io import BytesIO
+import json
 from pathlib import Path
 
 import pytest
@@ -67,6 +68,35 @@ class ScriptedWriterAgent(WriterAgent):
         if has_transcript:
             return WriterDecision(text=self.decision.text, tool_calls=())
         return self.decision
+
+
+class TranscriptAwareWriterAgent(WriterAgent):
+    def __init__(self, *, tool_call: WriterToolCall, image_alt: str = "图表") -> None:
+        self.tool_call = tool_call
+        self.image_alt = image_alt
+        self.invocations: list[WriterInvocation] = []
+
+    async def write(self, invocation: WriterInvocation) -> WriterDecision:
+        self.invocations.append(invocation)
+        has_transcript = (
+            invocation.prompt_bundle is not None
+            and len(invocation.prompt_bundle.transcript) > 0
+        )
+        if not has_transcript:
+            return WriterDecision(text="", tool_calls=(self.tool_call,))
+
+        tool_payload = json.loads(invocation.prompt_bundle.transcript[-1].content)
+        artifacts = tool_payload.get("artifacts", [])
+        image_markdown = ""
+        if artifacts:
+            image_markdown = (
+                f"\n![{self.image_alt}]({artifacts[0]['canonical_path']})\n"
+            )
+
+        return WriterDecision(
+            text=f"# 中国 AI 搜索产品竞争格局研究\n\n正文摘要。{image_markdown}",
+            tool_calls=(),
+        )
 
 
 class FailingWriterAgent(WriterAgent):
@@ -371,6 +401,74 @@ async def test_writer_creates_sandbox_lazily_reuses_it_and_destroys_it_on_delive
 
 
 @pytest.mark.asyncio
+async def test_writer_tool_transcript_contains_summary_and_real_artifact_metadata(
+    make_stage6_client,
+) -> None:
+    writer_agent = ScriptedWriterAgent(build_writer_decision(tool_call_count=1))
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={
+                "plot_1": (
+                    GeneratedArtifact(
+                        filename="chart_market_share.png",
+                        mime_type="image/png",
+                        content=b"png-chart-1",
+                    ),
+                ),
+            },
+        ),
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        await _close_stream(stream_context, response)
+
+    assert len(writer_agent.invocations) == 2
+    transcript = writer_agent.invocations[1].prompt_bundle.transcript
+    assert transcript is not None
+    tool_result = json.loads(transcript[-1].content)
+    assert tool_result["summary"] == "ok"
+    assert tool_result["artifacts"][0]["artifact_id"].startswith("art_")
+    assert tool_result["artifacts"][0]["filename"] == "chart_market_share.png"
+    assert tool_result["artifacts"][0]["mime_type"] == "image/png"
+    assert tool_result["artifacts"][0]["canonical_path"].startswith(
+        "mimir://artifact/art_"
+    )
+    assert transcript[-1].content != "Tool execution completed successfully."
+
+
+@pytest.mark.asyncio
+async def test_writer_tool_transcript_returns_summary_even_when_python_call_has_no_artifacts(
+    make_stage6_client,
+) -> None:
+    writer_agent = ScriptedWriterAgent(build_writer_decision(tool_call_count=1))
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        await _close_stream(stream_context, response)
+
+    assert len(writer_agent.invocations) == 2
+    transcript = writer_agent.invocations[1].prompt_bundle.transcript
+    assert transcript is not None
+    tool_result = json.loads(transcript[-1].content)
+    assert tool_result["summary"] == "ok"
+    assert tool_result["artifacts"] == []
+
+
+@pytest.mark.asyncio
 async def test_writer_tool_call_requested_precedes_completed_event_for_same_call(
     make_stage6_client,
 ) -> None:
@@ -401,6 +499,93 @@ async def test_writer_tool_call_requested_precedes_completed_event_for_same_call
     assert completed[1] == "writer.tool_call.completed"
     assert int(requested[0] or "0") < int(completed[0] or "0")
     assert requested[2]["payload"]["tool_call_id"] == completed[2]["payload"]["tool_call_id"]
+
+
+@pytest.mark.asyncio
+async def test_markdown_zip_rewrites_canonical_artifact_refs_to_offline_paths(
+    make_stage6_client,
+) -> None:
+    writer_agent = TranscriptAwareWriterAgent(
+        tool_call=WriterToolCall(
+            tool_call_id="call_writer_chart",
+            tool_name="python_interpreter",
+            code="plot_chart",
+        ),
+        image_alt="市场份额图",
+    )
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={
+                "plot_chart": (
+                    GeneratedArtifact(
+                        filename="chart_market_share.png",
+                        mime_type="image/png",
+                        content=b"png-chart-1",
+                    ),
+                ),
+            },
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        task_detail_response = await client.get(
+            f"/api/v1/tasks/{create_body['task_id']}",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+        )
+        assert task_detail_response.status_code == 200
+        markdown_zip_url = task_detail_response.json()["delivery"]["markdown_zip_url"]
+        markdown_zip_response = await client.get(markdown_zip_url)
+        await _close_stream(stream_context, response)
+
+    assert markdown_zip_response.status_code == 200
+    with zipfile.ZipFile(BytesIO(markdown_zip_response.content)) as archive:
+        report_markdown = archive.read("report.md").decode("utf-8")
+
+    assert "mimir://artifact/" not in report_markdown
+    assert "![市场份额图](artifacts/chart_market_share.png)" in report_markdown
+
+
+@pytest.mark.asyncio
+async def test_markdown_zip_does_not_rewrite_markdown_when_no_canonical_artifact_ref_exists(
+    make_stage6_client,
+) -> None:
+    writer_agent = ScriptedWriterAgent(
+        WriterDecision(
+            text="# 中国 AI 搜索产品竞争格局研究\n\n正文没有图片引用。\n",
+            tool_calls=(),
+        )
+    )
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        task_detail_response = await client.get(
+            f"/api/v1/tasks/{create_body['task_id']}",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+        )
+        assert task_detail_response.status_code == 200
+        markdown_zip_url = task_detail_response.json()["delivery"]["markdown_zip_url"]
+        markdown_zip_response = await client.get(markdown_zip_url)
+        await _close_stream(stream_context, response)
+
+    assert markdown_zip_response.status_code == 200
+    with zipfile.ZipFile(BytesIO(markdown_zip_response.content)) as archive:
+        report_markdown = archive.read("report.md").decode("utf-8")
+
+    assert report_markdown == "# 中国 AI 搜索产品竞争格局研究\n\n正文没有图片引用。\n"
 
 
 @pytest.mark.asyncio

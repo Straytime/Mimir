@@ -731,11 +731,40 @@ sub agent 给 master 的压缩摘要。
   "filename": "chart_market_share.png",
   "mime_type": "image/png",
   "storage_key": "tasks/tsk_x/rev_01H/artifacts/chart_market_share.png",
-  "download_path": "/api/v1/tasks/tsk_x/artifacts/art_01H...?access_token=***",
-  "markdown_ref": "![chart_market_share](/api/v1/tasks/tsk_x/artifacts/art_01H...?access_token=***)",
-  "access_expires_at": "2026-03-13T14:55:00+08:00"
+  "canonical_path": "mimir://artifact/art_01H..."
 }
 ```
+
+说明：
+
+- `delivery.artifacts[].url` 与正文 markdown 中的图片引用不是同一概念。
+- `delivery.artifacts[].url` 是短期访问地址，只用于在线访问与下载，不可作为正文持久 source of truth。
+- 正文 markdown 中的 canonical 图片引用统一使用 `mimir://artifact/{artifact_id}`。
+- canonical path 必须只表达“正文里引用的是哪一个 artifact”，不能携带 `access_token`、过期时间或部署域名。
+
+## 7.11.1 PythonToolResult
+
+`python_interpreter` 调用回放到 writer transcript 的标准结构。
+
+```json
+{
+  "summary": "已生成 1 张图表，并完成均值、增长率与象限坐标计算。",
+  "artifacts": [
+    {
+      "artifact_id": "art_01H...",
+      "filename": "chart_market_share.png",
+      "mime_type": "image/png",
+      "canonical_path": "mimir://artifact/art_01H..."
+    }
+  ]
+}
+```
+
+规则：
+
+- `summary` 必填；即使本次 Python 调用没有生成图片，也必须返回文本摘要。
+- `artifacts` 可为空；`python_interpreter` 既可做绘图，也可只做分析/计算。
+- writer 必须基于真实 `artifacts[]` 元数据插入 markdown 图片引用，不能自行猜测 `artifacts/{filename}` 或其他离线路径。
 
 ## 7.12 ReportBundle
 
@@ -1039,6 +1068,8 @@ PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": 
    - artifact 元数据
    - 失败错误摘要
 3. raw binary、压缩包内容或图片字节不进入 transcript；它们只能进入 artifact store。
+4. 回放到 writer transcript 的 tool result 必须使用 `summary + optional artifacts[]` 结构；不能退化成固定成功文案。
+5. `artifacts[]` 中必须包含真实 `artifact_id` 与 `canonical_path=mimir://artifact/{artifact_id}`，供 writer 在正文中插入稳定引用。
 
 ### 8.5.5 Port / adapter 责任边界
 
@@ -1336,6 +1367,12 @@ SSE 保活与断连判定：
 - 内容包含：
   - `report.md`
   - `artifacts/*.png`
+
+正文图片引用规则：
+
+1. 数据库与 SSE 中保存的正文 markdown 以 `mimir://artifact/{artifact_id}` 作为唯一 canonical 图片引用。
+2. `markdown zip` 导出时，后端允许把 `report.md` 中的 canonical 图片引用重写为离线路径 `artifacts/{filename}`。
+3. 该重写只发生在 zip 导出产物中；不会回写数据库中的正文，也不会改变前端在线渲染契约。
 
 ## 9.8 下载 PDF
 
