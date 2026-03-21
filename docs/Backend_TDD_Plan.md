@@ -815,6 +815,9 @@ DoD：
 - writer transcript tool result 不再退化为固定成功文案
 - `markdown zip` 会把正文中的 `mimir://artifact/{artifact_id}` 重写为 `artifacts/{filename}`
 - 无图片的 `python_interpreter` 结果仍返回 `summary`，且 zip 不误改写非图片正文
+- writer 达到 `MIMIR_WRITER_MAX_ROUNDS` 后若仍有 `tool_calls`，必须 `task.failed`，不能继续 `report.completed`
+- writer 最终 markdown 为空白时必须 `task.failed`，不能交付 `0 字 / 0 配图` 空报告
+- `Settings` 必须能正确读取 `MIMIR_WRITER_MAX_ROUNDS`，默认值保持 `5`
 
 实现内容：
 
@@ -835,6 +838,7 @@ DoD：
 - Revision 结束时 sandbox 会被销毁
 - 下载链接与 artifact URL 都符合契约
 - 正文 markdown 只保存 canonical artifact path，在线渲染与 zip 导出各自完成映射
+- writer 成功交付的前提是：无剩余 `tool_calls` 且最终 markdown 非空白
 - PDF / ZIP 均能从 temp artifact store 正常生成
 - Stage 6 的 Alembic migration 可正向和反向迁移
 

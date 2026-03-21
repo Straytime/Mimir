@@ -2270,3 +2270,53 @@ Copy the template below for each completed session:
   - `report-delivery-flow` 集成测试里存在 heartbeat 请求未匹配的 MSW 提示，属于既有测试夹具噪音，不影响本任务验收
 - 下一步建议:
   - 若要继续 release engineering 收尾，可单独清理前端 integration 中 heartbeat 的 MSW handler，减少测试噪音
+
+## R1-031 Writer Guardrail + Configurable Max Rounds
+
+- 日期时间: 2026-03-21 22:07:24 CST (+0800)
+- 任务包编号: R1-031
+- session 标识: `codex/r1-031-writer-guardrail-max-rounds`
+- 目标摘要:
+  - 修复 writer 在最大轮次耗尽时把空正文错误交付为成功报告的问题
+  - 将 writer 最大轮次从内部硬编码收敛为 `MIMIR_WRITER_MAX_ROUNDS` 环境变量
+  - 保持默认值兼容现状，默认仍为 `5`
+- 生产证据:
+  - 任务 `tsk_54a98569b9d04ff2ea7ccae6`
+  - 线上现象为 writer 连续 5 轮 `tool_calls=1`，日志出现 `writer max rounds reached, ignoring remaining tool calls`
+  - 任务却进入 `delivered / awaiting_feedback`，并产出 `0 字 / 0 配图 / 空 markdown`
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Deploy_Contract.md`
+  - `services/api/.env.example`
+  - `services/api/README.md`
+  - `services/api/app/core/config.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/tests/unit/core/test_config.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `docs/Execution_Log.md`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/integration/delivery/test_report_delivery.py -k 'writer_max_rounds or blank_markdown or pending_tool_calls or from_env_reads_writer_max_rounds or uses_default_writer_max_rounds'`
+    - 初次结果: `3 failed, 1 passed`
+    - 暴露问题:
+      - `Settings.from_env()` 未读取 `MIMIR_WRITER_MAX_ROUNDS`
+      - writer 达到最大轮次后仍继续成功交付
+      - writer 最终空白 markdown 时未明确失败
+  - 修补后定向:
+    - 同一命令重跑
+    - 结果: `4 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `22 passed`
+- 验收结论:
+  - writer 到达最大轮次后若仍有 `tool_calls`，现在会明确 `task.failed`，不再忽略剩余 tool calls 后继续交付
+  - writer 最终 markdown 若 `strip()` 后为空白，现在会明确 `task.failed`，不再生成 `0 字 / 0 配图` 的空报告
+  - `MIMIR_WRITER_MAX_ROUNDS` 已正式接入配置读取，默认值保持 `5`
+  - 既有 delivery events、downloads 与正常 writer 成功路径未回退
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次只修后端 guardrail 与配置，不涉及前端或 deploy 平台参数实配；生产是否调整上限仍需后续按环境变量单独放行
+- 下一步建议:
+  - 若生产需要放宽 writer 工具轮次，可单独以配置任务包形式调整 `MIMIR_WRITER_MAX_ROUNDS`
+  - 继续 release validation 时，重点观察真实 provider 下 writer 是否稳定落在“成功交付”或“明确失败”两种终态之一

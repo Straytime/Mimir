@@ -345,12 +345,32 @@ class DeliveryOrchestrator:
             if decision is None:
                 return None
 
-            if not decision.tool_calls or round_num == max_rounds:
-                if decision.tool_calls and round_num == max_rounds:
-                    logger.warning(
-                        "writer max rounds reached, ignoring remaining tool calls",
+            if decision.tool_calls:
+                if round_num == max_rounds:
+                    logger.error(
+                        "writer max rounds reached with pending tool calls",
                         extra={"task_id": task_id, "max_rounds": max_rounds},
                     )
+                    await self._fail_task(
+                        task_id=task_id,
+                        error_code="upstream_service_error",
+                        message="writer 达到最大轮次后仍需继续调用工具。",
+                    )
+                    await self._destroy_sandbox(runtime=runtime)
+                    return None
+            else:
+                if not decision.text.strip():
+                    logger.error(
+                        "writer produced blank markdown",
+                        extra={"task_id": task_id},
+                    )
+                    await self._fail_task(
+                        task_id=task_id,
+                        error_code="upstream_service_error",
+                        message="writer 最终输出为空白，无法交付报告。",
+                    )
+                    await self._destroy_sandbox(runtime=runtime)
+                    return None
                 return (decision.text, all_artifacts)
 
             tc_payloads = tuple(

@@ -31,6 +31,7 @@ See [`.env.example`](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects
 - `E2B_API_KEY` or `MIMIR_E2B_API_KEY` is required when the E2B sandbox runs in `real` mode. Request / execution / sandbox lifetime defaults can be overridden via `MIMIR_E2B_REQUEST_TIMEOUT_SECONDS`, `MIMIR_E2B_EXECUTION_TIMEOUT_SECONDS`, and `MIMIR_E2B_SANDBOX_TIMEOUT_SECONDS`.
 - Model IDs are configurable per agent role; the current default contract is `glm-5` for all roles unless you explicitly override them in local env.
 - `MIMIR_WEB_SEARCH_ENGINE` defaults to `search_prime`, which matches the current architecture contract for Zhipu `web_search`.
+- `MIMIR_WRITER_MAX_ROUNDS` controls the writer tool-call round limit. Default is `5`; if the final allowed round still returns `tool_calls`, the task now fails instead of silently delivering an empty report.
 
 ## Deploy contract
 

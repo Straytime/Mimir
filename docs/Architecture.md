@@ -919,6 +919,9 @@ E2B 生命周期约束：
 3. Revision 完成、任务终止、任务失败或任务过期时，必须显式销毁该 Revision 对应的 sandbox。
 4. E2B sandbox 创建失败、执行失败或上传 artifact 失败时，适用 PRD 的通用重试策略；重试耗尽后该 Revision 失败，不做“静默跳过图表”的降级。
 5. 由于 v1 全局只允许一个活动任务，一个 Revision 持有一个活动 sandbox 的成本是可接受的。
+6. writer loop 的最大 tool-call 轮次上限必须可配置，统一使用 `MIMIR_WRITER_MAX_ROUNDS`，默认值为 `5`。
+7. 若 writer 到达最大允许轮次后仍返回 `tool_calls`，后端必须将任务收口为 `task.failed`；禁止忽略剩余 tool call 后继续交付空报告或半成品报告。
+8. writer 最终用于交付的 markdown 在 `strip()` 后必须非空；若最终正文为空白，后端必须将任务收口为 `task.failed`，且不得发出 `report.completed`。
 
 ## 8.5 外部调用契约与 PRD 收敛
 

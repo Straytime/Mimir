@@ -220,6 +220,9 @@ class Settings:
             fetched_content_limit=int(
                 os.getenv("MIMIR_FETCHED_CONTENT_LIMIT", "10000")
             ),
+            writer_max_rounds=int(
+                os.getenv("MIMIR_WRITER_MAX_ROUNDS", "5")
+            ),
             cleanup_scan_interval_seconds=float(
                 os.getenv("MIMIR_CLEANUP_SCAN_INTERVAL_SECONDS", "60.0")
             ),
