@@ -2221,3 +2221,52 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 单独下发实现/验证任务包，处理生产 `outline` 阶段的 provider 限流韧性（并发/节流/重试/配额策略）
   - 待该 blocker 解除后，再重跑一轮 focused smoke 验证 `artifact` 与 `feedback revision`
+
+## R1-030 Report Image Reference Contract Alignment
+
+- 日期时间: 2026-03-21 21:20:09 CST (+0800)
+- 任务包编号: R1-030
+- session 标识: `codex/r1-030-report-image-reference-contract`
+- 目标摘要:
+  - 收敛报告正文图片引用的唯一契约，避免在线渲染与 markdown zip 离线渲染各自依赖不同路径语义
+  - 让 `python_interpreter` 工具结果返回“文本摘要 + 可选 artifact 元数据”，writer 只消费真实 artifact 元数据，不再猜测图片路径
+  - 保持 web 继续按 `artifact_id` 解析最新 delivery/stream artifact URL，同时让 zip 导出把 canonical 引用改写成离线相对路径
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Frontend_IA.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `services/api/app/application/dto/delivery.py`
+  - `services/api/app/application/prompts/delivery.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/tests/unit/application/test_delivery_prompts.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `apps/web/features/research/components/report-canvas.tsx`
+  - `apps/web/features/research/utils/task-artifact.ts`
+  - `apps/web/tests/unit/task-artifact.spec.ts`
+  - `apps/web/tests/component/report-canvas.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试 / 验证:
+  - 后端定向:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_delivery_prompts.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `12 passed`
+  - 后端回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_downloads.py`
+    - 结果: `2 passed`
+  - 前端定向:
+    - `cd apps/web && pnpm exec vitest run tests/unit/task-artifact.spec.ts tests/component/report-canvas.spec.tsx`
+    - 结果: `7 passed`
+  - 前端回归:
+    - `cd apps/web && pnpm exec vitest run tests/component/delivery-actions.spec.tsx tests/integration/report-delivery-flow.spec.tsx`
+    - 结果: `8 passed`
+    - 说明: `report-delivery-flow` 运行时有未匹配的 `POST /heartbeat` MSW 提示，但断言全部通过，本任务未改 heartbeat 语义
+- 验收结论:
+  - 报告正文 markdown 的 canonical 图片引用已收敛为 `mimir://artifact/{artifact_id}`
+  - `delivery.artifacts[].url` 明确仅用于在线短期访问，不再作为正文持久 source of truth
+  - `python_interpreter` 工具结果已支持 `summary + optional artifacts[]`，writer 可基于真实 `artifact_id / filename / mime_type / canonical_path` 插图
+  - markdown zip 会把 canonical 图片引用重写为 `artifacts/{filename}`，离线渲染与在线渲染语义一致
+  - web 前端继续按 `artifact_id` 解析最新 artifact URL，未回退 delivery refresh / artifact gallery / 下载契约
+- blocker / 风险:
+  - 无当前 blocker
+  - `report-delivery-flow` 集成测试里存在 heartbeat 请求未匹配的 MSW 提示，属于既有测试夹具噪音，不影响本任务验收
+- 下一步建议:
+  - 若要继续 release engineering 收尾，可单独清理前端 integration 中 heartbeat 的 MSW handler，减少测试噪音

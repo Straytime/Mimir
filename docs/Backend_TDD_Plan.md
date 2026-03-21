@@ -398,6 +398,8 @@ snapshot 规则：
 3. `python_interpreter`：
    - tool request 只允许 `code`
    - tool result 不得回灌 raw binary
+   - tool result 必须包含 `summary`，并可选携带 `artifacts[]`
+   - `artifacts[]` 中必须锁定 `artifact_id`、`filename`、`mime_type`、`canonical_path=mimir://artifact/{artifact_id}`
 4. `collect_agent`：
    - 模型可见参数只允许 `collect_target`、`additional_info`、`freshness_requirement`
    - `tool_call_id`、`revision_id`、`subtask_id` 只能在后端内部补齐
@@ -810,6 +812,9 @@ DoD：
 - 研究输出撰写 prompt invariant tests
 - outline / writer 调用 profile contract tests
 - `python_interpreter` tool request / tool result contract tests
+- writer transcript tool result 不再退化为固定成功文案
+- `markdown zip` 会把正文中的 `mimir://artifact/{artifact_id}` 重写为 `artifacts/{filename}`
+- 无图片的 `python_interpreter` 结果仍返回 `summary`，且 zip 不误改写非图片正文
 
 实现内容：
 
@@ -829,6 +834,7 @@ DoD：
 - writer 首次调用 `python_interpreter` 时才创建 sandbox
 - Revision 结束时 sandbox 会被销毁
 - 下载链接与 artifact URL 都符合契约
+- 正文 markdown 只保存 canonical artifact path，在线渲染与 zip 导出各自完成映射
 - PDF / ZIP 均能从 temp artifact store 正常生成
 - Stage 6 的 Alembic migration 可正向和反向迁移
 

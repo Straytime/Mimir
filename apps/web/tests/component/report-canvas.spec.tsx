@@ -180,3 +180,46 @@ test("only renders markdown images from current task artifact urls", async () =>
   expect(screen.queryByAltText("非法")).not.toBeInTheDocument();
   expect(screen.queryByAltText("跨任务")).not.toBeInTheDocument();
 });
+
+test("renders markdown images from canonical artifact paths using the latest artifact url", async () => {
+  const artifact = makeArtifactSummary({
+    artifact_id: "art_stage0_chart",
+    url: "/api/v1/tasks/tsk_stage0/artifacts/art_stage0_chart?access_token=fresh",
+  });
+  const store = createStage6Store();
+
+  store.setState((state) => ({
+    ...state,
+    remote: {
+      ...state.remote,
+      delivery: makeDeliverySummary({
+        artifacts: [artifact],
+      }),
+    },
+    stream: {
+      ...state.stream,
+      reportMarkdown: [
+        "![合法](mimir://artifact/art_stage0_chart)",
+        "![未知](mimir://artifact/art_missing_chart)",
+        "![非法](https://evil.test/image.png)",
+      ].join("\n\n"),
+    },
+  }));
+
+  mswServer.use(
+    http.get("*/api/v1/tasks/tsk_stage0/artifacts/art_stage0_chart", () => {
+      return new HttpResponse(new Uint8Array([137, 80, 78, 71]), {
+        status: 200,
+        headers: {
+          "Content-Type": "image/png",
+        },
+      });
+    }),
+  );
+
+  renderWithStore(<ReportCanvas />, { store });
+
+  expect(await screen.findByAltText("合法")).toBeInTheDocument();
+  expect(screen.queryByAltText("未知")).not.toBeInTheDocument();
+  expect(screen.queryByAltText("非法")).not.toBeInTheDocument();
+});
