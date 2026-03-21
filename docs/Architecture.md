@@ -748,7 +748,13 @@ sub agent 给 master 的压缩摘要。
 
 ```json
 {
+  "success": true,
   "summary": "已生成 1 张图表，并完成均值、增长率与象限坐标计算。",
+  "stdout": "mean=17.4\ngrowth=0.31",
+  "stderr": null,
+  "error_type": null,
+  "error_message": null,
+  "traceback_excerpt": null,
   "artifacts": [
     {
       "artifact_id": "art_01H...",
@@ -762,9 +768,13 @@ sub agent 给 master 的压缩摘要。
 
 规则：
 
+- `success` 必填。`true` 表示 Python 代码已执行完成；`false` 表示 sandbox 已正常返回执行结果，但代码在沙盒内部失败。
 - `summary` 必填；即使本次 Python 调用没有生成图片，也必须返回文本摘要。
+- `stdout` 必填；允许为空字符串，但必须经过合理截断。
+- `stderr`、`error_type`、`error_message`、`traceback_excerpt` 在失败时可填写，在成功时应为 `null` 或空字符串。
 - `artifacts` 可为空；`python_interpreter` 既可做绘图，也可只做分析/计算。
 - writer 必须基于真实 `artifacts[]` 元数据插入 markdown 图片引用，不能自行猜测 `artifacts/{filename}` 或其他离线路径。
+- 沙盒内部代码执行失败属于 agent loop 内部可恢复失败，不默认等同于 Task 级 `upstream_service_error`；writer 可以基于错误信息修正代码、放弃图表或继续正文。
 
 ## 7.12 ReportBundle
 
@@ -1067,12 +1077,19 @@ PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": 
 
 1. writer 发出的 tool request 只包含 `code`。
 2. adapter / orchestrator 负责把执行结果拆成：
+   - `success`
    - 文本执行摘要
+   - `stdout`
+   - `stderr` / 错误摘要
+   - `error_type`
+   - `error_message`
+   - `traceback_excerpt`
    - artifact 元数据
-   - 失败错误摘要
 3. raw binary、压缩包内容或图片字节不进入 transcript；它们只能进入 artifact store。
-4. 回放到 writer transcript 的 tool result 必须使用 `summary + optional artifacts[]` 结构；不能退化成固定成功文案。
+4. 回放到 writer transcript 的 tool result 必须使用结构化 envelope；不能退化成固定成功文案，也不能只表达“成功产出 artifact”。
 5. `artifacts[]` 中必须包含真实 `artifact_id` 与 `canonical_path=mimir://artifact/{artifact_id}`，供 writer 在正文中插入稳定引用。
+6. 只有 infra / transport / sandbox create-destroy / artifact post-processing 失败，才按后端通用重试策略映射为 `RetryableOperationError`。
+7. 当 E2B `execute` 请求本身成功返回，但 sandbox 内部 Python 代码执行失败时，adapter 必须返回 `success=false` 的结构化 tool result，而不是抛可重试异常。
 
 ### 8.5.5 Port / adapter 责任边界
 

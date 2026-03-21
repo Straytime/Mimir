@@ -79,6 +79,7 @@ class LocalStubSandboxClient:
 
     async def execute_python(self, sandbox_id: str, code: str) -> SandboxExecutionResult:
         return SandboxExecutionResult(
+            success=True,
             stdout=f"executed:{sandbox_id}:{code}",
             artifacts=(
                 GeneratedArtifact(
