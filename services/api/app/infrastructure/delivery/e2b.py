@@ -103,9 +103,6 @@ class E2BRealSandboxClient:
         except Exception as exc:
             raise RetryableOperationError("e2b sandbox execute failed") from exc
 
-        if getattr(execution, "error", None) is not None:
-            raise RetryableOperationError("e2b sandbox execute failed")
-
         try:
             after_paths = await self._list_png_paths(sandbox)
             artifacts = await self._load_new_artifacts(
@@ -116,8 +113,14 @@ class E2BRealSandboxClient:
         except Exception as exc:
             raise RetryableOperationError("e2b sandbox artifact read failed") from exc
 
+        error = getattr(execution, "error", None)
         return SandboxExecutionResult(
+            success=error is None,
             stdout=_extract_execution_stdout(execution),
+            stderr=_extract_execution_stderr(execution),
+            error_type=_extract_execution_error_type(error),
+            error_message=_extract_execution_error_message(error),
+            traceback_excerpt=_extract_execution_traceback(error),
             artifacts=artifacts,
         )
 
@@ -188,3 +191,61 @@ def _extract_execution_stdout(execution: Any) -> str:
     if isinstance(text, str):
         return text
     return ""
+
+
+def _extract_execution_stderr(execution: Any) -> str | None:
+    logs = getattr(execution, "logs", None)
+    if logs is not None:
+        stderr_lines = getattr(logs, "stderr", None)
+        if isinstance(stderr_lines, list):
+            stderr = "\n".join(str(line) for line in stderr_lines).strip()
+            return stderr or None
+    return None
+
+
+def _extract_execution_error_type(error: Any) -> str | None:
+    if error is None:
+        return None
+    if isinstance(error, str):
+        return None
+    for key in ("name", "type", "error_type"):
+        value = _read_error_field(error, key)
+        if value:
+            return value
+    return None
+
+
+def _extract_execution_error_message(error: Any) -> str | None:
+    if error is None:
+        return None
+    if isinstance(error, str):
+        return error.strip() or None
+    for key in ("message", "value", "detail", "error_message"):
+        value = _read_error_field(error, key)
+        if value:
+            return value
+    text = str(error).strip()
+    return text or None
+
+
+def _extract_execution_traceback(error: Any) -> str | None:
+    if error is None or isinstance(error, str):
+        return None
+    for key in ("traceback", "stack", "traceback_excerpt"):
+        value = _read_error_field(error, key)
+        if value:
+            return value
+    return None
+
+
+def _read_error_field(error: Any, key: str) -> str | None:
+    value = None
+    if isinstance(error, dict):
+        value = error.get(key)
+    else:
+        value = getattr(error, key, None)
+
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

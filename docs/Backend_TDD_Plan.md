@@ -398,7 +398,9 @@ snapshot 规则：
 3. `python_interpreter`：
    - tool request 只允许 `code`
    - tool result 不得回灌 raw binary
-   - tool result 必须包含 `summary`，并可选携带 `artifacts[]`
+   - tool result 必须包含 `success`、`summary`、`stdout`
+   - 失败时必须包含 `stderr` 或等价错误摘要，以及 `error_type`、`error_message`、`traceback_excerpt`
+   - tool result 可选携带 `artifacts[]`
    - `artifacts[]` 中必须锁定 `artifact_id`、`filename`、`mime_type`、`canonical_path=mimir://artifact/{artifact_id}`
 4. `collect_agent`：
    - 模型可见参数只允许 `collect_target`、`additional_info`、`freshness_requirement`
@@ -410,6 +412,7 @@ snapshot 规则：
 2. `web_fetch` 正文截断到前 `10000` 字符，标题提取规则稳定
 3. `python_interpreter` 只返回文本摘要与 artifact 元数据，不把二进制内容写入 transcript
 4. provider 风控、超时、空内容、4xx、5xx 都会被映射到统一异常或统一 tool result envelope
+5. E2B `execute` 成功返回但 `execution.error != null` 时，必须映射成 writer 可消费的结构化失败 tool result，而不是 `RetryableOperationError`
 
 阶段映射：
 
@@ -818,6 +821,8 @@ DoD：
 - writer 达到 `MIMIR_WRITER_MAX_ROUNDS` 后若仍有 `tool_calls`，必须 `task.failed`，不能继续 `report.completed`
 - writer 最终 markdown 为空白时必须 `task.failed`，不能交付 `0 字 / 0 配图` 空报告
 - `Settings` 必须能正确读取 `MIMIR_WRITER_MAX_ROUNDS`，默认值保持 `5`
+- E2B 基础设施失败 / destroy 失败 / artifact upload-store 失败仍走后端重试与失败收口
+- sandbox 内部 Python 执行失败会产出 `writer.tool_call.completed(success=false)`，并把结构化失败结果写入 writer transcript，允许下一轮继续决策
 
 实现内容：
 
@@ -839,6 +844,7 @@ DoD：
 - 下载链接与 artifact URL 都符合契约
 - 正文 markdown 只保存 canonical artifact path，在线渲染与 zip 导出各自完成映射
 - writer 成功交付的前提是：无剩余 `tool_calls` 且最终 markdown 非空白
+- sandbox 代码执行失败不应直接触发 `task.failed`；只有 infra / upload / store 路径仍可直接失败收口
 - PDF / ZIP 均能从 temp artifact store 正常生成
 - Stage 6 的 Alembic migration 可正向和反向迁移
 

@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 logger = logging.getLogger(__name__)
 
+_PYTHON_TOOL_FEEDBACK_LIMIT = 4000
+
 from app.application.dto.delivery import (
     GeneratedArtifact,
     OutlineDecision,
@@ -559,7 +561,7 @@ class DeliveryOrchestrator:
             return None
 
         tool_result = _build_python_tool_result(
-            summary=_normalize_python_summary(result.stdout),
+            result=result,
             stored_artifacts=stored_artifacts,
         )
 
@@ -568,7 +570,7 @@ class DeliveryOrchestrator:
             revision_id=revision_id,
             tool_call=tool_call,
             status="completed",
-            error_code=None,
+            error_code="execution_failed" if not result.success else None,
             response_json=_python_tool_result_to_payload(tool_result),
         )
         await self._append_event(
@@ -577,7 +579,7 @@ class DeliveryOrchestrator:
             payload={
                 "tool_call_id": tool_call.tool_call_id,
                 "tool_name": tool_call.tool_name,
-                "success": True,
+                "success": result.success,
             },
         )
         return _WriterToolCallResult(
@@ -881,16 +883,49 @@ def _split_markdown_deltas(markdown: str, *, chunk_size: int = 200) -> list[str]
     return chunks or [markdown]
 
 
-def _normalize_python_summary(stdout: str) -> str:
+def _normalize_python_success_summary(stdout: str) -> str:
     summary = stdout.strip()
     if summary:
-        return summary
+        return _truncate_python_feedback(summary)
     return "Python execution completed without textual output."
 
 
-def _build_python_tool_result(*, summary: str, stored_artifacts: list) -> PythonToolResult:
+def _normalize_python_failure_summary(
+    *,
+    error_type: str | None,
+    error_message: str | None,
+) -> str:
+    if error_type and error_message:
+        return _truncate_python_feedback(
+            f"Python execution failed with {error_type}: {error_message}"
+        )
+    if error_message:
+        return _truncate_python_feedback(
+            f"Python execution failed: {error_message}"
+        )
+    return "Python execution failed."
+
+
+def _build_python_tool_result(
+    *,
+    result,
+    stored_artifacts: list,
+) -> PythonToolResult:
     return PythonToolResult(
-        summary=summary,
+        success=result.success,
+        summary=(
+            _normalize_python_success_summary(result.stdout)
+            if result.success
+            else _normalize_python_failure_summary(
+                error_type=result.error_type,
+                error_message=result.error_message,
+            )
+        ),
+        stdout=_truncate_python_feedback(result.stdout) or "",
+        stderr=_truncate_python_feedback(result.stderr),
+        error_type=_truncate_python_feedback(result.error_type),
+        error_message=_truncate_python_feedback(result.error_message),
+        traceback_excerpt=_truncate_python_feedback(result.traceback_excerpt),
         artifacts=tuple(
             ToolResultArtifact(
                 artifact_id=artifact.artifact_id,
@@ -905,7 +940,13 @@ def _build_python_tool_result(*, summary: str, stored_artifacts: list) -> Python
 
 def _python_tool_result_to_payload(tool_result: PythonToolResult) -> dict[str, object]:
     return {
+        "success": tool_result.success,
         "summary": tool_result.summary,
+        "stdout": tool_result.stdout,
+        "stderr": tool_result.stderr,
+        "error_type": tool_result.error_type,
+        "error_message": tool_result.error_message,
+        "traceback_excerpt": tool_result.traceback_excerpt,
         "artifacts": [
             {
                 "artifact_id": artifact.artifact_id,
@@ -926,3 +967,15 @@ def _rewrite_markdown_artifact_refs_for_zip(*, markdown: str, stored_artifacts: 
             f"artifacts/{artifact.filename}",
         )
     return rewritten
+
+
+def _truncate_python_feedback(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if len(normalized) <= _PYTHON_TOOL_FEEDBACK_LIMIT:
+        return normalized
+    return f"{normalized[:_PYTHON_TOOL_FEEDBACK_LIMIT]}\n...[truncated]"

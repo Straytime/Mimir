@@ -78,14 +78,25 @@ class ToolResultArtifact:
 
 @dataclass(frozen=True, slots=True)
 class PythonToolResult:
+    success: bool
     summary: str
+    stdout: str
+    stderr: str | None = None
+    error_type: str | None = None
+    error_message: str | None = None
+    traceback_excerpt: str | None = None
     artifacts: tuple[ToolResultArtifact, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class SandboxExecutionResult:
+    success: bool
     stdout: str
-    artifacts: tuple[GeneratedArtifact, ...]
+    stderr: str | None = None
+    error_type: str | None = None
+    error_message: str | None = None
+    traceback_excerpt: str | None = None
+    artifacts: tuple[GeneratedArtifact, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

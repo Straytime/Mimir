@@ -99,6 +99,31 @@ class TranscriptAwareWriterAgent(WriterAgent):
         )
 
 
+class ExecutionFailureAwareWriterAgent(WriterAgent):
+    def __init__(self, *, tool_call: WriterToolCall) -> None:
+        self.tool_call = tool_call
+        self.invocations: list[WriterInvocation] = []
+
+    async def write(self, invocation: WriterInvocation) -> WriterDecision:
+        self.invocations.append(invocation)
+        has_transcript = (
+            invocation.prompt_bundle is not None
+            and len(invocation.prompt_bundle.transcript) > 0
+        )
+        if not has_transcript:
+            return WriterDecision(text="", tool_calls=(self.tool_call,))
+
+        tool_payload = json.loads(invocation.prompt_bundle.transcript[-1].content)
+        assert tool_payload["success"] is False
+        return WriterDecision(
+            text=(
+                "# 中国 AI 搜索产品竞争格局研究\n\n"
+                "图表脚本执行失败后，正文改为直接输出文字分析结论。\n"
+            ),
+            tool_calls=(),
+        )
+
+
 class FailingWriterAgent(WriterAgent):
     def __init__(self, *, error: Exception) -> None:
         self.error = error
@@ -157,9 +182,11 @@ class ScriptedSandboxClient(E2BSandboxClient):
         *,
         scenario: SandboxScenario,
         artifacts_by_code: dict[str, Sequence[GeneratedArtifact]],
+        results_by_code: dict[str, SandboxExecutionResult] | None = None,
     ) -> None:
         self.scenario = scenario
         self.artifacts_by_code = artifacts_by_code
+        self.results_by_code = results_by_code or {}
 
     async def create(self) -> str:
         if self.scenario.create_failures_remaining > 0:
@@ -176,7 +203,11 @@ class ScriptedSandboxClient(E2BSandboxClient):
             self.scenario.execute_failures_remaining -= 1
             raise RetryableOperationError("temporary sandbox execute failure")
 
+        if code in self.results_by_code:
+            return self.results_by_code[code]
+
         return SandboxExecutionResult(
+            success=True,
             stdout="ok",
             artifacts=tuple(self.artifacts_by_code.get(code, ())),
         )
@@ -483,7 +514,13 @@ async def test_writer_tool_transcript_contains_summary_and_real_artifact_metadat
     transcript = writer_agent.invocations[1].prompt_bundle.transcript
     assert transcript is not None
     tool_result = json.loads(transcript[-1].content)
+    assert tool_result["success"] is True
     assert tool_result["summary"] == "ok"
+    assert tool_result["stdout"] == "ok"
+    assert tool_result["stderr"] is None
+    assert tool_result["error_type"] is None
+    assert tool_result["error_message"] is None
+    assert tool_result["traceback_excerpt"] is None
     assert tool_result["artifacts"][0]["artifact_id"].startswith("art_")
     assert tool_result["artifacts"][0]["filename"] == "chart_market_share.png"
     assert tool_result["artifacts"][0]["mime_type"] == "image/png"
@@ -516,7 +553,71 @@ async def test_writer_tool_transcript_returns_summary_even_when_python_call_has_
     transcript = writer_agent.invocations[1].prompt_bundle.transcript
     assert transcript is not None
     tool_result = json.loads(transcript[-1].content)
+    assert tool_result["success"] is True
     assert tool_result["summary"] == "ok"
+    assert tool_result["stdout"] == "ok"
+    assert tool_result["stderr"] is None
+    assert tool_result["error_type"] is None
+    assert tool_result["error_message"] is None
+    assert tool_result["traceback_excerpt"] is None
+    assert tool_result["artifacts"] == []
+
+
+@pytest.mark.asyncio
+async def test_python_execution_failure_returns_structured_tool_result_and_writer_continues_next_round(
+    make_stage6_client,
+) -> None:
+    writer_agent = ExecutionFailureAwareWriterAgent(
+        tool_call=WriterToolCall(
+            tool_call_id="call_writer_chart_failure",
+            tool_name="python_interpreter",
+            code="plot_failure",
+        )
+    )
+    scenario = SandboxScenario()
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=scenario,
+            artifacts_by_code={},
+            results_by_code={
+                "plot_failure": SandboxExecutionResult(
+                    success=False,
+                    stdout="partial output",
+                    stderr="Traceback (most recent call last):\nValueError: bad column",
+                    error_type="ValueError",
+                    error_message="bad column",
+                    traceback_excerpt="Traceback (most recent call last):\nValueError: bad column",
+                    artifacts=(),
+                ),
+            },
+        ),
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        requested = await read_until_event(lines, {"writer.tool_call.requested"}, timeout=2.0)
+        completed = await read_until_event(lines, {"writer.tool_call.completed"}, timeout=2.0)
+        _, report_completed_name, _ = await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        await _close_stream(stream_context, response)
+
+    assert requested[1] == "writer.tool_call.requested"
+    assert completed[1] == "writer.tool_call.completed"
+    assert completed[2]["payload"]["success"] is False
+    assert report_completed_name == "report.completed"
+    assert len(scenario.executed_calls) == 1
+    assert len(writer_agent.invocations) == 2
+    transcript = writer_agent.invocations[1].prompt_bundle.transcript
+    assert transcript is not None
+    tool_result = json.loads(transcript[-1].content)
+    assert tool_result["success"] is False
+    assert tool_result["summary"].startswith("Python execution failed")
+    assert tool_result["stdout"] == "partial output"
+    assert tool_result["stderr"] == "Traceback (most recent call last):\nValueError: bad column"
+    assert tool_result["error_type"] == "ValueError"
+    assert tool_result["error_message"] == "bad column"
+    assert tool_result["traceback_excerpt"] == "Traceback (most recent call last):\nValueError: bad column"
     assert tool_result["artifacts"] == []
 
 

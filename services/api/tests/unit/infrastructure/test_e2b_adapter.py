@@ -215,6 +215,48 @@ async def test_e2b_adapter_execute_error_maps_to_retryable() -> None:
 
 
 @pytest.mark.asyncio
+async def test_e2b_adapter_execution_error_returns_structured_failure_result() -> None:
+    sandbox = FakeSandbox(
+        files=FakeFilesystem(
+            list_results=[
+                [],
+                [],
+            ],
+        ),
+        execution=SimpleNamespace(
+            logs=SimpleNamespace(
+                stdout=["partial output"],
+                stderr=["Traceback (most recent call last):", "ValueError: boom"],
+            ),
+            error=SimpleNamespace(
+                name="ValueError",
+                value="boom",
+                traceback="Traceback (most recent call last):\nValueError: boom",
+            ),
+            text="partial output",
+        ),
+    )
+    adapter = E2BRealSandboxClient(
+        api_key="e2b-key",
+        request_timeout_seconds=12.0,
+        execution_timeout_seconds=34.0,
+        sandbox_timeout_seconds=600,
+        sandbox_factory=FakeSandboxFactory(sandbox=sandbox),
+    )
+
+    sandbox_id = await adapter.create()
+    result = await adapter.execute_python(sandbox_id, "print('boom')")
+
+    assert result.success is False
+    assert result.stdout == "partial output"
+    assert result.stderr == "Traceback (most recent call last):\nValueError: boom"
+    assert result.error_type == "ValueError"
+    assert result.error_message == "boom"
+    assert result.traceback_excerpt == "Traceback (most recent call last):\nValueError: boom"
+    assert result.artifacts == ()
+
+
+@pytest.mark.asyncio
 async def test_e2b_adapter_destroy_error_maps_to_retryable() -> None:
     sandbox = FakeSandbox(
         files=FakeFilesystem(list_results=[[]]),

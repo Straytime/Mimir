@@ -2320,3 +2320,55 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若生产需要放宽 writer 工具轮次，可单独以配置任务包形式调整 `MIMIR_WRITER_MAX_ROUNDS`
   - 继续 release validation 时，重点观察真实 provider 下 writer 是否稳定落在“成功交付”或“明确失败”两种终态之一
+
+## R1-032 E2B Tool Failure Feedback Loop
+
+- 日期时间: 2026-03-21 22:53:12 CST (+0800)
+- 任务包编号: R1-032
+- session 标识: `codex/r1-032-e2b-tool-failure-feedback`
+- 目标摘要:
+  - 修正 `python_interpreter` 的失败分类，把 sandbox 内部 Python 代码执行失败从 retryable infra failure 中拆出来
+  - 让 writer 能收到结构化失败 tool result，并在下一轮决定修代码重试、放弃图表或继续正文
+  - 保持 E2B create / transport / destroy 失败，以及 artifact upload / store 失败仍由后端负责重试与失败收口
+- 生产证据:
+  - 任务 `tsk_7a3bebcf6cded9ca14167d27`
+  - 第二次 `python_interpreter` 调用时，E2B `POST /execute` 返回 `200`
+  - adapter 看到 `execution.error != None` 后直接映射为 `RetryableOperationError("e2b sandbox execute failed")`
+  - 后端重试 4 次后 `task.failed`
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `services/api/app/application/dto/delivery.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/infrastructure/delivery/e2b.py`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/tests/unit/infrastructure/test_e2b_adapter.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `docs/Execution_Log.md`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_e2b_adapter.py tests/integration/delivery/test_report_delivery.py -k 'execution_error_returns_structured_failure_result or python_execution_failure_returns_structured_tool_result_and_writer_continues_next_round or sandbox_execution_retry_exhaustion_fails_revision_and_destroys_sandbox or artifact_upload_retry_exhaustion_fails_revision_without_silent_degradation or writer_tool_transcript_contains_summary_and_real_artifact_metadata or writer_tool_transcript_returns_summary_even_when_python_call_has_no_artifacts'`
+    - 初次结果: `5 failed, 1 passed`
+    - 暴露问题:
+      - `SandboxExecutionResult` 还不能表达 `success=false` 的结构化执行结果
+      - E2B adapter 仍把 `execution.error != None` 当成 `RetryableOperationError`
+      - delivery loop 仍把这类错误直接推进到 task-level fail path
+  - 修补后定向:
+    - 同一命令重跑
+    - 结果: `6 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_e2b_adapter.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `22 passed`
+- 验收结论:
+  - `python_interpreter` 现在明确区分三类失败：
+    - E2B create / transport / destroy 失败：仍是 retryable infra failure
+    - sandbox 内部 Python 代码执行失败：返回 `success=false` 的结构化 tool result，不直接 `task.failed`
+    - artifact upload / artifact read / store 后处理失败：仍是 retryable failure，耗尽后 `task.failed`
+  - writer transcript 现在可收到结构化失败结果，字段包含 `success`、`summary`、`stdout`、`stderr`、`error_type`、`error_message`、`traceback_excerpt`、`artifacts`
+  - `writer.tool_call.completed(success=false)` 已能自然进入下一轮 writer 决策，不再默认触发 task-level upstream failure
+  - 成功 Python 执行、无 artifact 成功执行、delivery events 和 downloads 契约未回退
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次没有改前端或 writer prompt；writer 对结构化失败结果的策略选择仍依赖现有模型能力与 transcript 理解
+- 下一步建议:
+  - 如需继续 release validation，可单独执行一轮真实 provider + E2B 生产 smoke，观察 writer 是否会利用结构化失败结果自修代码或放弃图表继续交付
