@@ -260,6 +260,30 @@ PR 应当：
 - E2B 真实 adapter 接线
 - test-only surface 收敛
 
+### Production 只读排查路径
+
+- 需要查看 production 原始任务数据时，优先使用 Railway 平台内的只读路径，不要先凭本机缓存、浏览器状态或非权威 DB 连接下结论
+- 固定顺序：
+  - `railway status --json`
+  - `railway variable list --service mimir-api --environment production --json`
+  - `railway ssh --service mimir-api --environment production`
+  - `railway ssh --service Postgres --environment production`
+- `mimir-api` 容器内的权威查询方式：
+  - 使用 `/app/.venv/bin/python`
+  - 通过 `from app.core.config import Settings; Settings.from_env().database_url` 解析运行时真实 DB URL
+  - 再用 SQLAlchemy 做只读查询
+- `Postgres` 容器内的交叉确认方式：
+  - 使用 `psql -U postgres -d railway -P pager=off`
+  - 只运行只读 SQL，用于确认 `research_tasks`、`task_events`、`agent_runs`、`task_tool_calls`、`artifacts`
+- `railway connect` 只作为可选辅助路径：
+  - 它依赖本机 `psql`
+  - 若本机缺少 `psql`，不要把 `railway connect` 失败误判为 production DB 不可达
+- production 数据是短期存活的：
+  - delivered task 默认 `30` 分钟后进入过期/cleanup 路径
+  - cleanup 会物理删除 `research_tasks` 及其级联表记录与 artifacts
+  - 因此排查 writer / delivery 正文问题时，必须在 task 仍存活时立即采样原始数据
+- 在拿到存活 task 的 `agent_runs.content_text`、最终 delivery 存储值，以及尾部 `task_events` 之前，不对 writer 正文语义、正文截断或正文拼装问题下实现结论
+
 当前阶段不应做：
 - 新增 API 端点或业务功能
 - 修改 Architecture / OpenAPI / IA / TDD Plan 的设计结论

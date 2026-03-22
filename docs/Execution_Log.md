@@ -2372,3 +2372,72 @@ Copy the template below for each completed session:
   - 本次没有改前端或 writer prompt；writer 对结构化失败结果的策略选择仍依赖现有模型能力与 transcript 理解
 - 下一步建议:
   - 如需继续 release validation，可单独执行一轮真实 provider + E2B 生产 smoke，观察 writer 是否会利用结构化失败结果自修代码或放弃图表继续交付
+
+## R1-033 Production Data Inspection Path
+
+- 日期时间: 2026-03-22 12:15:35 CST (+0800)
+- 任务包编号: R1-033
+- session 标识: `codex/r1-033-production-data-inspection`
+- 目标摘要:
+  - 打通 production 原始数据的只读排查路径，稳定读取 `research_tasks` / `task_events` / `agent_runs` / `task_tool_calls` / `artifacts`
+  - 解释“线上任务在跑，但本机或普通 Railway DB 查询结果不一致”的原因
+  - 在路径打通前，不继续对 writer 正文语义和截断问题下结论
+- 目标 task:
+  - `tsk_31b1b9830af175e6f3119680`
+- 修改文件:
+  - `AGENTS.md`
+  - `CLAUDE.md`
+  - `docs/Execution_Log.md`
+- 测试 / 验证:
+  - 已运行上下文确认:
+    - `railway --version`
+    - `railway whoami --json`
+    - `railway status --json`
+    - 结论: 当前 CLI 上下文已绑定 `Mimir-api / production`，service 包含 `mimir-api` 与 `Postgres`
+  - 已运行运行时变量确认:
+    - `railway variable list --service mimir-api --environment production --json`
+    - `railway variable list --service Postgres --environment production --json`
+    - 结论: `mimir-api` 运行时同时注入 `MIMIR_DATABASE_URL` 与 `DATABASE_URL`；两者都指向 production `Postgres` 服务的 `railway` 数据库；`MIMIR_WRITER_MAX_ROUNDS=10` 已在线上生效
+  - 已运行权威只读查询路径:
+    - `railway ssh --service mimir-api --environment production`
+    - 在容器内执行 `/app/.venv/bin/python` + SQLAlchemy 只读查询，确认 `Settings.from_env().database_url` 实际解析到 `postgres.railway.internal:5432/railway`
+    - `railway ssh --service Postgres --environment production`
+    - 在容器内执行 `psql -U postgres -d railway -P pager=off ...` 只读 SQL，与 app 容器查询结果交叉一致
+  - 已运行辅助验证:
+    - `railway connect Postgres --environment production`
+    - 结果: 本机直接失败 `psql must be installed to continue`，说明 `railway connect` 依赖本地 `psql`，不能作为这台机器上的唯一权威路径
+    - `railway logs --service mimir-api --environment production --lines 500 --json --filter 'tsk_31b1b9830af175e6f3119680'`
+    - 结论: 该 task 在 `2026-03-21 15:04Z ~ 15:19Z` 期间确实在线运行并持续 heartbeat，且在 `15:12Z ~ 15:13Z` 已成功返回 artifact 与 `markdown.zip`
+  - 已运行当前 DB 存量验证:
+    - app 容器与 Postgres 容器都返回:
+      - `research_tasks=0`
+      - `task_events=0`
+      - `agent_runs=0`
+      - `task_tool_calls=0`
+      - `artifacts=0`
+- 验收结论:
+  - production 权威只读排查路径已打通，后续应优先使用两条路径：
+    - `railway ssh --service mimir-api --environment production` + 容器内 `/app/.venv/bin/python` 只读查询
+    - `railway ssh --service Postgres --environment production` + 容器内 `psql` 只读查询
+  - 上述只读排查路径与使用约束已同步固化到 `AGENTS.md` 与 `CLAUDE.md`，后续 session 可直接复用
+  - 已确认 `mimir-api` 运行时实际使用的 DB URL 来源不是“另一份库”；app 容器和 Postgres 容器看到的是同一个 production `railway` 数据库
+  - 之前查询“看不到任务”并不是因为连错库，而是因为 production 数据面是短期存活的：
+    - delivered task 会写入 `expires_at = now + 30 minutes`
+    - cleanup worker 会对 `expired_feedback_tasks` 与 `cleanup_pending_tasks` 执行 `_maybe_cleanup_task()`
+    - `_cleanup_task_records()` 最终会物理删除 `research_tasks` 及其级联数据
+  - 对 `tsk_31b1b9830af175e6f3119680` 的权威原始数据摘录如下:
+    - 当前 production DB 中，`research_tasks` / `task_events` / `agent_runs` / `task_tool_calls` / `artifacts` 对该 `task_id` 均已无行
+    - 生产运行日志能证明该 task 曾真实存在并完成过交付动作：artifact `GET .../artifacts/... -> 200 OK`，`GET .../downloads/markdown.zip -> 200 OK`
+    - 因数据库与 artifact 记录已被 cleanup 删除，当前已无法再从 production DB 回补 writer 各轮 `content_text` 与最终交付正文原文；后续若要排查 writer 正文问题，必须在 task 仍存活时立即沿本次确定的只读路径采样
+- blocker / 风险:
+  - 当前排查路径本身无 blocker
+  - 但对本次目标 task 而言，writer 各轮原文与最终 markdown 正文已被 production cleanup 删除，属于不可逆数据缺口
+  - `railway connect` 在这台机器上缺少本地 `psql`，因此只能作为可选辅助路径，不能作为默认方案
+- 下一步建议:
+  - 后续继续排查 writer 问题时，先执行:
+    - `railway status --json`
+    - `railway variable list --service mimir-api --environment production --json`
+    - `railway ssh --service mimir-api --environment production`
+    - 在容器内立即运行只读 Python 查询 `research_tasks` / `task_events` / `agent_runs` / `task_tool_calls` / `artifacts`
+    - 再用 `railway ssh --service Postgres --environment production` 的 `psql` 结果做交叉确认
+  - 在拿到存活 task 的 `agent_runs.content_text` 与最终 delivery 存储值之前，不对 writer 语义、正文截断或正文拼装问题下实现结论
