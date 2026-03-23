@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from httpx import AsyncClient
 
@@ -123,7 +125,7 @@ async def test_post_clarification_returns_validation_error_for_invalid_body(
 
 
 @pytest.mark.asyncio
-async def test_post_clarification_returns_invalid_task_state_before_ready(
+async def test_post_clarification_accepts_ready_task_without_prior_sse_connection(
     app_client: AsyncClient,
 ) -> None:
     create_response = await app_client.post(
@@ -131,6 +133,8 @@ async def test_post_clarification_returns_invalid_task_state_before_ready(
         json=build_create_task_payload(clarification_mode="natural"),
     )
     create_body = create_response.json()
+
+    await asyncio.sleep(0.05)
 
     submit_response = await app_client.post(
         f"/api/v1/tasks/{create_body['task_id']}/clarification",
@@ -141,5 +145,6 @@ async def test_post_clarification_returns_invalid_task_state_before_ready(
         },
     )
 
-    assert submit_response.status_code == 409
-    assert submit_response.json()["error"]["code"] == "invalid_task_state"
+    assert submit_response.status_code == 202
+    assert submit_response.json()["accepted"] is True
+    assert submit_response.json()["snapshot"]["phase"] == "analyzing_requirement"

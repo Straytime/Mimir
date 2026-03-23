@@ -2441,3 +2441,58 @@ Copy the template below for each completed session:
     - 在容器内立即运行只读 Python 查询 `research_tasks` / `task_events` / `agent_runs` / `task_tool_calls` / `artifacts`
     - 再用 `railway ssh --service Postgres --environment production` 的 `psql` 结果做交叉确认
   - 在拿到存活 task 的 `agent_runs.content_text` 与最终 delivery 存储值之前，不对 writer 语义、正文截断或正文拼装问题下实现结论
+
+## R1-034 Explicit Abort Lifecycle
+
+- 日期时间: 2026-03-23 12:18:01 CST (+0800)
+- 任务包编号: R1-034
+- session 标识: `codex/r1-034-explicit-abort-lifecycle`
+- 目标摘要:
+  - 将任务生命周期从“heartbeat 保活 / 断连即终止”收敛为“显式终止”
+  - 任务默认在后端持续运行；页面切后台、窗口失焦、SSE 断连或 heartbeat 中断不再自动杀任务
+  - 保留手动终止、刷新确认、关闭确认三条显式 abort 路径；不新增恢复接管和 token 持久化
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Frontend_IA.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Release_Readiness_Checklist.md`
+  - `services/api/app/infrastructure/streaming/broker.py`
+  - `services/api/tests/contract/rest/test_clarification.py`
+  - `services/api/tests/contract/rest/test_task_events.py`
+  - `services/api/tests/integration/lifecycle/test_task_stream_lifecycle.py`
+  - `apps/web/features/research/hooks/use-task-stream.ts`
+  - `apps/web/features/research/components/terminal-banner.tsx`
+  - `apps/web/tests/integration/task-stream-lifecycle.spec.tsx`
+  - `apps/web/tests/integration/clarification-flow.spec.tsx`
+- 测试 / 验证:
+  - 后端:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_clarification.py tests/integration/lifecycle/test_clarification_lifecycle.py tests/integration/lifecycle/test_task_stream_lifecycle.py tests/contract/rest/test_task_events.py`
+    - 结果: `20 passed`
+  - 前端:
+    - `cd apps/web && pnpm exec vitest run tests/integration/task-stream-lifecycle.spec.tsx tests/integration/clarification-flow.spec.tsx tests/integration/research-transparency.spec.tsx`
+    - 结果: `25 passed`
+    - `cd apps/web && pnpm typecheck`
+    - 结果: `passed`
+- 验收结论:
+  - 生命周期语义已从“heartbeat / SSE 断连驱动终止”切换为“显式 disconnect 驱动终止”
+  - 后端已移除三类自动终止:
+    - `connect_deadline` 超时自动终止
+    - `heartbeat_timeout` 自动终止
+    - SSE stream disconnect / finalize 自动终止
+  - `task.created` 现在在创建后立即持久化，澄清 orchestrator 也在任务创建后立即启动，因此任务不再依赖首个 SSE 连接才能继续推进
+  - 前端 `useTaskStream` 不再把 SSE `onError` / `onClose` / connect timeout 本地硬映射成 `terminated`；现在只更新 `sseState`
+  - 手动“终止任务”、`beforeunload` 原生离开确认、`pagehide` `sendBeacon` 仍保留为现有显式 abort 路径
+  - 页面切后台 / 标签切换 / 窗口失焦不会触发本地 disconnect，也不会导致后端终止任务
+  - v1 的既有边界保持不变：
+    - 不支持刷新恢复
+    - 不持久化 `task_token`
+    - 不新增 API 端点
+- blocker / 风险:
+  - 无当前 blocker
+  - `connect_deadline_at` 与 `POST /heartbeat` 仍保留在公开契约中，但都已降级为兼容/遥测语义；后续若要进一步精简公开契约，需要单独任务包
+  - 对于“用户确认离开后浏览器未成功送达 `sendBeacon`”的场景，后端任务会继续运行到正常终态；这是当前 explicit-abort 语义下的预期 best-effort 边界
+- 下一步建议:
+  - 若继续做 release validation，可单独补一轮 production smoke，确认真实 Railway + Vercel 环境下：
+    - 切后台不会终止任务
+    - 手动终止仍会及时进入 `task.terminated`
+    - 刷新 / 关闭确认后的 `sendBeacon` 路径仍按 best-effort 生效

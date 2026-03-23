@@ -157,8 +157,8 @@ Frontend required：
 
 - [ ] 已有一条真实 LLM + `web_search` + `web_fetch` smoke 记录
 - [ ] 已有一条真实 E2B baseline smoke 记录
-- [ ] 若发布前再次做人工 smoke，已准备 heartbeat 保活，避免 collection 阶段误触发 `heartbeat_timeout`
-- [ ] 已确认任务进入 `collecting` 且持续超过 1 个 heartbeat interval 时，前端仍会持续 `POST /heartbeat` 直到终态
+- [ ] 已确认页面切后台、标签切换或窗口失焦不会导致任务终止
+- [ ] 已确认任务进入 `collecting` 且持续超过 1 个 heartbeat interval 时，heartbeat 仍可持续发送，但 heartbeat 中断本身不会杀任务
 - [ ] 已记录本次发布使用的 smoke 日期与执行人
 
 ### 3.13 Go / No-Go
@@ -195,7 +195,7 @@ Frontend required：
 
 ### 4.4 生命周期
 
-- [ ] 是否出现 heartbeat 超时误杀
+- [ ] 是否出现未显式终止却被错误 `terminated`
 - [ ] 是否出现 disconnect 后任务未终止
 - [ ] 是否出现 cleanup_pending 长时间堆积
 - [ ] 是否出现 feedback 后 revision 切换异常

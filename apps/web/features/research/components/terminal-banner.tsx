@@ -10,7 +10,7 @@ const TERMINAL_CONTENT = {
   },
   terminated: {
     title: "任务已终止，旧任务操作已禁用。",
-    detail: "连接中断、手动终止或 connect deadline 超时后，v1 不会自动重连。",
+    detail: "只有手动终止或确认离开页面后，任务才会结束。v1 不支持恢复旧任务。",
     tone: "border-amber-200 bg-amber-50 text-amber-900",
   },
   expired: {

@@ -38,7 +38,7 @@ v1 推荐采用“单主路由工作台”：
 
 1. 当前版本不支持页面刷新后恢复任务，URL 中暴露 `task_id` 不带来真正的恢复能力。
 2. `task_token` 只保存在内存，不持久化到 `localStorage` / `IndexedDB`；跨路由跳转只会增加状态丢失面。
-3. PRD 明确“刷新、关闭页面视为放弃任务”，单路由能最大化避免误触导航。
+3. v1 仍不支持刷新后恢复任务，单路由能最大化避免误触导航；若用户确认刷新或关闭页面，则通过显式断连语义放弃任务。
 
 ### 3.2 App Router 结构建议
 
@@ -338,7 +338,7 @@ apps/web/
 
 文案要求：
 
-- `terminated`: 明确告知因页面断连或主动终止导致任务结束
+- `terminated`: 明确告知因用户显式终止或确认离开页面导致任务结束
 - `failed`: 明确显示错误摘要
 - `expired`: 明确告知报告已过期并被清理
 
@@ -488,13 +488,13 @@ type TimelineItem = {
 
 规则：
 
-1. 首次有效连接必须在后端 `connect_deadline_at` 前完成。
+1. 创建任务后应立即发起首个 SSE 连接，但超过 `connect_deadline_at` 不会再导致后端自动终止。
 2. v1 不做自动重连。
-3. 若连接失败、流中断或解析异常，直接切换到终止态 UI，不尝试恢复旧任务。
+3. 若连接失败、流中断或解析异常，只更新连接状态，不本地硬终止旧任务，也不尝试恢复旧任务。
 
 ### 7.3 心跳
 
-前端在以下状态持续发送 `POST /heartbeat`：
+前端在以下状态可持续发送 `POST /heartbeat`：
 
 - `awaiting_user_input`
 - `running`
@@ -504,7 +504,7 @@ type TimelineItem = {
 
 1. 默认每 `20 秒` 发送一次。
 2. 仅在 `sseState === "open"` 时运行。
-3. 若 heartbeat 返回 `409 invalid_task_state` 或 `404 task_not_found`，前端立即停止轮询并切换终态提示。
+3. heartbeat 用于活跃遥测，不再承担“保命”职责；若返回 `409 invalid_task_state` 或 `404 task_not_found`，前端停止轮询并按服务端已收口的状态进入终态提示。
 
 ### 7.4 断连与主动终止
 
@@ -521,7 +521,7 @@ type TimelineItem = {
 
 1. 当存在 `snapshot` 且 `status` 不属于 `terminated / failed / expired` 时注册 `beforeunload` 提示。
 2. 自定义提示文案不可靠，应按浏览器默认行为处理。
-3. `pagehide` 时尽量触发 `sendBeacon`，但 UI 不能假设 beacon 一定成功。
+3. `pagehide` 时尽量触发 `sendBeacon`，但 UI 不能假设 beacon 一定成功；若 beacon 未送达，任务可能继续在后端运行。
 
 ### 7.5 交付链接刷新
 
@@ -706,7 +706,7 @@ type TimelineItem = {
 | `422 validation_error` | 就地标红字段，不丢失已输入内容 |
 | `401 task_token_invalid` | 视为当前会话失效，进入终止提示 |
 | `401 access_token_invalid` | 先刷新 `delivery`，再重试一次 |
-| SSE 中断 | 直接进入终止态，不自动重连 |
+| SSE 中断 | 标记连接已关闭或失败，不自动重连，也不本地硬终止任务 |
 | `invalid_task_state` | 立即同步禁用按钮，并提示“任务状态已变更” |
 
 ## 12. 可访问性与可测试性约束

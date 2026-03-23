@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { ResearchPageClient } from "@/features/research/components/research-page-client";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
@@ -52,6 +52,10 @@ class ControlledTaskEventSource<TEvent = unknown> implements TaskEventSource<TEv
 
 const CLARIFICATION_API_URL = new URL(
   "/api/v1/tasks/tsk_stage0/clarification",
+  window.location.origin,
+).toString();
+const HEARTBEAT_API_URL = new URL(
+  "/api/v1/tasks/tsk_stage0/heartbeat",
   window.location.origin,
 ).toString();
 
@@ -141,6 +145,14 @@ async function flushAsyncWork() {
 }
 
 describe("Stage 4 clarification flow", () => {
+  beforeEach(() => {
+    mswServer.use(
+      http.post(HEARTBEAT_API_URL, () => {
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -440,7 +452,7 @@ describe("Stage 4 clarification flow", () => {
       await flushAsyncWork();
     });
 
-    expect(sendHeartbeat).toHaveBeenCalledTimes(1);
+    expect(sendHeartbeat).toHaveBeenCalledTimes(3);
     expect(sendHeartbeat).toHaveBeenCalledWith({
       url: "/api/v1/tasks/tsk_stage0/heartbeat",
       token: "secret_stage0",
@@ -448,7 +460,7 @@ describe("Stage 4 clarification flow", () => {
         client_time: expect.any(String),
       },
     });
-    expect(sendHeartbeat.mock.calls[0]?.[0]?.request.client_time).toBe(
+    expect(sendHeartbeat.mock.calls.at(-1)?.[0]?.request.client_time).toBe(
       new Date().toISOString(),
     );
   });

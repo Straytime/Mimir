@@ -200,7 +200,7 @@ services/api/tests/
 - writer + E2B artifact 链路
 - access token 刷新
 - 反馈新 revision
-- disconnect / heartbeat timeout / expiry cleanup
+- disconnect / 显式终止 / expiry cleanup
 
 依赖边界：
 
@@ -671,8 +671,8 @@ DoD：
 先写失败测试：
 
 - `GET /events`
-- 建立首个 SSE 连接后才启动 orchestrator
-- 10 秒内未建 SSE 连接触发清理
+- 任务创建后立即启动 orchestrator
+- 首个 SSE 连接只影响观察流，不影响任务是否继续运行
 - `task.created`
 - `heartbeat`
 - `phase.changed`
@@ -693,8 +693,8 @@ DoD：
 - SSE broker
 - event persistence
 - event serialization
-- connect deadline policy
-- heartbeat / disconnect / expiry lifecycle
+- 显式终止 lifecycle
+- SSE 观察流与 expiry lifecycle
 - Stage 3 所需 Alembic migration：
   - `task_events`
 
@@ -703,7 +703,7 @@ DoD：
 - 前端可稳定消费统一 SSE envelope
 - 事件顺序可通过测试确定
 - 终态后任务正确触发清理或进入待清理状态
-- 首个 SSE 连接与 connect deadline 行为具备 integration tests
+- 首个 SSE 连接、SSE 断开不终止、显式 disconnect 终止具备 integration tests
 - Stage 3 的 Alembic migration 可正向和反向迁移
 
 ## 9.5 Stage 4: 澄清与需求分析
@@ -901,8 +901,7 @@ DoD：
 
 高风险行为：
 
-- connect deadline
-- heartbeat timeout
+- 显式 disconnect / beforeunload
 - 30 分钟 expiry
 - access token TTL
 

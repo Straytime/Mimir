@@ -4,10 +4,6 @@ import { useEffect, useRef } from "react";
 
 import { useResearchRuntime, useResearchSessionStore } from "../providers/research-workspace-providers";
 
-function getTerminationTimestamp(connectDeadlineAt: string | null) {
-  return connectDeadlineAt ?? new Date().toISOString();
-}
-
 export function useTaskStream() {
   const taskId = useResearchSessionStore((state) => state.session.taskId);
   const taskToken = useResearchSessionStore((state) => state.session.taskToken);
@@ -19,7 +15,6 @@ export function useTaskStream() {
   const terminalReason = useResearchSessionStore((state) => state.ui.terminalReason);
   const applyEvent = useResearchSessionStore((state) => state.applyEvent);
   const setSessionContext = useResearchSessionStore((state) => state.setSessionContext);
-  const setTerminalState = useResearchSessionStore((state) => state.setTerminalState);
   const { taskEventSource } = useResearchRuntime();
 
   const streamTeardownRef = useRef<(() => void) | null>(null);
@@ -76,9 +71,8 @@ export function useTaskStream() {
         }
 
         clearConnectDeadlineTimer();
-        setTerminalState({
-          terminalReason: "terminated",
-          timestamp: new Date().toISOString(),
+        streamTeardownRef.current?.();
+        setSessionContext({
           sseState: "failed",
         });
       },
@@ -88,9 +82,8 @@ export function useTaskStream() {
         }
 
         clearConnectDeadlineTimer();
-        setTerminalState({
-          terminalReason: "terminated",
-          timestamp: new Date().toISOString(),
+        streamTeardownRef.current?.();
+        setSessionContext({
           sseState: "closed",
         });
       },
@@ -114,9 +107,7 @@ export function useTaskStream() {
 
         streamTeardownRef.current?.();
         clearConnectDeadlineTimer();
-        setTerminalState({
-          terminalReason: "terminated",
-          timestamp: getTerminationTimestamp(connectDeadlineAt),
+        setSessionContext({
           sseState: "failed",
         });
       }, connectTimeoutMs);
@@ -126,7 +117,6 @@ export function useTaskStream() {
     connectDeadlineAt,
     eventsUrl,
     setSessionContext,
-    setTerminalState,
     sseState,
     taskEventSource,
     taskId,
