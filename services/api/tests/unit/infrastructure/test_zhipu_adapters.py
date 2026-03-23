@@ -554,7 +554,7 @@ async def test_jina_web_fetch_uses_reader_get_contract_and_truncates_content() -
     assert result.success is True
     assert result.title == "标题"
     assert result.content is not None
-    assert len(result.content) == 10000
+    assert len(result.content) == 5000
 
 
 @pytest.mark.asyncio

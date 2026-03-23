@@ -69,7 +69,11 @@ def test_planner_prompt_semantic_lock_keeps_role_limits_and_transcript_order() -
     )
 
     assert "信息搜集调度 agent" in prompt.system_prompt
-    assert "最多同时发起 3 个工具调用" in prompt.system_prompt
+    assert "2.1 若无法支撑：" in prompt.system_prompt
+    assert "2.2 若能够支撑" in prompt.system_prompt
+    assert "你并不需要一次性理清所有目标，而是根据已有信息进行动态规划。" in prompt.system_prompt
+    assert "若串行执行能有效提升质量，优先进行串行执行，记住质量比效率更重要。" in prompt.system_prompt
+    assert "最多只能同时发起 3 个`collect_agent`工具调用。" in prompt.system_prompt
     assert "collect_agent" in prompt.system_prompt
     assert "2026-03-16T15:00:00+00:00" in prompt.user_prompt
     assert "分析中国 AI 搜索产品的竞争格局与机会" in prompt.user_prompt
@@ -117,6 +121,8 @@ def test_collector_prompt_semantic_lock_matches_prd_literal_prompt_and_transcrip
     assert "你是一个信息搜集 agent" in prompt.system_prompt
     assert "max_tool_calls = 10" in prompt.system_prompt
     assert "使用提供的搜索和网页读取工具" in prompt.system_prompt
+    assert "当未进行任何搜集，或已知信息不足时" in prompt.system_prompt
+    assert "在搜索列表中发现潜在的高价值信息时，使用网页读取工具获取详情。" in prompt.system_prompt
     assert "高质量的关键信息和数据" in prompt.system_prompt
     assert "<信息获取目标>" in prompt.user_prompt
     assert "收集目标 1" in prompt.user_prompt

@@ -153,6 +153,7 @@ def build_provider_runtime(settings: Settings) -> ProviderRuntime:
             api_key=settings.jina_api_key,
             base_url=settings.jina_base_url,
             timeout_seconds=settings.web_fetch_timeout_seconds,
+            max_content_chars=settings.fetched_content_limit,
         )
         cleanup_callbacks.append(web_fetch_client.aclose)
     else:

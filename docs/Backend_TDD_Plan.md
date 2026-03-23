@@ -382,6 +382,7 @@ snapshot 规则：
 2. no-tool 阶段不应意外挂载 tool schema
 3. `collect_agent`、`web_search`、`web_fetch`、`python_interpreter` 的名称与参数名
 4. planner / collector / writer 的 transcript 回放顺序
+5. `func_7` / `func_8` 的 system prompt 与 tools description 关键句必须与 PRD 0.4 对齐
 
 其中必须重点锁定的 request construction：
 
@@ -404,12 +405,13 @@ snapshot 规则：
    - `artifacts[]` 中必须锁定 `artifact_id`、`filename`、`mime_type`、`canonical_path=mimir://artifact/{artifact_id}`
 4. `collect_agent`：
    - 模型可见参数只允许 `collect_target`、`additional_info`、`freshness_requirement`
+   - `freshness_requirement` 继续锁定为枚举语义 `low | high`
    - `tool_call_id`、`revision_id`、`subtask_id` 只能在后端内部补齐
 
 结果清洗 contract tests 还必须锁定：
 
 1. `web_search` tool result 只保留 `search_result` 的核心字段，剔除 `icon`、`media` 等展示性字段
-2. `web_fetch` 正文截断到前 `10000` 字符，标题提取规则稳定
+2. `web_fetch` 正文截断到前 `5000` 字符，标题提取规则稳定；adapter 与 collection service 若存在双重截断，必须共用同一个配置源
 3. `python_interpreter` 只返回文本摘要与 artifact 元数据，不把二进制内容写入 transcript
 4. provider 风控、超时、空内容、4xx、5xx 都会被映射到统一异常或统一 tool result envelope
 5. E2B `execute` 成功返回但 `execution.error != null` 时，必须映射成 writer 可消费的结构化失败 tool result，而不是 `RetryableOperationError`

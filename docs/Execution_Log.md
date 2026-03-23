@@ -2841,3 +2841,62 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 合并后补一条 production smoke，实际下载并打开 `report.pdf`，确认真实 Railway 环境下文本与图片导出都正常
   - 若后续继续优化 PDF 视觉样式，应单开任务包，不与当前“真实可解析导出”基础修补混做
+
+## R1-043 PRD 0.4 Func7/Func8 Prompt + Fetch Limit Alignment
+
+- 日期时间: 2026-03-24 00:11:54 CST (+0800)
+- 任务包编号: R1-043
+- session 标识: `codex/r1-043-prd04-func7-func8-alignment`
+- 目标摘要:
+  - 将 PRD 0.4 对 `func_7 / func_8` 的 prompt、tools 描述与当前实现收敛
+  - 明确 `collect_agent.freshness_requirement` 继续保持枚举语义，与实现一致
+  - 将 `web_fetch` 返回正文的截断上限从 `10000` 全链路收敛到 `5000`
+- 修改文件:
+  - `docs/Mimir_v1.0.0_prd_0.3.md`
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/application/prompts/collection.py`
+  - `services/api/app/application/invocation_contracts.py`
+  - `services/api/app/core/config.py`
+  - `services/api/app/infrastructure/research/jina.py`
+  - `services/api/app/infrastructure/providers.py`
+  - `services/api/tests/unit/application/test_collection_prompts.py`
+  - `services/api/tests/unit/application/test_invocation_contracts.py`
+  - `services/api/tests/unit/core/test_config.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_collection_prompts.py tests/unit/application/test_invocation_contracts.py tests/unit/core/test_config.py tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/collection/test_collection_engine.py -k 'planner_prompt_semantic_lock_keeps_role_limits_and_transcript_order or collector_prompt_semantic_lock_matches_prd_literal_prompt_and_transcript or tool_schemas_match_current_architecture_contract or uses_default_fetched_content_limit or reads_fetched_content_limit or jina_web_fetch_uses_reader_get_contract_and_truncates_content or collection_fetch_content_is_truncated_to_five_thousand_chars_across_summary_and_storage'`
+    - 初次结果: `6 failed, 1 passed`
+    - 缺口定位:
+      - planner system prompt 仍是 0.3 文案，缺少 0.4 新增的“动态规划 / 串行优先 / 最多 3 个 collect_agent”约束
+      - collector system prompt 仍是 0.3 文案，缺少“已知信息不足 / 高价值搜索结果时使用 web_fetch”的 0.4 描述
+      - `web_search` / `web_fetch` tool description 仍是旧文案
+      - `Settings.fetched_content_limit`、Jina adapter 与 fetch 截断测试仍停在 `10000`
+      - 新增 collection integration 断言还没有真正走到 fetch 截断后的 `collected_items` 路径
+    - 修补后结果: `7 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_collection_prompts.py tests/unit/application/test_invocation_contracts.py tests/unit/core/test_config.py tests/unit/infrastructure/test_jina_web_fetch.py tests/unit/infrastructure/test_zhipu_adapters.py tests/contract/rest/test_collection_events.py tests/integration/collection/test_collection_engine.py`
+    - 结果: `78 passed`
+- 验收结论:
+  - `docs/Mimir_v1.0.0_prd_0.3.md` 中的 PRD 0.4 已显式修正为：`collect_agent.freshness_requirement` 继续保持枚举语义 `low | high`，不扩成自由字符串
+  - planner `func_7` system prompt、collector `func_8` system prompt，以及 `collect_agent / web_search / web_fetch` 的模型可见 description 已与 PRD 0.4 收敛；collector user prompt 继续保留运行时 `<时效要求>` block
+  - `web_fetch` 正文上限现以 `Settings.fetched_content_limit` 为唯一配置权威，默认值改为 `5000`；Jina adapter 与 collection service 的防御性截断都读取同一配置
+  - collection integration 已验证：fetch 返回 `6200` 字符时，summary loop 与落库的 `CollectedSourceRecord.info` 都只保留前 `5000` 字符
+  - planner / collector 现有 thinking 配置、sub-agent loop、transcript replay 与 `web_search` recency enum 语义未回退
+- blocker / 风险:
+  - 无当前 blocker
+  - `web_fetch` 仍保留 adapter + application 双重截断，但两者现在共享单一配置源；后续若要继续简化，可单开任务包讨论是否收敛为单点截断实现
+- 下一步建议:
+  - 合并后若继续推进 release engineering，可补一条 real-provider smoke，确认生产 `collector` 实际消费到的 Jina 内容同样只保留前 `5000` 字符
+
+### R1-043 收尾修正
+
+- 日期时间: 2026-03-24 CST (+0800)
+- 修正摘要:
+  - 将 planner system prompt 中残留的 `2.1 无法支撑` / `2.2 能够支撑` 补齐为 PRD 0.4 的 `2.1 若无法支撑` / `2.2 若能够支撑`
+  - 同步在 `test_collection_prompts.py` 中补充精确断言，锁定这两处文案
+- 验证:
+  - 待运行 `tests/unit/application/test_collection_prompts.py` 定向回归

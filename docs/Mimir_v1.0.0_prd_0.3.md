@@ -1,4 +1,4 @@
-# Mimir_v1.0.0_prd_0.3
+# Mimir_v1.0.0_prd_0.4
 
 # 版本历史
 
@@ -12,6 +12,13 @@
   • 调整 func_15 的重启逻辑，不删除已收集信息
   • 在 func_20 中新增「被终止任务」的数据删除策略
   • 新增 func_22 处理断连情形 | 2026.03.12 | 郑翰文 |
+| 0.4 |   • 更新 func_7_搜集调度 的 system prompt
+  • 更新 func_7_搜集调度 输入的 tools 描述
+  • 更新 func_8_搜集目标执行 的 system prompt
+  • 更新 func_8_搜集目标执行 的 user prompt（与当前实际实现对齐）
+  • 更新 func_8_搜集目标执行 输入的 tools 描述
+  • 调整 func_8_搜集目标执行中，web_fetch 工具的读取内容截断限制，从一万调整到五千
+  • 将 func_7 中 `collect_agent.freshness_requirement` 保持为枚举语义，与当前实现一致 | 2026.03.23 | 郑翰文 |
 
 # 产品背景
 
@@ -386,18 +393,21 @@ stateDiagram-v2
     你应当按以下逻辑工作
     1. 仔细观察用户的需求详情和工具返回的执行摘要
     2. 细致分析已收集信息是否能够支撑用户的深度研究需求
-    	2.1 无法支撑：
+    	2.1 若无法支撑：
     		- 定位缺失的内容，分析依赖关系和关键约束
     		- 规划接下来要执行的信息搜集目标
     		- 调用 `collect_agent` 工具执行
-    	2.2 能够支撑
+    	2.2 若能够支撑
     		- 输出信息收集完成的简短通知
-    	2.3 已经多次使用 `collect_agent` 工具，仍无有效进展
+    	2.3 若已经多次使用 `collect_agent` 工具（max tool calls=9），仍无有效进展
     		- 避免资源浪费，输出信息收集完成但不完整的简短通知
     
     注意事项
-    1. 你可以通过一次发起多个工具调用的方式，规划多个目标以提升收集效率，但必须保证多个目标之间无逻辑顺序或依赖关系。
-    2. 最多同时发起 3 个工具调用。
+    1. 你并不需要一次性理清所有目标，而是根据已有信息进行动态规划。
+    2. 你可以通过一次发起多个工具调用的方式，规划多个目标以提升收集效率
+    	- 必须保证同时发起的多个`collect_agent`目标之间无逻辑顺序或依赖关系！
+    	- 若串行执行能有效提升质量，优先进行串行执行，记住质量比效率更重要。
+    	- 最多只能同时发起 3 个`collect_agent`工具调用。
     3. `collect_agent` 工具会将完整搜集结果暂存，供后续 agent 使用，因此信息搜集全部完成后无需提供任何结果信息，仅声明通知即可。
     </任务>
     ```
@@ -429,6 +439,14 @@ stateDiagram-v2
                         "additional_info": {
                             "type": "string",
                             "description": "可辅助 sub agent、有助于其更快、更好达成收集目标的补充信息"
+                        },
+                        "freshness_requirement": {
+    		                    "type": "string",
+                                "enum": [
+                                    "low",
+                                    "high"
+                                ],
+    		                    "description": "该搜集目标对参考信息的时效要求"
                         }
                     },
                     "required": [
@@ -474,7 +492,8 @@ stateDiagram-v2
     核心目标：基于用户的目标和补充信息，进行高质量的信息搜集和整理。
     你应当使用提供的搜索和网页读取工具，获得需要的信息，当决定下一步动作时，遵循以下逻辑：
     - 仔细观察并分析已有信息
-    - 当未进行任何搜集，或历史结果不佳时，按需设置合理的工具参数使用工具进行搜集。
+    - 当未进行任何搜集，或已知信息不足时，按需设置合理的搜索工具参数进行搜集。
+    - 在搜索列表中发现潜在的高价值信息时，使用网页读取工具获取详情。
     - 当你的历史上下文中，搜索结果或网页内容已足够支撑用户目标时，停止进一步搜集，输出信息搜集结果。
     - 若经过多轮工具调用仍无法达成或逼近目标（max_tool_calls = 10），则该目标本身可能就是无法触达的，为避免时间和资源浪费，停止搜集，输出已有的信息搜集结果。
     
@@ -506,6 +525,10 @@ stateDiagram-v2
     <补充信息>
     {{#additional_info#}}
     </补充信息>
+    
+    <时效要求>
+    {{#freshness_requirement#}}
+    </时效要求>
     ```
     
     - tools
@@ -516,7 +539,7 @@ stateDiagram-v2
             "type": "function",
             "function": {
                 "name": "web_search",
-                "description": "通过搜索引擎检索指定信息，返回搜索结果列表，包含网页摘要和对应 url",
+                "description": "搜索工具，通过搜索引擎检索指定信息，返回搜索结果列表，包含网页摘要和对应 url",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -534,7 +557,7 @@ stateDiagram-v2
                                 "noLimit"
                             ],
                             "description": "限定搜索结果的时间范围，最近一日、一周、一月、一年或不限制",
-                            "defult": "nolimit"
+                            "defult": "noLimit"
                         }
                     },
                     "required": [
@@ -547,7 +570,7 @@ stateDiagram-v2
             "type": "function",
             "function": {
                 "name": "web_fetch",
-                "description": "读取 url 并获取内容",
+                "description": "网页读取工具，可读取 url 获取其内容",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -631,7 +654,7 @@ stateDiagram-v2
     }
     ```
     
-    - 响应网页 markdown，示例如下，**保留前一万字符**，返回到 tool message
+    - 响应网页 markdown，示例如下，**保留前五千字符**，返回到 tool message
     
     ```
     Title: Mcporter — ClawHub

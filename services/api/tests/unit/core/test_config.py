@@ -50,6 +50,22 @@ def test_settings_from_env_reads_writer_max_rounds(monkeypatch) -> None:
     assert settings.writer_max_rounds == 7
 
 
+def test_settings_from_env_uses_default_fetched_content_limit(monkeypatch) -> None:
+    monkeypatch.delenv("MIMIR_FETCHED_CONTENT_LIMIT", raising=False)
+
+    settings = Settings.from_env()
+
+    assert settings.fetched_content_limit == 5000
+
+
+def test_settings_from_env_reads_fetched_content_limit(monkeypatch) -> None:
+    monkeypatch.setenv("MIMIR_FETCHED_CONTENT_LIMIT", "4321")
+
+    settings = Settings.from_env()
+
+    assert settings.fetched_content_limit == 4321
+
+
 def test_resolve_database_url_from_env_prefers_mimir_database_url(monkeypatch) -> None:
     monkeypatch.setenv(
         "MIMIR_DATABASE_URL",
