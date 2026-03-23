@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.infrastructure.db.models import ResearchTaskRecord
 from tests.contract.rest.test_tasks import build_create_task_payload
+from tests.fixtures.tasks import seed_delivered_task
 from tests.fixtures.runtime import FakeClock
 
 
@@ -85,6 +86,39 @@ async def test_get_events_streams_task_created_on_first_connect(
     assert payload["revision_id"] == create_body["snapshot"]["active_revision_id"]
     assert payload["phase"] == "clarifying"
     assert payload["payload"] == {"snapshot": create_body["snapshot"]}
+
+
+@pytest.mark.asyncio
+async def test_seeded_delivered_task_bootstraps_task_created_on_first_events_connect(
+    app_instance,
+    app_client: AsyncClient,
+    db_session: Session,
+    fake_clock: FakeClock,
+) -> None:
+    seeded = await seed_delivered_task(
+        session=db_session,
+        task_service=app_instance.state.task_service,
+        artifact_store=app_instance.state.artifact_store,
+        now=fake_clock.now(),
+        suffix="events_bootstrap",
+    )
+
+    async with app_client.stream(
+        "GET",
+        f"/api/v1/tasks/{seeded.task_id}/events",
+        headers={"Authorization": f"Bearer {seeded.task_token}"},
+    ) as response:
+        lines = response.aiter_lines()
+        event_id, event_name, payload = await read_sse_event(lines)
+
+    assert event_id == "1"
+    assert event_name == "task.created"
+    assert payload["task_id"] == seeded.task_id
+    assert payload["revision_id"] == seeded.revision_id
+    assert payload["phase"] == "delivered"
+    assert payload["payload"]["snapshot"]["task_id"] == seeded.task_id
+    assert payload["payload"]["snapshot"]["status"] == "awaiting_feedback"
+    assert payload["payload"]["snapshot"]["phase"] == "delivered"
 
 
 @pytest.mark.asyncio

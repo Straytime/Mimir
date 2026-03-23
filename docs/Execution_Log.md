@@ -2638,3 +2638,38 @@ Copy the template below for each completed session:
     - 历史 `tool_calls`
     - 对应 `tool results`
   - 若要继续排查 `feedback_rollover` 的 seeded stream bootstrap，应单开小任务包，避免与 collector PRD 对齐问题混在一起
+
+## R1-038 Seeded Task SSE Bootstrap
+
+- 日期时间: 2026-03-23 17:21:52 CST (+0800)
+- 任务包编号: R1-038
+- session 标识: `codex/r1-038-seeded-task-sse-bootstrap`
+- 目标摘要:
+  - 修复 seeded delivered task 首次打开 `/events` 时没有 bootstrap event，导致 feedback rollover 集成测试首帧超时的问题
+  - 保持既有 task events 契约：首次事件流连接到“无历史 event 的任务”时，仍然补出唯一 `task.created`
+  - 不通过修改 fixture 偷偷补 event，而是修复真实 SSE bootstrap 路径
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `services/api/app/infrastructure/streaming/broker.py`
+  - `services/api/tests/contract/rest/test_task_events.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_task_events.py::test_get_events_streams_task_created_on_first_connect tests/contract/rest/test_task_events.py::test_seeded_delivered_task_bootstraps_task_created_on_first_events_connect tests/integration/feedback/test_feedback_revision.py::test_feedback_rollover_reuses_sources_resets_counter_and_advances_to_planning_collection`
+    - 初次结果: `tests/integration/feedback/test_feedback_revision.py::test_feedback_rollover_reuses_sources_resets_counter_and_advances_to_planning_collection` 首帧超时失败
+    - 缺口定位: seeded delivered task 不经过 `register_task()`，因此从未触发 `ensure_task_created_event()`；`prepare_event_stream()` 只校验 token 和建立 runtime，没有为“无历史 event 的既有任务”补 bootstrap `task.created`
+    - 修补后结果: `3 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_task_events.py tests/integration/feedback/test_feedback_revision.py`
+    - 结果: `7 passed`
+- 验收结论:
+  - `prepare_event_stream()` 现在会在完成 token 校验后调用 `ensure_task_created_event()`；若该任务尚无任何 `task_events`，则在首个 `/events` 连接建立前补出唯一的 `task.created`
+  - seeded delivered task 首次打开 `/events` 不再首帧超时，`feedback_rollover` 集成测试已恢复
+  - 正常 create-task 路径与既有 `task.created` 首连契约保持不变；若任务已有历史事件，不会重复插入 `task.created`
+  - 本次没有改 feedback 状态机、collector、前端或 deploy 配置
+- blocker / 风险:
+  - 无当前 blocker
+  - 该 bootstrap 逻辑仍依赖数据库里“无历史事件”这一判定；若后续引入新的 seeded factory 且预写部分 event，需要继续保持 `task.created` 唯一性测试
+- 下一步建议:
+  - 若继续扩 seeded task fixture，优先沿用“让 `/events` 真正补 bootstrap event”的路径，不要回到 fixture 直接塞假首帧
+  - 若后续再改 broker 连接建立流程，应保留“先 bootstrap 唯一 `task.created`，再切换到实时流”的测试锁定

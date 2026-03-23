@@ -123,6 +123,14 @@ class TaskLifecycleManager:
                 task_id=task_id,
                 token=token,
             )
+            created_event = self._task_service.ensure_task_created_event(
+                session,
+                task_id=task_id,
+            )
+            if created_event is not None:
+                session.commit()
+            else:
+                session.rollback()
             runtime = self._runtimes.get(task_id)
             if runtime is None:
                 runtime = TaskRuntime(connect_deadline_at=task.connect_deadline_at)
