@@ -795,6 +795,15 @@ Writer 阶段最终交付结构。
 }
 ```
 
+规则：
+
+- writer 的 reasoning content 与 content 是两个不同维度：
+  - reasoning 用于 debug、诊断与 prompt / provider 优化依据
+  - content 用于最终报告交付
+- 若 provider 返回独立 reasoning 字段，必须单独持久化到 `agent_runs.reasoning_text`，不能混入最终 markdown。
+- writer 单轮内的流式 chunk 仍由 provider adapter 在轮内聚合；最终交付 markdown 的 source of truth 是“所有 writer rounds 的 `content` 按顺序组装结果”，而不是仅最后一轮 `content`。
+- 多轮组装只处理跨 round 边界；不得把 tool transcript、reasoning content 或 expiring artifact URL 混入最终 markdown。
+
 ## 7.13 AgentTranscriptMessage
 
 这是“完整 agent loop 信息”的标准落库结构，用于下一轮调用时重建上下文。
@@ -932,6 +941,8 @@ E2B 生命周期约束：
 6. writer loop 的最大 tool-call 轮次上限必须可配置，统一使用 `MIMIR_WRITER_MAX_ROUNDS`，默认值为 `5`。
 7. 若 writer 到达最大允许轮次后仍返回 `tool_calls`，后端必须将任务收口为 `task.failed`；禁止忽略剩余 tool call 后继续交付空报告或半成品报告。
 8. writer 最终用于交付的 markdown 在 `strip()` 后必须非空；若最终正文为空白，后端必须将任务收口为 `task.failed`，且不得发出 `report.completed`。
+9. writer 若经历多轮 `python_interpreter` tool loop，最终交付 markdown 必须按 round 顺序组装所有 `decision.content`；禁止只取 terminal round 的 `content`。
+10. 若 provider 返回独立 reasoning content，adapter 必须把它映射到 writer round 的单独字段并落库到 `agent_runs.reasoning_text`；最终报告正文不得包含 reasoning 内容。
 
 ## 8.5 外部调用契约与 PRD 收敛
 
@@ -1477,6 +1488,12 @@ SSE 观察流与客户端心跳：
   - `finish_reason`
   - `tool_calls_json`
   - `compressed`
+
+writer 特别约束：
+
+- `reasoning_text` 保存 provider 独立返回的 reasoning content；若 provider 未提供，则允许为空。
+- `content_text` 保存该 round 的正文内容与 round metadata，不得混入 reasoning。
+- 最终交付 markdown 由同一 revision 下 writer 各 round 的 `content_text` 中正文部分按顺序组装，不得只取最后一轮。
 
 ### `task_tool_calls`
 

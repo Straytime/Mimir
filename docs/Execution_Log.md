@@ -2496,3 +2496,45 @@ Copy the template below for each completed session:
     - 切后台不会终止任务
     - 手动终止仍会及时进入 `task.terminated`
     - 刷新 / 关闭确认后的 `sendBeacon` 路径仍按 best-effort 生效
+
+## R1-035 Writer Reasoning Capture + Multi-Round Content Assembly
+
+- 日期时间: 2026-03-23 14:53:48 CST (+0800)
+- 任务包编号: R1-035
+- session 标识: `codex/r1-035-writer-reasoning-assembly`
+- 目标摘要:
+  - 为 writer 接收并持久化 provider 独立返回的 reasoning content
+  - 修复 writer 多轮 tool-loop 时最终报告只取 terminal round `content` 的问题
+  - 将 writer 各轮正文按顺序组装为最终 markdown 交付，保持单轮路径与既有 guardrail 不回退
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `services/api/app/application/dto/delivery.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/infrastructure/delivery/zhipu.py`
+  - `services/api/app/infrastructure/llm/zhipu.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/delivery/test_report_delivery.py -k 'writer_agent_maps_provider_reasoning or extracts_reasoning_content or multi_round_markdown'`
+    - 初次结果: `4 failed`
+    - 修补后结果: `4 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_delivery_prompts.py tests/unit/infrastructure/test_zhipu_adapters.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `54 passed`
+- 验收结论:
+  - writer provider adapter 现在会从真实 LLM 返回里单独提取 `reasoning_content`（以及兼容的 `reasoning` / `thinking` 字段），并落入 `WriterDecision.reasoning_text`
+  - `agent_runs.reasoning_text` 对 writer 不再固定写空字符串；provider 若返回独立 reasoning，将按 round 单独持久化
+  - writer 最终交付 markdown 的 source of truth 已改为“各 round 非空 `content` 的有序组装结果”，不再只取 terminal round 的 `decision.text`
+  - 单轮直接完成路径保持兼容；既有空白 markdown guardrail、`max_rounds + pending tool_calls` guardrail、markdown zip 重写、downloads 契约均未回退
+  - reasoning content 仅进入调试/持久化，不会混入最终 `report.md`
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前 provider reasoning 捕获优先匹配 `reasoning_content`，并兼容 `reasoning` / `thinking`；若后续真实 provider 字段再次变化，需要单独补 adapter 映射测试
+- 下一步建议:
+  - 若继续排查生产 writer 正文质量，可在 production 只读路径上优先比对：
+    - `agent_runs.reasoning_text`
+    - `agent_runs.content_text`
+    - 最终 `report.md`
+  - 若后续要做前端 typewriter streaming 或更细粒度 writer 增量展示，应单独开任务包，不在本次范围内扩张
