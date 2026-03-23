@@ -666,6 +666,7 @@ class DeliveryOrchestrator:
         for artifact in image_artifacts:
             generated_artifacts_list.append(
                 GeneratedArtifact(
+                    artifact_id=artifact.artifact_id,
                     filename=artifact.filename,
                     mime_type=artifact.mime_type,
                     content=await self._artifact_store.get(artifact.storage_key),
@@ -685,7 +686,10 @@ class DeliveryOrchestrator:
                 )
             )
             pdf_bytes = await self._invoke_operation(
-                lambda: self._report_export_service.build_pdf(markdown=final_markdown)
+                lambda: self._report_export_service.build_pdf(
+                    markdown=final_markdown,
+                    artifacts=generated_artifacts,
+                )
             )
         except RetryableOperationError:
             await self._fail_task(

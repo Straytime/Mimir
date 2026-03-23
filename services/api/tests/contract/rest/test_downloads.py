@@ -1,8 +1,10 @@
+from io import BytesIO
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
 from tests.fixtures.runtime import FakeClock
@@ -62,6 +64,11 @@ async def test_download_and_artifact_endpoints_accept_refreshed_access_tokens(
     assert pdf_response.headers["content-type"] == "application/pdf"
     assert pdf_response.headers["content-disposition"] == 'attachment; filename="mimir-report.pdf"'
     assert pdf_response.headers["cache-control"] == "no-store"
+    pdf_reader = PdfReader(BytesIO(pdf_response.content))
+    assert len(pdf_reader.pages) >= 1
+    assert "Seeded delivered report" in "\n".join(
+        (page.extract_text() or "") for page in pdf_reader.pages
+    )
 
     assert artifact_response.status_code == 200
     assert artifact_response.headers["content-type"] == "image/png"

@@ -2787,3 +2787,57 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 生产 smoke 可补一条“同一页面内人为断开 SSE 后，时间线能继续向前推进”的证据，验证真实 Railway + Vercel 环境下的页内观察恢复
   - 若后续需要更细的连接态展示，可在不改变当前产品语义的前提下区分“重连中”与“连接失败待重试”
+
+## R1-041 Real PDF Export
+
+- 日期时间: 2026-03-23 22:27:00 CST (+0800)
+- 任务包编号: R1-041
+- session 标识: `codex/r1-041-real-pdf-export`
+- 目标摘要:
+  - 将 `report.pdf` 从伪 `%PDF-1.4 + markdown bytes` 占位实现替换为真实可解析 PDF
+  - 保持 `GET /downloads/report.pdf` 与 `access_token` 契约不变
+  - 让 PDF 至少可打开、可抽取正文文本，并在正文包含 canonical artifact 引用时正确消费图片资源
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/application/dto/delivery.py`
+  - `services/api/app/application/ports/delivery.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/pyproject.toml`
+  - `services/api/tests/contract/rest/test_downloads.py`
+  - `services/api/tests/fixtures/tasks.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `services/api/tests/unit/infrastructure/test_local_report_export.py`
+  - `services/api/uv.lock`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_local_report_export.py tests/integration/delivery/test_report_delivery.py tests/contract/rest/test_downloads.py -k 'pdf'`
+    - 初次结果: `3 errors`
+    - 缺口定位:
+      - `build_pdf()` 仍输出伪 PDF header，无法被真实 PDF parser 作为合法文档读取
+      - 后端导出链路未把图片 artifact 元数据传给 PDF 导出器，导致 canonical 图片引用无法在导出层解析
+      - contract fixture 的 seeded `report.pdf` 仍是伪字节，无法支撑下载端点 parse smoke
+    - 修补后结果: `3 passed`
+  - 相关回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv sync --group dev`
+    - 结果: 成功安装 `markdown`、`beautifulsoup4`、`reportlab`、`pypdf` 并更新 `uv.lock`
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_local_report_export.py tests/contract/rest/test_downloads.py tests/contract/rest/test_delivery_events.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `21 passed`
+- 验收结论:
+  - `LocalReportExportService.build_pdf()` 已改为真实 PDF 导出：
+    - 先将 markdown 转为 HTML
+    - 再由后端渲染为合法 PDF 字节
+    - `mimir://artifact/{artifact_id}` 仅在导出层临时改写为可消费的本地图片资源，不回写正文 source of truth
+  - `ReportExportService.build_pdf()` 现在接收 `artifacts`，交付阶段会把真实图片 artifact 元数据一并传入 PDF 导出器
+  - 下载端点 `GET /api/v1/tasks/{task_id}/downloads/report.pdf` 的 URL、token 校验、headers 与资源类型保持不变
+  - `report.pdf` 现已能被 `pypdf.PdfReader` 成功打开；seeded 下载 fixture 也改为生成真实 PDF，不再继续用伪 header 冒充
+  - 含 canonical 图片引用的 PDF 导出路径已通过 parse smoke，渲染器能消费图片资源且不会因导出器本身损坏图片
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前导出样式以“正确可读”为主，未额外追求精细版式；后续若要提升排版质量，可在不改变现有下载契约的前提下增量优化
+  - 新增依赖均为 Python 包，未引入额外 Railway 系统级运行时依赖；但生产构建会新增 `reportlab` / `markdown` / `beautifulsoup4` / `pypdf`（测试）安装成本
+- 下一步建议:
+  - 合并后补一条 production smoke，实际下载并打开 `report.pdf`，确认真实 Railway 环境下文本与图片导出都正常
+  - 若后续继续优化 PDF 视觉样式，应单开任务包，不与当前“真实可解析导出”基础修补混做
