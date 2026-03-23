@@ -65,6 +65,7 @@ class GeneratedArtifact:
     filename: str
     mime_type: str
     content: bytes
+    artifact_id: str | None = None
 
 
 def build_canonical_artifact_path(artifact_id: str) -> str:

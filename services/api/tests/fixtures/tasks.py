@@ -1,8 +1,10 @@
+from base64 import b64decode
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.application.dto.delivery import GeneratedArtifact, build_canonical_artifact_path
 from app.application.ports.delivery import ArtifactStore
 from app.application.services.tasks import TaskService
 from app.core.ids import hash_secret
@@ -20,6 +22,11 @@ from app.infrastructure.db.models import (
     CollectedSourceRecord,
     ResearchTaskRecord,
     TaskRevisionRecord,
+)
+from app.infrastructure.delivery.local import LocalReportExportService
+
+_ONE_PIXEL_PNG = b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
 )
 
 
@@ -113,34 +120,67 @@ async def seed_delivered_task(
     artifact_storage_key = f"tasks/{task_id}/{revision_id}/artifacts/art_{suffix}_chart.png"
     markdown_storage_key = f"tasks/{task_id}/{revision_id}/downloads/mimir-report.zip"
     pdf_storage_key = f"tasks/{task_id}/{revision_id}/downloads/mimir-report.pdf"
+    export_service = LocalReportExportService()
+    markdown_body = (
+        "# Seeded delivered report\n\n"
+        "This delivered report can be parsed by a real PDF reader.\n"
+    )
+    zip_markdown = markdown_body
+    generated_artifacts: tuple[GeneratedArtifact, ...] = ()
 
     if include_artifacts:
+        artifact_id = f"art_{suffix}_img"
+        generated_artifacts = (
+            GeneratedArtifact(
+                artifact_id=artifact_id,
+                filename="chart_market_share.png",
+                mime_type="image/png",
+                content=_ONE_PIXEL_PNG,
+            ),
+        )
+        markdown_body = (
+            markdown_body
+            + "\n"
+            + f"![Seeded chart]({build_canonical_artifact_path(artifact_id)})\n"
+        )
+        zip_markdown = markdown_body.replace(
+            build_canonical_artifact_path(artifact_id),
+            "artifacts/chart_market_share.png",
+        )
         await artifact_store.put(
             artifact_storage_key,
-            b"png-chart",
+            _ONE_PIXEL_PNG,
             "image/png",
+        )
+        markdown_zip_bytes = await export_service.build_markdown_zip(
+            markdown=zip_markdown,
+            artifacts=generated_artifacts,
+        )
+        pdf_bytes = await export_service.build_pdf(
+            markdown=markdown_body,
+            artifacts=generated_artifacts,
         )
         await artifact_store.put(
             markdown_storage_key,
-            b"zip-bytes",
+            markdown_zip_bytes,
             "application/zip",
         )
         await artifact_store.put(
             pdf_storage_key,
-            b"%PDF-1.4\nseed\n%%EOF",
+            pdf_bytes,
             "application/pdf",
         )
         session.add_all(
             [
                 ArtifactRecord(
-                    artifact_id=f"art_{suffix}_img",
+                    artifact_id=artifact_id,
                     task_id=task_id,
                     revision_id=revision_id,
                     resource_type=AccessTokenResourceType.ARTIFACT.value,
                     filename="chart_market_share.png",
                     mime_type="image/png",
                     storage_key=artifact_storage_key,
-                    byte_size=9,
+                    byte_size=len(_ONE_PIXEL_PNG),
                     metadata_json=None,
                     created_at=now - timedelta(minutes=2),
                 ),
@@ -152,7 +192,7 @@ async def seed_delivered_task(
                     filename="mimir-report.zip",
                     mime_type="application/zip",
                     storage_key=markdown_storage_key,
-                    byte_size=9,
+                    byte_size=len(markdown_zip_bytes),
                     metadata_json={"word_count": 1200},
                     created_at=now - timedelta(minutes=2),
                 ),
@@ -164,7 +204,7 @@ async def seed_delivered_task(
                     filename="mimir-report.pdf",
                     mime_type="application/pdf",
                     storage_key=pdf_storage_key,
-                    byte_size=18,
+                    byte_size=len(pdf_bytes),
                     metadata_json={"word_count": 1200},
                     created_at=now - timedelta(minutes=2),
                 ),

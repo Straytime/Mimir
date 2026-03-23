@@ -42,4 +42,9 @@ class ReportExportService(Protocol):
         artifacts: tuple[GeneratedArtifact, ...],
     ) -> bytes: ...
 
-    async def build_pdf(self, *, markdown: str) -> bytes: ...
+    async def build_pdf(
+        self,
+        *,
+        markdown: str,
+        artifacts: tuple[GeneratedArtifact, ...],
+    ) -> bytes: ...

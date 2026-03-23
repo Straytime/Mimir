@@ -1428,6 +1428,8 @@ SSE 观察流与客户端心跳：
 
 - 由后端负责 `markdown -> HTML -> PDF` 渲染
 - v1 推荐在 Railway 后端内实现 `ReportExportService`
+- PDF 导出层可以把正文中的 `mimir://artifact/{artifact_id}` 临时改写为渲染器可消费的图片资源，但该改写只发生在导出过程中，不回写数据库中的正文 markdown
+- `report.pdf` 必须是真实、可被标准 PDF 解析器打开的 PDF 二进制；不能继续使用伪 PDF header + markdown bytes 的占位方案
 - PDF 与 markdown zip 都属于短期制品，纳入统一 Artifact 清理策略
 
 ## 9.9 获取图片制品

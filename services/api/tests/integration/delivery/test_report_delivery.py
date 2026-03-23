@@ -1,3 +1,4 @@
+from base64 import b64decode
 import zipfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
@@ -9,6 +10,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
+from pypdf import PdfReader
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -45,6 +47,34 @@ from tests.contract.rest.test_task_events import assert_stream_closed, read_sse_
 from tests.contract.rest.test_tasks import build_create_task_payload
 from tests.fixtures.app import StreamingASGITransport
 from tests.fixtures.runtime import FakeClock
+
+_ONE_PIXEL_PNG = b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
+)
+
+
+def _extract_pdf_text(pdf_bytes: bytes) -> str:
+    reader = PdfReader(BytesIO(pdf_bytes))
+    return "\n".join((page.extract_text() or "") for page in reader.pages)
+
+
+def _count_pdf_images(pdf_bytes: bytes) -> int:
+    reader = PdfReader(BytesIO(pdf_bytes))
+    count = 0
+
+    for page in reader.pages:
+        resources = page.get("/Resources")
+        if resources is None:
+            continue
+        xobjects = resources.get("/XObject")
+        if xobjects is None:
+            continue
+        for candidate in xobjects.values():
+            obj = candidate.get_object()
+            if obj.get("/Subtype") == "/Image":
+                count += 1
+
+    return count
 
 
 class ScriptedOutlineAgent(OutlineAgent):
@@ -432,14 +462,14 @@ async def test_writer_creates_sandbox_lazily_reuses_it_and_destroys_it_on_delive
                 GeneratedArtifact(
                     filename="chart_market_share.png",
                     mime_type="image/png",
-                    content=b"png-chart-1",
+                    content=_ONE_PIXEL_PNG,
                 ),
             ),
             "plot_2": (
                 GeneratedArtifact(
                     filename="chart_growth.png",
                     mime_type="image/png",
-                    content=b"png-chart-2",
+                    content=_ONE_PIXEL_PNG,
                 ),
             ),
         },
@@ -527,7 +557,9 @@ async def test_writer_creates_sandbox_lazily_reuses_it_and_destroys_it_on_delive
         pdf_path = temp_artifact_dir / pdf_artifact.storage_key
         assert zip_path.exists()
         assert pdf_path.exists()
-        assert pdf_path.read_bytes().startswith(b"%PDF-1.4")
+        pdf_bytes = pdf_path.read_bytes()
+        PdfReader(BytesIO(pdf_bytes))
+        assert "中国 AI 搜索产品竞争格局研究" in _extract_pdf_text(pdf_bytes)
 
         with zipfile.ZipFile(BytesIO(zip_path.read_bytes())) as archive:
             assert sorted(archive.namelist()) == [
@@ -555,14 +587,14 @@ async def test_writer_persists_reasoning_text_and_assembles_multi_round_markdown
                     GeneratedArtifact(
                         filename="chart_market_share.png",
                         mime_type="image/png",
-                        content=b"png-chart-1",
+                        content=_ONE_PIXEL_PNG,
                     ),
                 ),
                 "plot_round_2": (
                     GeneratedArtifact(
                         filename="chart_growth.png",
                         mime_type="image/png",
-                        content=b"png-chart-2",
+                        content=_ONE_PIXEL_PNG,
                     ),
                 ),
             },
@@ -693,7 +725,7 @@ async def test_writer_tool_transcript_contains_summary_and_real_artifact_metadat
                     GeneratedArtifact(
                         filename="chart_market_share.png",
                         mime_type="image/png",
-                        content=b"png-chart-1",
+                        content=_ONE_PIXEL_PNG,
                     ),
                 ),
             },
@@ -830,7 +862,7 @@ async def test_writer_tool_call_requested_precedes_completed_event_for_same_call
                     GeneratedArtifact(
                         filename="chart_market_share.png",
                         mime_type="image/png",
-                        content=b"png-chart-1",
+                        content=_ONE_PIXEL_PNG,
                     ),
                 ),
             },
@@ -871,7 +903,7 @@ async def test_markdown_zip_rewrites_canonical_artifact_refs_to_offline_paths(
                     GeneratedArtifact(
                         filename="chart_market_share.png",
                         mime_type="image/png",
-                        content=b"png-chart-1",
+                        content=_ONE_PIXEL_PNG,
                     ),
                 ),
             },
@@ -896,6 +928,52 @@ async def test_markdown_zip_rewrites_canonical_artifact_refs_to_offline_paths(
 
     assert "mimir://artifact/" not in report_markdown
     assert "![市场份额图](artifacts/chart_market_share.png)" in report_markdown
+
+
+@pytest.mark.asyncio
+async def test_pdf_export_renders_canonical_artifact_refs(
+    make_stage6_client,
+) -> None:
+    writer_agent = TranscriptAwareWriterAgent(
+        tool_call=WriterToolCall(
+            tool_call_id="call_writer_chart_pdf",
+            tool_name="python_interpreter",
+            code="plot_chart_pdf",
+        ),
+        image_alt="市场份额图",
+    )
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={
+                "plot_chart_pdf": (
+                    GeneratedArtifact(
+                        filename="chart_market_share.png",
+                        mime_type="image/png",
+                        content=_ONE_PIXEL_PNG,
+                    ),
+                ),
+            },
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        task_detail_response = await client.get(
+            f"/api/v1/tasks/{create_body['task_id']}",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+        )
+        assert task_detail_response.status_code == 200
+        pdf_url = task_detail_response.json()["delivery"]["pdf_url"]
+        pdf_response = await client.get(pdf_url)
+        await _close_stream(stream_context, response)
+
+    assert pdf_response.status_code == 200
+    assert "中国 AI 搜索产品竞争格局研究" in _extract_pdf_text(pdf_response.content)
+    assert _count_pdf_images(pdf_response.content) >= 1
 
 
 @pytest.mark.asyncio
@@ -984,7 +1062,7 @@ async def test_artifact_upload_retry_exhaustion_fails_revision_without_silent_de
                 GeneratedArtifact(
                     filename="chart_market_share.png",
                     mime_type="image/png",
-                    content=b"png-chart-1",
+                    content=_ONE_PIXEL_PNG,
                 ),
             ),
         },

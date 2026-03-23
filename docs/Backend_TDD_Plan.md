@@ -816,6 +816,9 @@ DoD：
 - access token 生成与刷新
 - markdown zip 下载
 - pdf 下载
+- `build_pdf()` 产物必须可被真实 PDF 解析器打开并抽取基本正文
+- `report.pdf` 下载接口返回的二进制必须是可解析 PDF，而不是伪造 header
+- 含 `mimir://artifact/{artifact_id}` 图片引用时，PDF 导出必须能消费图片资源并完成渲染，不得因导出器本身报错
 - 研究输出准备 prompt invariant tests
 - 研究输出撰写 prompt invariant tests
 - outline / writer 调用 profile contract tests
