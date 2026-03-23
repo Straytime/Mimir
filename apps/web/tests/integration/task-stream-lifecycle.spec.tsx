@@ -17,6 +17,7 @@ import {
   makeCollectorFetchStartedEvent,
   makeCollectorSearchCompletedEvent,
   makeCollectorSearchStartedEvent,
+  makeClarificationDeltaEvent,
   makePhaseChangedEvent,
   makeResearchSessionState,
   makeTaskCreatedEvent,
@@ -46,16 +47,32 @@ class ControlledTaskEventSource<TEvent = unknown> implements TaskEventSource<TEv
     this.activeArgs?.onOpen();
   }
 
+  openAt(index: number) {
+    this.connectCalls[index]?.onOpen();
+  }
+
   emit(event: TEvent) {
     this.activeArgs?.onEvent(event);
+  }
+
+  emitAt(index: number, event: TEvent) {
+    this.connectCalls[index]?.onEvent(event);
   }
 
   error(error: unknown = new Error("stream interrupted")) {
     this.activeArgs?.onError(error);
   }
 
+  errorAt(index: number, error: unknown = new Error("stream interrupted")) {
+    this.connectCalls[index]?.onError(error);
+  }
+
   close() {
     this.activeArgs?.onClose();
+  }
+
+  closeAt(index: number) {
+    this.connectCalls[index]?.onClose();
   }
 }
 
@@ -175,7 +192,7 @@ describe("Stage 3 task stream lifecycle", () => {
     expect(store.getState().session.sseState).toBe("open");
   });
 
-  test("marks the stream as failed after connect_deadline without locally terminating the task", async () => {
+  test("retries in-page after connect_deadline without locally terminating the task", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-16T00:00:00+08:00"));
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
@@ -195,12 +212,19 @@ describe("Stage 3 task stream lifecycle", () => {
       await flushAsyncWork();
     });
 
-    expect(taskEventSource.connectCalls).toHaveLength(1);
     expect(store.getState().ui.terminalReason).toBeNull();
     expect(store.getState().session.sseState).toBe("failed");
     expect(store.getState().remote.snapshot).toMatchObject({
       status: "running",
     });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_000);
+      await flushAsyncWork();
+    });
+
+    expect(taskEventSource.connectCalls).toHaveLength(2);
+    expect(store.getState().session.sseState).toBe("connecting");
   });
 
   test("starts the heartbeat loop only when the task is open and in a heartbeat-eligible status", async () => {
@@ -458,7 +482,8 @@ describe("Stage 3 task stream lifecycle", () => {
     expect(store.getState().session.sseState).toBe("open");
   });
 
-  test("marks the SSE stream failed without locally terminating the task", async () => {
+  test("reconnects in-page after SSE error, de-dupes replayed events, and keeps consuming later events", async () => {
+    vi.useFakeTimers();
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
     const store = createActiveStore();
 
@@ -470,17 +495,62 @@ describe("Stage 3 task stream lifecycle", () => {
     );
 
     await act(async () => {
-      taskEventSource.open();
-      taskEventSource.error(new Error("network_lost"));
+      taskEventSource.openAt(0);
+      taskEventSource.emitAt(
+        0,
+        makeClarificationDeltaEvent({
+          seq: 2,
+          payload: {
+            delta: "第一段",
+          },
+        }),
+      );
+      taskEventSource.errorAt(0, new Error("network_lost"));
       await flushAsyncWork();
     });
 
     expect(store.getState().ui.terminalReason).toBeNull();
     expect(taskEventSource.connectCalls).toHaveLength(1);
     expect(store.getState().session.sseState).toBe("failed");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_000);
+      await flushAsyncWork();
+    });
+
+    expect(taskEventSource.connectCalls).toHaveLength(2);
+    expect(store.getState().session.sseState).toBe("connecting");
+
+    await act(async () => {
+      taskEventSource.openAt(1);
+      taskEventSource.emitAt(
+        1,
+        makeClarificationDeltaEvent({
+          seq: 2,
+          payload: {
+            delta: "第一段",
+          },
+        }),
+      );
+      taskEventSource.emitAt(
+        1,
+        makeClarificationDeltaEvent({
+          seq: 3,
+          payload: {
+            delta: "第二段",
+          },
+        }),
+      );
+      await flushAsyncWork();
+    });
+
+    expect(store.getState().session.sseState).toBe("open");
+    expect(store.getState().stream.clarificationText).toBe("第一段第二段");
+    expect(store.getState().stream.lastEventSeq).toBe(3);
   });
 
-  test("marks the SSE stream closed without locally terminating the task", async () => {
+  test("reconnects in-page after SSE close and continues observing later events", async () => {
+    vi.useFakeTimers();
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
     const store = createActiveStore();
 
@@ -492,8 +562,8 @@ describe("Stage 3 task stream lifecycle", () => {
     );
 
     await act(async () => {
-      taskEventSource.open();
-      taskEventSource.close();
+      taskEventSource.openAt(0);
+      taskEventSource.closeAt(0);
       await flushAsyncWork();
     });
 
@@ -502,6 +572,34 @@ describe("Stage 3 task stream lifecycle", () => {
     expect(store.getState().session.sseState).toBe("closed");
     expect(store.getState().remote.snapshot).toMatchObject({
       status: "running",
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_000);
+      await flushAsyncWork();
+    });
+
+    expect(taskEventSource.connectCalls).toHaveLength(2);
+
+    await act(async () => {
+      taskEventSource.openAt(1);
+      taskEventSource.emitAt(
+        1,
+        makePhaseChangedEvent({
+          seq: 20,
+          payload: {
+            from_phase: "clarifying",
+            to_phase: "analyzing_requirement",
+            status: "running",
+          },
+        }),
+      );
+      await flushAsyncWork();
+    });
+
+    expect(store.getState().session.sseState).toBe("open");
+    expect(store.getState().remote.snapshot).toMatchObject({
+      phase: "analyzing_requirement",
     });
   });
 
@@ -537,6 +635,95 @@ describe("Stage 3 task stream lifecycle", () => {
     expect(store.getState().remote.snapshot).toMatchObject({
       status: "running",
     });
+  });
+
+  test("does not reconnect after a terminal event closes the stream", async () => {
+    vi.useFakeTimers();
+    const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
+    const store = createActiveStore();
+
+    render(
+      <ResearchPageClient
+        runtime={createLifecycleRuntime(taskEventSource)}
+        store={store}
+      />,
+    );
+
+    await act(async () => {
+      taskEventSource.openAt(0);
+      taskEventSource.emitAt(0, makeTaskFailedEvent());
+      taskEventSource.closeAt(0);
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+      await flushAsyncWork();
+    });
+
+    expect(taskEventSource.connectCalls).toHaveLength(1);
+    expect(store.getState().ui.terminalReason).toBe("failed");
+  });
+
+  test("does not reconnect after explicit abort has been requested", async () => {
+    vi.useFakeTimers();
+    const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
+    const store = createActiveStore();
+
+    render(
+      <ResearchPageClient
+        runtime={createLifecycleRuntime(taskEventSource)}
+        store={store}
+      />,
+    );
+
+    act(() => {
+      store.getState().setSessionContext({
+        explicitAbortRequested: true,
+      });
+      store.getState().setPendingAction("disconnecting");
+    });
+
+    await act(async () => {
+      taskEventSource.openAt(0);
+      taskEventSource.errorAt(0, new Error("network_lost"));
+      await flushAsyncWork();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+      await flushAsyncWork();
+    });
+
+    expect(taskEventSource.connectCalls).toHaveLength(1);
+  });
+
+  test("does not reconnect after the workspace unmounts", async () => {
+    vi.useFakeTimers();
+    const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
+    const store = createActiveStore();
+
+    const { unmount } = render(
+      <ResearchPageClient
+        runtime={createLifecycleRuntime(taskEventSource)}
+        store={store}
+      />,
+    );
+
+    await act(async () => {
+      taskEventSource.openAt(0);
+      taskEventSource.errorAt(0, new Error("network_lost"));
+      await flushAsyncWork();
+    });
+
+    unmount();
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+      await flushAsyncWork();
+    });
+
+    expect(taskEventSource.connectCalls).toHaveLength(1);
   });
 
   test("registers beforeunload for active tasks and removes it after a terminal event", async () => {
@@ -604,7 +791,9 @@ describe("Stage 3 task stream lifecycle", () => {
       />,
     );
 
-    window.dispatchEvent(new Event("pagehide"));
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
 
     expect(sendBeacon).toHaveBeenCalledTimes(1);
     const [url, body] = sendBeacon.mock.calls[0] as unknown as [string, Blob];

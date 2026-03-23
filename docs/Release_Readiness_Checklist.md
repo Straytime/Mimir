@@ -158,7 +158,9 @@ Frontend required：
 - [ ] 已有一条真实 LLM + `web_search` + `web_fetch` smoke 记录
 - [ ] 已有一条真实 E2B baseline smoke 记录
 - [ ] 已确认页面切后台、标签切换或窗口失焦不会导致任务终止
+- [ ] 已确认同一页面会话内的 SSE 中断可自动重连，并继续看到后续事件
 - [ ] 已确认任务进入 `collecting` 且持续超过 1 个 heartbeat interval 时，heartbeat 仍可持续发送，但 heartbeat 中断本身不会杀任务
+- [ ] 已确认状态栏展示“最近事件/最近服务端活动”，而不是“最近心跳”
 - [ ] 已记录本次发布使用的 smoke 日期与执行人
 
 ### 3.13 Go / No-Go

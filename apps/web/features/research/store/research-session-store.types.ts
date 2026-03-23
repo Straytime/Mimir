@@ -68,7 +68,9 @@ export type ResearchSessionState = {
     disconnectUrl: string | null;
     connectDeadlineAt: string | null;
     sseState: SseState;
+    explicitAbortRequested: boolean;
     lastHeartbeatAt: string | null;
+    lastServerActivityAt: string | null;
   };
   remote: {
     snapshot: TaskSnapshot | null;
@@ -177,7 +179,9 @@ export function createResearchSessionState(): ResearchSessionState {
       disconnectUrl: null,
       connectDeadlineAt: null,
       sseState: "idle",
+      explicitAbortRequested: false,
       lastHeartbeatAt: null,
+      lastServerActivityAt: null,
     },
     remote: {
       snapshot: null,

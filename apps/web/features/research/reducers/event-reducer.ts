@@ -23,15 +23,19 @@ type TerminalEventEnvelope =
   | TaskFailedEventEnvelope
   | TaskTerminatedEventEnvelope;
 
-function withLastEventSeq(
+function withAcceptedEventMeta(
   state: ResearchSessionState,
-  lastEventSeq: number,
+  event: EventEnvelope,
 ): ResearchSessionState {
   return {
     ...state,
+    session: {
+      ...state.session,
+      lastServerActivityAt: event.timestamp,
+    },
     stream: {
       ...state.stream,
-      lastEventSeq,
+      lastEventSeq: event.seq,
     },
   };
 }
@@ -67,7 +71,7 @@ function applyTerminalEvent(
   terminalReason: TerminalReason,
 ): ResearchSessionState {
   return {
-    ...withLastEventSeq(state, event.seq),
+    ...withAcceptedEventMeta(state, event),
     remote: {
       ...state.remote,
       snapshot: updateSnapshotForTerminalEvent(state.remote.snapshot, event),
@@ -145,7 +149,7 @@ export function reduceResearchSessionEvent(
   state: ResearchSessionState,
   event: EventEnvelope,
 ): ResearchSessionState {
-  const stateWithLastEventSeq = withLastEventSeq(state, event.seq);
+  const stateWithLastEventSeq = withAcceptedEventMeta(state, event);
 
   switch (event.event) {
     case "task.created":

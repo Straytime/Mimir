@@ -178,7 +178,7 @@ describe("Stage 4 clarification flow", () => {
         seq: 8,
       });
       taskEventSource.emit({
-        seq: 7,
+        seq: 9,
         event: "clarification.delta",
         task_id: "tsk_stage0",
         revision_id: "rev_stage0",
