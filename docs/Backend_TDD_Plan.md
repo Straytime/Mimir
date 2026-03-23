@@ -682,6 +682,7 @@ DoD：
 - 终态事件顺序
 - `awaiting_feedback` 期间保持 SSE 打开
 - `awaiting_feedback` 期间 `heartbeat` 与 `disconnect` 仍可调用
+- 对无历史 `task_events` 的 seeded task，首次 `/events` 连接仍能 bootstrap `task.created`
 
 说明：
 
