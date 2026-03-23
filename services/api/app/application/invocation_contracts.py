@@ -134,7 +134,7 @@ def build_collect_agent_tool_schema() -> ToolSchema:
 def build_web_search_tool_schema() -> ToolSchema:
     return ToolSchema(
         name="web_search",
-        description="通过搜索引擎检索指定信息，返回搜索结果列表，包含网页摘要和对应 url",
+        description="搜索工具，通过搜索引擎检索指定信息，返回搜索结果列表，包含网页摘要和对应 url",
         parameters={
             "search_query": {
                 "type": "string",
@@ -153,7 +153,7 @@ def build_web_search_tool_schema() -> ToolSchema:
 def build_web_fetch_tool_schema() -> ToolSchema:
     return ToolSchema(
         name="web_fetch",
-        description="读取 url 并获取内容",
+        description="网页读取工具，可读取 url 获取其内容",
         parameters={
             "url": {
                 "type": "string",

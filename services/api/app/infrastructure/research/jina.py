@@ -14,7 +14,7 @@ from app.application.services.invocation import RetryableOperationError
 logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE_URL = "https://r.jina.ai/"
-_MAX_FETCH_CONTENT_CHARS = 10000
+_DEFAULT_MAX_FETCH_CONTENT_CHARS = 5000
 
 
 class JinaWebFetchClient:
@@ -24,9 +24,11 @@ class JinaWebFetchClient:
         api_key: str | None = None,
         base_url: str = _DEFAULT_BASE_URL,
         timeout_seconds: float = 30.0,
+        max_content_chars: int = _DEFAULT_MAX_FETCH_CONTENT_CHARS,
         transport: httpx.BaseTransport | httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/") + "/"
+        self._max_content_chars = max_content_chars
         headers: dict[str, str] = {"Accept": "text/plain"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -60,7 +62,7 @@ class JinaWebFetchClient:
             url=url,
             success=True,
             title=title,
-            content=body[:_MAX_FETCH_CONTENT_CHARS],
+            content=body[: self._max_content_chars],
         )
 
     async def aclose(self) -> None:

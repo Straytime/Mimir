@@ -1003,6 +1003,8 @@ E2B 生命周期约束：
 - `clarification options`
 - `requirement analysis`
 - `feedback analysis`
+- `planner system prompt`
+- `planner collect_agent tool description`
 - `collector`
 
 约束：
@@ -1010,7 +1012,8 @@ E2B 生命周期约束：
 1. 以上五类 prompt 的模型可见文本，以 PRD 原文为准逐字落实；允许的变化只有运行时变量插值、空白规范化和 JSON 示例中的动态值替换。
 2. `clarification natural` 与 `clarification options` 必须保持 PRD 的“空 system prompt”约束，不能再由 adapter 私自补一个新的 system prompt。
 3. `requirement analysis` 与 `feedback analysis` 的 system prompt / user prompt 边界，以 PRD 为准；不得把 PRD 中模型可见的角色说明挪到 adapter 不可见的默认字符串里。
-4. `collector` 对应 PRD `func_8`，其 system prompt 与最终输出格式文本以 PRD 原文为准；user prompt 以 PRD 原文为主，并允许在 `<补充信息>` 之后追加显式 `<时效要求>` runtime block，以保留 `freshness_requirement` 的独立信号。除此之外只允许运行时变量插值、空白规范化，以及 transcript 作为独立 message 注入。
+4. `planner` 对应 PRD `func_7`，其 system prompt 与 `collect_agent` 的模型可见 description 以 PRD 0.4 原文为准；planner user prompt 允许继续保留当前实现中的运行时上下文包装，但不得改变 PRD 定义的角色边界、并发限制、tool 语义与 `freshness_requirement` 枚举语义。
+5. `collector` 对应 PRD `func_8`，其 system prompt、user prompt 与 tools description 以 PRD 0.4 原文为准；collector user prompt 允许在 `<补充信息>` 之后追加显式 `<时效要求>` runtime block，以保留 `freshness_requirement` 的独立信号。除此之外只允许运行时变量插值、空白规范化，以及 transcript 作为独立 message 注入。
 
 第二类：允许等价改写，但语义必须与 PRD 一致
 
@@ -1042,7 +1045,7 @@ system / user prompt 组织规则：
 
 | tool | 可用阶段 | 模型可见 request schema | 设计约束 |
 | --- | --- | --- | --- |
-| `collect_agent` | planner | `collect_target`、`additional_info`、`freshness_requirement` | 对模型暴露的 schema 以 PRD 为准，不额外暴露 `tool_call_id`、`revision_id`、`subtask_id`；这些内部元数据由后端在解析后补齐。 |
+| `collect_agent` | planner | `collect_target`、`additional_info`、`freshness_requirement` | 对模型暴露的 schema 与 description 以 PRD 0.4 为准；`freshness_requirement` 继续保持内部枚举语义（`low \| high`），不扩成自由字符串；`tool_call_id`、`revision_id`、`subtask_id` 这些内部元数据由后端在解析后补齐。 |
 | `web_search` | collector | `search_query`、`search_recency_filter` | `search_recency_filter` 的模型可见规范值与真实 provider 请求值一致，均为 `oneDay | oneWeek | oneMonth | oneYear | noLimit`；adapter 只负责 `nolimit` 等历史兼容归一化。 |
 | `web_fetch` | collector | `url` | 只允许模型传目标 URL，不对模型暴露 header、timeout、parser 等实现细节。 |
 | `python_interpreter` | writer | `code` | 只允许模型提交待执行 Python 代码；sandbox 创建、复用、上传 artifact、下载签名 URL 都由后端 orchestrator / adapter 负责。 |
@@ -1093,7 +1096,7 @@ PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": 
 
 1. 把响应视为 markdown / plaintext 文本，不做 HTML 二次抓取。
 2. 以首个 markdown 标题或首行文本生成 `title`，原始 `url` 仍作为主键。
-3. 返回给 collector transcript、数据库与 summary loop 的正文，统一截断到前 `10000` 个字符。
+3. 返回给 collector transcript、数据库与 summary loop 的正文，统一截断到前 `5000` 个字符；该上限的单一配置权威是 `Settings.fetched_content_limit`，adapter 与 application 层的防御性截断都必须读取同一配置值。
 4. 空内容、上游 4xx、拒绝访问、非文本体都转成标准化“失败但可继续”的 tool result；超时与 5xx 仍按可重试异常处理。
 
 #### `python_interpreter`

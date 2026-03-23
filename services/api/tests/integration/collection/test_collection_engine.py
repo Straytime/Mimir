@@ -744,6 +744,89 @@ async def test_collection_persists_provider_finish_reason_and_usage_for_agent_ru
 
 
 @pytest.mark.asyncio
+async def test_collection_fetch_content_is_truncated_to_five_thousand_chars_across_summary_and_storage(
+    make_stage5_client,
+    db_session: Session,
+) -> None:
+    long_content = "A" * 6200
+    planner = ScriptedPlannerAgent(
+        rounds=[
+            PlannerDecision(
+                reasoning_deltas=("开始搜集。",),
+                plans=(
+                    CollectPlan(
+                        tool_call_id="call_1",
+                        revision_id="rev_placeholder",
+                        collect_target="收集主要玩家",
+                        additional_info="优先官方与高可信媒体。",
+                        freshness_requirement=FreshnessRequirement.HIGH,
+                    ),
+                ),
+                stop=False,
+            ),
+            PlannerDecision(
+                reasoning_deltas=("准备进入 merge。",),
+                plans=(),
+                stop=True,
+            ),
+        ]
+    )
+    collector = ScriptedCollectorAgent(
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_players",
+                    url="https://example.com/a",
+                    reasoning="直接读取详情。",
+                ),
+                _collector_stop_round(
+                    reasoning="信息已足够。",
+                    items=(),
+                ),
+            ),
+        }
+    )
+    summarizer = ScriptedSummaryAgent()
+    fetch = ScriptedWebFetchClient(
+        content_by_url={
+            "https://example.com/a": FetchResponse(
+                url="https://example.com/a",
+                success=True,
+                title="来源 A",
+                content=long_content,
+            ),
+        }
+    )
+    search = ScriptedWebSearchClient(SearchScenario(results_by_query={}))
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=collector,
+        summary_agent=summarizer,
+        web_search_client=search,
+        web_fetch_client=fetch,
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_collection_flow(client)
+        await read_until_event(lines, {"sources.merged"})
+        await _close_stream(stream_context, response)
+
+    summary_invocation = summarizer.invocations[0]
+    assert summary_invocation.item_payloads[0]["info"] == long_content[:5000]
+    assert len(summary_invocation.item_payloads[0]["info"]) == 5000
+
+    stored_source = db_session.scalar(
+        select(CollectedSourceRecord)
+        .where(CollectedSourceRecord.task_id == create_body["task_id"])
+        .where(CollectedSourceRecord.link == "https://example.com/a")
+        .where(CollectedSourceRecord.is_merged.is_(False))
+    )
+    assert stored_source is not None
+    assert stored_source.info == long_content[:5000]
+    assert len(stored_source.info) == 5000
+
+
+@pytest.mark.asyncio
 async def test_collect_loop_handles_one_risk_blocked_and_two_successful_subtasks(
     make_stage5_client,
 ) -> None:

@@ -72,17 +72,26 @@ def test_stage_profiles_match_architecture_defaults() -> None:
 def test_tool_schemas_match_current_architecture_contract() -> None:
     collect_agent = build_collect_agent_tool_schema()
     assert collect_agent.name == "collect_agent"
+    assert (
+        collect_agent.description
+        == "创建独立的信息收集 sub agent，针对单个明确的信息获取目标进行检索和搜集，执行完成后会自动将结果暂存，返回执行摘要"
+    )
     assert set(collect_agent.parameters) == {
         "collect_target",
         "additional_info",
         "freshness_requirement",
     }
+    assert collect_agent.parameters["freshness_requirement"]["enum"] == ["low", "high"]
     assert "tool_call_id" not in collect_agent.parameters
     assert "revision_id" not in collect_agent.parameters
     assert "subtask_id" not in collect_agent.parameters
 
     web_search = build_web_search_tool_schema()
     assert web_search.name == "web_search"
+    assert (
+        web_search.description
+        == "搜索工具，通过搜索引擎检索指定信息，返回搜索结果列表，包含网页摘要和对应 url"
+    )
     assert set(web_search.parameters) == {
         "search_query",
         "search_recency_filter",
@@ -97,6 +106,7 @@ def test_tool_schemas_match_current_architecture_contract() -> None:
 
     web_fetch = build_web_fetch_tool_schema()
     assert web_fetch.name == "web_fetch"
+    assert web_fetch.description == "网页读取工具，可读取 url 获取其内容"
     assert set(web_fetch.parameters) == {"url"}
 
     python_interpreter = build_python_interpreter_tool_schema()

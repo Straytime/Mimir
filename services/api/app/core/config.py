@@ -58,7 +58,7 @@ class Settings:
     revision_collect_agent_limit: int = 5
     subtask_tool_call_limit: int = 10
     collect_risk_block_threshold: int = 2
-    fetched_content_limit: int = 10000
+    fetched_content_limit: int = 5000
     writer_max_rounds: int = 5
     cleanup_scan_interval_seconds: float = 60.0
 
@@ -218,7 +218,7 @@ class Settings:
                 os.getenv("MIMIR_COLLECT_RISK_BLOCK_THRESHOLD", "2")
             ),
             fetched_content_limit=int(
-                os.getenv("MIMIR_FETCHED_CONTENT_LIMIT", "10000")
+                os.getenv("MIMIR_FETCHED_CONTENT_LIMIT", "5000")
             ),
             writer_max_rounds=int(
                 os.getenv("MIMIR_WRITER_MAX_ROUNDS", "5")
