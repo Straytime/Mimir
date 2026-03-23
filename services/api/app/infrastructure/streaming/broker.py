@@ -88,6 +88,26 @@ class TaskLifecycleManager:
         else:
             runtime.connect_deadline_at = connect_deadline_at
 
+        should_start_clarification = False
+        with self._session_factory() as session:
+            task = self._task_service.repository.get_task(session=session, task_id=task_id)
+            if task is not None:
+                event = self._task_service.ensure_task_created_event(
+                    session,
+                    task_id=task_id,
+                )
+                if event is not None:
+                    session.commit()
+                else:
+                    session.rollback()
+                should_start_clarification = (
+                    TaskStatus(task.status) is TaskStatus.RUNNING
+                    and task.phase == "clarifying"
+                )
+
+        if should_start_clarification:
+            await self._clarification_orchestrator.ensure_started(task_id=task_id)
+
         self._ensure_monitor(task_id=task_id, runtime=runtime)
 
     async def prepare_event_stream(
@@ -112,16 +132,7 @@ class TaskLifecycleManager:
                 runtime.first_connected = True
                 runtime.last_client_seen_at = self._clock()
                 runtime.last_server_heartbeat_at = self._clock()
-                self._task_service.ensure_task_created_event(
-                    session,
-                    task_id=task_id,
-                )
-                session.commit()
-                if (
-                    TaskStatus(task.status) is TaskStatus.RUNNING
-                    and task.phase == "clarifying"
-                ):
-                    await self._clarification_orchestrator.ensure_started(task_id=task_id)
+                session.rollback()
 
             runtime.connection_count += 1
             self._ensure_monitor(task_id=task_id, runtime=runtime)
@@ -360,59 +371,6 @@ class TaskLifecycleManager:
 
                     now = self._clock()
                     status = TaskStatus(task.status)
-                    if not runtime.first_connected and now >= runtime.connect_deadline_at:
-                        logger.warning(
-                            "terminating task: sse_connect_timeout",
-                            extra={"task_id": task_id, "reason": "sse_connect_timeout"},
-                        )
-                        self._task_service.terminate_task(
-                            session,
-                            task_id=task_id,
-                            reason="sse_connect_timeout",
-                        )
-                        session.commit()
-                        await self._cancel_all_orchestrators(task_id=task_id)
-                        await self._mark_cleanup_pending(task_id=task_id)
-                        await self._maybe_cleanup_task(task_id=task_id)
-                        if runtime.connection_count == 0:
-                            self._runtimes.pop(task_id, None)
-                        return
-
-                    if runtime.first_connected and status in {
-                        TaskStatus.RUNNING,
-                        TaskStatus.AWAITING_USER_INPUT,
-                        TaskStatus.AWAITING_FEEDBACK,
-                    }:
-                        if (
-                            runtime.last_client_seen_at is not None
-                            and now - runtime.last_client_seen_at
-                            >= timedelta(
-                                seconds=self._settings.client_heartbeat_timeout_seconds
-                            )
-                        ):
-                            elapsed = (now - runtime.last_client_seen_at).total_seconds()
-                            logger.warning(
-                                "terminating task: heartbeat_timeout",
-                                extra={
-                                    "task_id": task_id,
-                                    "reason": "heartbeat_timeout",
-                                    "last_client_seen_at": runtime.last_client_seen_at.isoformat(),
-                                    "elapsed_seconds": elapsed,
-                                },
-                            )
-                            self._task_service.terminate_task(
-                                session,
-                                task_id=task_id,
-                                reason="heartbeat_timeout",
-                            )
-                            session.commit()
-                            await self._cancel_all_orchestrators(task_id=task_id)
-                            await self._mark_cleanup_pending(task_id=task_id)
-                            await self._maybe_cleanup_task(task_id=task_id)
-                            if runtime.connection_count == 0:
-                                self._runtimes.pop(task_id, None)
-                            return
-
                     if (
                         status is TaskStatus.AWAITING_FEEDBACK
                         and task.expires_at is not None
@@ -466,19 +424,10 @@ class TaskLifecycleManager:
         return True
 
     async def _handle_stream_disconnect(self, *, task_id: str) -> None:
-        logger.warning(
-            "terminating task: client_disconnected (stream disconnect)",
-            extra={"task_id": task_id, "reason": "client_disconnected"},
+        logger.info(
+            "sse stream disconnected without explicit abort",
+            extra={"task_id": task_id},
         )
-        with self._session_factory() as session:
-            self._task_service.terminate_task(
-                session,
-                task_id=task_id,
-                reason="client_disconnected",
-            )
-            session.commit()
-        await self._cancel_all_orchestrators(task_id=task_id)
-        await self._mark_cleanup_pending(task_id=task_id)
 
     async def _finalize_stream(self, *, task_id: str) -> None:
         runtime = self._runtimes.get(task_id)
@@ -500,26 +449,16 @@ class TaskLifecycleManager:
 
             status = TaskStatus(task.status)
             if status in {
-                TaskStatus.RUNNING,
-                TaskStatus.AWAITING_USER_INPUT,
-                TaskStatus.AWAITING_FEEDBACK,
+                TaskStatus.TERMINATED,
+                TaskStatus.FAILED,
+                TaskStatus.EXPIRED,
+                TaskStatus.PURGED,
             }:
-                logger.warning(
-                    "terminating task: client_disconnected (stream finalize)",
-                    extra={"task_id": task_id, "reason": "client_disconnected"},
-                )
-                self._task_service.terminate_task(
-                    session,
-                    task_id=task_id,
-                    reason="client_disconnected",
-                )
-                session.commit()
-                await self._cancel_all_orchestrators(task_id=task_id)
-                await self._mark_cleanup_pending(task_id=task_id)
-            else:
                 session.rollback()
+                await self._maybe_cleanup_task(task_id=task_id)
+                return
 
-        await self._maybe_cleanup_task(task_id=task_id)
+            session.rollback()
 
     async def _cancel_all_orchestrators(self, *, task_id: str) -> None:
         await self._clarification_orchestrator.cancel(task_id=task_id)

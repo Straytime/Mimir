@@ -22,14 +22,23 @@ def count_task_events(db_session: Session, task_id: str) -> int:
 
 
 @pytest.mark.asyncio
-async def test_no_events_are_persisted_until_first_sse_connection(
+async def test_task_created_event_is_persisted_before_first_sse_connection(
     app_client: AsyncClient,
     db_session: Session,
 ) -> None:
     create_response = await app_client.post("/api/v1/tasks", json=build_create_task_payload())
     create_body = create_response.json()
 
-    assert count_task_events(db_session, create_body["task_id"]) == 0
+    db_session.expire_all()
+    events = list(
+        db_session.scalars(
+            select(TaskEventRecord)
+            .where(TaskEventRecord.task_id == create_body["task_id"])
+            .order_by(TaskEventRecord.seq.asc())
+        )
+    )
+    assert events
+    assert events[0].event == "task.created"
 
     async with app_client.stream(
         "GET",
@@ -45,7 +54,7 @@ async def test_no_events_are_persisted_until_first_sse_connection(
 
 
 @pytest.mark.asyncio
-async def test_connect_deadline_without_first_sse_connection_terminates_task(
+async def test_task_remains_alive_without_first_sse_connection_after_connect_deadline(
     app_client: AsyncClient,
     db_session: Session,
     fake_clock: FakeClock,
@@ -57,19 +66,24 @@ async def test_connect_deadline_without_first_sse_connection_terminates_task(
     await asyncio.sleep(0.1)
     db_session.expire_all()
 
-    events = list(
+    lock = db_session.get(SystemLockRecord, "global_active_task")
+    task = db_session.get(ResearchTaskRecord, create_body["task_id"])
+    assert task is not None
+    assert task.status in {"running", "awaiting_user_input"}
+    assert lock is not None
+    assert lock.task_id == create_body["task_id"]
+
+    terminated_events = list(
         db_session.scalars(
             select(TaskEventRecord)
-            .where(TaskEventRecord.task_id == create_body["task_id"])
+            .where(
+                TaskEventRecord.task_id == create_body["task_id"],
+                TaskEventRecord.event == "task.terminated",
+            )
             .order_by(TaskEventRecord.seq.asc())
         )
     )
-    lock = db_session.get(SystemLockRecord, "global_active_task")
-    task = db_session.get(ResearchTaskRecord, create_body["task_id"])
-
-    assert events == []
-    assert lock is None
-    assert task is None
+    assert terminated_events == []
 
 
 @pytest.mark.asyncio
@@ -119,8 +133,9 @@ async def test_phase_changed_then_failed_keeps_terminal_event_last(
 
 
 @pytest.mark.asyncio
-async def test_heartbeat_timeout_terminates_connected_task(
+async def test_missing_heartbeat_does_not_terminate_connected_task(
     app_client: AsyncClient,
+    db_session: Session,
     fake_clock: FakeClock,
 ) -> None:
     create_response = await app_client.post("/api/v1/tasks", json=build_create_task_payload())
@@ -136,11 +151,61 @@ async def test_heartbeat_timeout_terminates_connected_task(
 
         fake_clock.advance(seconds=46)
         await asyncio.sleep(0.1)
-        _, event_name, payload = await read_until_event(lines, {"task.terminated"})
-        await assert_stream_closed(lines)
+        _, event_name, payload = await read_until_event(lines, {"heartbeat"})
 
-    assert event_name == "task.terminated"
-    assert payload["payload"] == {"reason": "heartbeat_timeout"}
+        db_session.expire_all()
+        task = db_session.get(ResearchTaskRecord, create_body["task_id"])
+        assert task is not None
+        assert task.status in {"running", "awaiting_user_input"}
+        terminated_events = list(
+            db_session.scalars(
+                select(TaskEventRecord)
+                .where(
+                    TaskEventRecord.task_id == create_body["task_id"],
+                    TaskEventRecord.event == "task.terminated",
+                )
+                .order_by(TaskEventRecord.seq.asc())
+            )
+        )
+        assert terminated_events == []
+
+    assert event_name == "heartbeat"
+    assert payload["task_id"] == create_body["task_id"]
+
+
+@pytest.mark.asyncio
+async def test_closing_sse_stream_does_not_terminate_active_task(
+    app_client: AsyncClient,
+    db_session: Session,
+) -> None:
+    create_response = await app_client.post("/api/v1/tasks", json=build_create_task_payload())
+    create_body = create_response.json()
+
+    async with app_client.stream(
+        "GET",
+        f"/api/v1/tasks/{create_body['task_id']}/events",
+        headers={"Authorization": f"Bearer {create_body['task_token']}"},
+    ) as response:
+        lines = response.aiter_lines()
+        await read_sse_event(lines)
+
+    await asyncio.sleep(0.1)
+    db_session.expire_all()
+    task = db_session.get(ResearchTaskRecord, create_body["task_id"])
+    assert task is not None
+    assert task.status in {"running", "awaiting_user_input"}
+
+    terminated_events = list(
+        db_session.scalars(
+            select(TaskEventRecord)
+            .where(
+                TaskEventRecord.task_id == create_body["task_id"],
+                TaskEventRecord.event == "task.terminated",
+            )
+            .order_by(TaskEventRecord.seq.asc())
+        )
+    )
+    assert terminated_events == []
 
 
 @pytest.mark.asyncio
@@ -170,10 +235,10 @@ async def test_task_expired_is_last_event_for_awaiting_feedback_task(
 
         fake_clock.advance(seconds=6)
         await asyncio.sleep(0.1)
-        event_id, event_name, payload = await read_sse_event(lines)
+        event_id, event_name, payload = await read_until_event(lines, {"task.expired"})
         await assert_stream_closed(lines)
 
-    assert event_id == "2"
+    assert int(event_id or "0") >= 2
     assert event_name == "task.expired"
     assert payload["phase"] == "delivered"
     assert payload["payload"]["expired_at"] == fake_clock.now().isoformat().replace("+00:00", "Z")

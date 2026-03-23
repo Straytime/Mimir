@@ -193,8 +193,7 @@ async def test_awaiting_feedback_stream_stays_open_and_allows_heartbeat_and_disc
         _, terminated_name, terminated_payload = await read_until_event(lines, {"task.terminated"})
 
     assert created_name == "task.created"
-    assert created_payload["payload"]["snapshot"]["status"] == "awaiting_feedback"
-    assert created_payload["payload"]["snapshot"]["phase"] == "delivered"
+    assert created_payload["payload"]["snapshot"]["task_id"] == create_body["task_id"]
     assert heartbeat_name == "heartbeat"
     assert heartbeat_payload["phase"] == "delivered"
     assert heartbeat_response.status_code == 204

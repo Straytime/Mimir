@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { ResearchPageClient } from "@/features/research/components/research-page-client";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
@@ -129,6 +129,14 @@ async function flushAsyncWork() {
 }
 
 describe("Stage 3 task stream lifecycle", () => {
+  beforeEach(() => {
+    mswServer.use(
+      http.post(HEARTBEAT_API_URL, () => {
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -167,7 +175,7 @@ describe("Stage 3 task stream lifecycle", () => {
     expect(store.getState().session.sseState).toBe("open");
   });
 
-  test("times out before connect_deadline_at if onOpen never fires and does not reconnect", async () => {
+  test("marks the stream as failed after connect_deadline without locally terminating the task", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-16T00:00:00+08:00"));
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
@@ -188,10 +196,10 @@ describe("Stage 3 task stream lifecycle", () => {
     });
 
     expect(taskEventSource.connectCalls).toHaveLength(1);
-    expect(store.getState().ui.terminalReason).toBe("terminated");
+    expect(store.getState().ui.terminalReason).toBeNull();
+    expect(store.getState().session.sseState).toBe("failed");
     expect(store.getState().remote.snapshot).toMatchObject({
-      status: "terminated",
-      available_actions: [],
+      status: "running",
     });
   });
 
@@ -224,7 +232,7 @@ describe("Stage 3 task stream lifecycle", () => {
       await flushAsyncWork();
     });
 
-    expect(heartbeatCalls).toBe(1);
+    expect(heartbeatCalls).toBe(2);
 
     unmount();
     heartbeatCalls = 0;
@@ -309,7 +317,7 @@ describe("Stage 3 task stream lifecycle", () => {
         await flushAsyncWork();
       });
 
-      expect(heartbeatCalls).toBe(1);
+      expect(heartbeatCalls).toBe(2);
       expect(store.getState().remote.snapshot).toMatchObject({
         status: "terminated",
         available_actions: [],
@@ -356,7 +364,7 @@ describe("Stage 3 task stream lifecycle", () => {
       await flushAsyncWork();
     });
 
-    expect(heartbeatCalls).toBe(1);
+    expect(heartbeatCalls).toBe(2);
 
     await act(async () => {
       taskEventSource.emit(
@@ -442,7 +450,7 @@ describe("Stage 3 task stream lifecycle", () => {
       await flushAsyncWork();
     });
 
-    expect(heartbeatCalls).toBe(3);
+    expect(heartbeatCalls).toBe(5);
     expect(store.getState().remote.snapshot).toMatchObject({
       status: "running",
       phase: "collecting",
@@ -450,7 +458,7 @@ describe("Stage 3 task stream lifecycle", () => {
     expect(store.getState().session.sseState).toBe("open");
   });
 
-  test("enters a terminal state immediately when the SSE stream errors and never auto reconnects", async () => {
+  test("marks the SSE stream failed without locally terminating the task", async () => {
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
     const store = createActiveStore();
 
@@ -467,9 +475,68 @@ describe("Stage 3 task stream lifecycle", () => {
       await flushAsyncWork();
     });
 
-    expect(store.getState().ui.terminalReason).toBe("terminated");
+    expect(store.getState().ui.terminalReason).toBeNull();
     expect(taskEventSource.connectCalls).toHaveLength(1);
     expect(store.getState().session.sseState).toBe("failed");
+  });
+
+  test("marks the SSE stream closed without locally terminating the task", async () => {
+    const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
+    const store = createActiveStore();
+
+    render(
+      <ResearchPageClient
+        runtime={createLifecycleRuntime(taskEventSource)}
+        store={store}
+      />,
+    );
+
+    await act(async () => {
+      taskEventSource.open();
+      taskEventSource.close();
+      await flushAsyncWork();
+    });
+
+    expect(store.getState().ui.terminalReason).toBeNull();
+    expect(taskEventSource.connectCalls).toHaveLength(1);
+    expect(store.getState().session.sseState).toBe("closed");
+    expect(store.getState().remote.snapshot).toMatchObject({
+      status: "running",
+    });
+  });
+
+  test("does not terminate or disconnect when the page only becomes hidden", async () => {
+    const sendBeacon = vi.fn(() => true);
+    Object.defineProperty(window.navigator, "sendBeacon", {
+      configurable: true,
+      writable: true,
+      value: sendBeacon,
+    });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+
+    const store = createActiveStore({
+      session: {
+        sseState: "open",
+      },
+    });
+
+    render(
+      <ResearchPageClient
+        runtime={createLifecycleRuntime(new ControlledTaskEventSource<EventEnvelope>())}
+        store={store}
+      />,
+    );
+
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(sendBeacon).not.toHaveBeenCalled();
+    expect(store.getState().ui.terminalReason).toBeNull();
+    expect(store.getState().remote.snapshot).toMatchObject({
+      status: "running",
+    });
   });
 
   test("registers beforeunload for active tasks and removes it after a terminal event", async () => {

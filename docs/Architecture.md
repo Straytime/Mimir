@@ -352,7 +352,7 @@ stateDiagram-v2
 
 补充说明：
 
-1. 为避免状态图过于拥挤，图中未逐一画出所有通用边。实际上所有活跃 phase 在前端断连时都允许流转到 `terminated`。
+1. 为避免状态图过于拥挤，图中未逐一画出所有通用边。实际上所有活跃 phase 在显式终止请求到达时都允许流转到 `terminated`。
 2. 同样地，所有活跃 phase 在通用异常重试耗尽时都允许流转到 `failed`。
 3. `processing_feedback` 内部先完成 feedback analyzer LLM 调用，生成新的 `RequirementDetail` 后，才进入下一轮 `planning_collection`。
 
@@ -361,7 +361,7 @@ stateDiagram-v2
 1. Task 创建后立即占用“全局唯一活动任务锁”。
 2. 交付后的 Task 进入 `awaiting_feedback`，最多保留 30 分钟。
 3. 用户提交反馈时，创建新 Revision，不删除已有搜集结果。
-4. 用户刷新、关闭页面或前端断连时，Task 直接 `terminated` 并立即清理。
+4. Task 默认在后端异步持续运行；只有显式终止请求到达时才进入 `terminated` 并清理。
 5. 任一阶段遇到非风控异常，按统一重试策略处理；超限后 `failed`。
 6. 任何终止态都必须触发清理作业。
 
@@ -1133,12 +1133,12 @@ PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": 
 
 ### 通用连接约定
 
-1. 前端创建任务成功后，必须在 10 秒内建立 SSE 连接。
-2. 后端只在“首个有效 SSE 连接建立完成”后启动 orchestrator，因此不会出现 `POST /tasks` 返回后早期事件丢失的问题。
+1. 前端创建任务成功后应立即建立 SSE 连接，但后端不再把首连超时视为任务终止条件。
+2. 后端在任务创建后立即启动所需 orchestrator，并先持久化 `task.created`，因此不会出现 `POST /tasks` 返回后早期事件丢失的问题。
 3. SSE 建立时，后端先回放当前任务已经持久化但尚未发出的事件，然后切换到实时流。
-4. 一旦活动 SSE 流中断，即视为前端断连，不支持基于 `Last-Event-ID` 的任务恢复；`seq` 和 `id:` 字段主要用于事件排序、审计和首连回放。
+4. SSE 仅用于观察任务进度；活动 SSE 流中断不会直接终止后端任务。v1 仍不支持基于 `Last-Event-ID` 的任务恢复；`seq` 和 `id:` 字段主要用于事件排序、审计和首连回放。
 5. 前端应使用支持自定义 Header 的 SSE 客户端，不使用浏览器原生 `EventSource`。
-6. 若创建任务后 10 秒内始终没有建立首个有效 SSE 连接，后端直接终止并清理该任务，避免悬空任务占用全局锁。
+6. `connect_deadline_at` 仍保留在创建响应中，作为前端“应立即建连”的兼容提示；后端不会因超过该时间而自动终止任务。
 
 ### CORS 约定
 
@@ -1250,14 +1250,14 @@ data: {"seq":41,"event":"planner.tool_call.requested","task_id":"tsk_01H...","re
 - `task.failed`
 - `task.terminated`
 
-SSE 保活与断连判定：
+SSE 观察流与客户端心跳：
 
 1. 后端每 15 秒发送一个 `heartbeat` 事件。
-2. 前端心跳 effect 启动时**立即发送一次** heartbeat（fire-and-forget），然后每 20 秒 setInterval 周期发送。当 `snapshotStatus` 变化导致 effect 重跑时，也会立即发送一次，消除竞态窗口。
-3. 后端若连续 45 秒未收到客户端心跳，视为前端断连并终止任务。
-4. 客户端发送 `POST /clarification` 或 `POST /feedback` 也视为心跳活动，后端在处理这些请求后刷新 `last_client_seen_at`。
-5. 若 SSE 写入失败、客户端主动断开或 `sendBeacon` 上报断连，后端也立即执行同样的终止逻辑。
-6. 鉴于 PRD 明确”断连即放弃任务”，v1 不做 SSE 自动重连与断点续跑。
+2. 前端可继续发送 `POST /heartbeat` 作为会话活跃遥测；effect 启动时**立即发送一次** heartbeat（fire-and-forget），然后每 20 秒 setInterval 周期发送。当 `snapshotStatus` 变化导致 effect 重跑时，也会立即发送一次，消除竞态窗口。
+3. 后端不再把 heartbeat 视为任务存活的必要条件；连续未收到客户端心跳不会自动终止任务。
+4. 客户端发送 `POST /clarification` 或 `POST /feedback` 仍可刷新 `last_client_seen_at`，用于观测最近交互时间。
+5. 若 SSE 写入失败或客户端主动断开，后端只关闭该观察流，不直接终止任务；只有显式 `POST /disconnect` / `sendBeacon` 断连请求才会终止任务。
+6. v1 仍不做 SSE 自动重连与断点续跑；任务可在后端继续运行，但离开后的页面不会自动恢复或重新接管。
 
 ### 心跳保活接口
 
@@ -1350,8 +1350,9 @@ SSE 保活与断连判定：
 
 说明：
 
-- 前端在 `pagehide` / `beforeunload` 中通过 `sendBeacon` 调用
-- 后端收到后立即终止任务并清理
+- 手动点击“终止任务”走普通 `POST /disconnect`
+- 页面刷新 / 关闭在浏览器允许的情况下通过原生离开确认 + `sendBeacon` 调用
+- 后端收到显式断连请求后立即终止任务并清理
 
 请求体：
 
@@ -1369,13 +1370,11 @@ SSE 保活与断连判定：
 }
 ```
 
-此外，后端还应在 SSE 连接非正常断开时触发同样的终止逻辑，作为 `sendBeacon` 失败时的兜底。
+约束补充：
 
-更准确地说，后端的断连兜底来源包括三类：
-
-1. `sendBeacon` 主动上报断连
-2. SSE 写入失败或连接主动关闭
-3. heartbeat 超时
+1. `sendBeacon` 属于显式离开时的 best-effort 终止手段。
+2. 若浏览器未能成功发送 `sendBeacon`，后端任务会继续运行到正常终态或后续显式终止。
+3. SSE 写入失败、连接关闭和 heartbeat 中断本身都不再触发任务终止。
 
 ## 9.7 下载 markdown zip
 
@@ -1638,13 +1637,13 @@ SSE 保活与断连判定：
 - 刷新页面
 - 其他前端断连
 
-统一视为放弃任务。
+只有用户确认离开或手动终止时，才视为放弃任务。
 
 实现建议：
 
-1. 前端在 `pagehide` 触发 `sendBeacon`
-2. 后端以客户端 heartbeat 超时和 SSE 写入失败作为双重兜底判据
-3. 一旦判定断连，立即：
+1. 前端在 `pagehide` / `beforeunload` 的显式离开场景下触发 `sendBeacon`
+2. 后端仅把 `POST /disconnect` / `sendBeacon` 视为终止依据
+3. 一旦收到显式终止请求，立即：
    - 取消 orchestrator
    - 关闭 E2B 沙箱
    - 删除任务与制品
@@ -1713,7 +1712,7 @@ SSE 保活与断连判定：
 
 1. 前端不解析 LLM 的原始选单 markdown；选单只消费后端输出的 `ClarificationQuestionSet`。
 2. 前端不缓存 `task_token` 到 localStorage / IndexedDB，只保存在当前页面内存。
-3. 前端收到 `task.terminated`、`task.failed` 或 SSE 流中断后，应立即切换到终止态 UI，不再尝试恢复任务。
+3. 前端收到 `task.terminated`、`task.failed` 或 `task.expired` 后立即切换到终止态 UI；若只是 SSE 流中断，则只更新连接状态，不本地硬终止任务，也不尝试恢复任务。
 
 ## 12.3 Markdown 与图片渲染
 
