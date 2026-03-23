@@ -1159,7 +1159,7 @@ PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": 
 1. 前端创建任务成功后应立即建立 SSE 连接，但后端不再把首连超时视为任务终止条件。
 2. 后端在任务创建后立即启动所需 orchestrator，并先持久化 `task.created`，因此不会出现 `POST /tasks` 返回后早期事件丢失的问题。
 3. SSE 建立时，后端先回放当前任务已经持久化但尚未发出的事件，然后切换到实时流。若当前任务尚无任何 `task_events`，首次合法 `/events` 连接必须先补出唯一的 `task.created` bootstrap event，再进入实时流；这条规则同样适用于 factory / repository 预置的 seeded task。
-4. SSE 仅用于观察任务进度；活动 SSE 流中断不会直接终止后端任务。v1 仍不支持基于 `Last-Event-ID` 的任务恢复；`seq` 和 `id:` 字段主要用于事件排序、审计和首连回放。
+4. SSE 仅用于观察任务进度；活动 SSE 流中断不会直接终止后端任务。v1 仍不支持基于 `Last-Event-ID` 的跨刷新任务恢复；但在同一页面生命周期内，只要 `task_token` 仍保存在内存且任务未终态、未显式终止，前端可以对 `/events` 做自动重连。`seq` 和 `id:` 字段主要用于事件排序、审计、首连回放与页内重连去重。
 5. 前端应使用支持自定义 Header 的 SSE 客户端，不使用浏览器原生 `EventSource`。
 6. `connect_deadline_at` 仍保留在创建响应中，作为前端“应立即建连”的兼容提示；后端不会因超过该时间而自动终止任务。
 
@@ -1280,7 +1280,7 @@ SSE 观察流与客户端心跳：
 3. 后端不再把 heartbeat 视为任务存活的必要条件；连续未收到客户端心跳不会自动终止任务。
 4. 客户端发送 `POST /clarification` 或 `POST /feedback` 仍可刷新 `last_client_seen_at`，用于观测最近交互时间。
 5. 若 SSE 写入失败或客户端主动断开，后端只关闭该观察流，不直接终止任务；只有显式 `POST /disconnect` / `sendBeacon` 断连请求才会终止任务。
-6. v1 仍不做 SSE 自动重连与断点续跑；任务可在后端继续运行，但离开后的页面不会自动恢复或重新接管。
+6. v1 支持**同页面生命周期内**的 SSE 自动重连，但不支持跨刷新、跨关闭或跨新标签页的任务恢复；离开后的页面不会自动重新接管。
 
 ### 心跳保活接口
 
@@ -1746,7 +1746,7 @@ writer 特别约束：
 
 1. 前端不解析 LLM 的原始选单 markdown；选单只消费后端输出的 `ClarificationQuestionSet`。
 2. 前端不缓存 `task_token` 到 localStorage / IndexedDB，只保存在当前页面内存。
-3. 前端收到 `task.terminated`、`task.failed` 或 `task.expired` 后立即切换到终止态 UI；若只是 SSE 流中断，则只更新连接状态，不本地硬终止任务，也不尝试恢复任务。
+3. 前端收到 `task.terminated`、`task.failed` 或 `task.expired` 后立即切换到终止态 UI；若只是 SSE 流中断，则只更新连接状态并在当前页面会话内自动重连，不本地硬终止任务，也不跨刷新恢复任务。
 
 ## 12.3 Markdown 与图片渲染
 

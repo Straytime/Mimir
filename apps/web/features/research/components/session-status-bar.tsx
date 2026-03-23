@@ -25,8 +25,8 @@ const PHASE_LABELS = {
 
 export function SessionStatusBar() {
   const sseState = useResearchSessionStore((state) => state.session.sseState);
-  const lastHeartbeatAt = useResearchSessionStore(
-    (state) => state.session.lastHeartbeatAt,
+  const lastServerActivityAt = useResearchSessionStore(
+    (state) => state.session.lastServerActivityAt,
   );
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
   const revisionTransition = useResearchSessionStore(
@@ -48,7 +48,7 @@ export function SessionStatusBar() {
         {snapshot ? PHASE_LABELS[snapshot.phase] : "未开始"}
       </span>
       <span className="text-slate-500">
-        最近心跳：{lastHeartbeatAt ?? "尚未收到"}
+        最近服务端活动：{lastServerActivityAt ?? "尚未收到"}
       </span>
       {revisionTransition.status !== "idle" ? (
         <>

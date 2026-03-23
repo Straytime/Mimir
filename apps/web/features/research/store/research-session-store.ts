@@ -239,6 +239,8 @@ function bootstrapCreateTaskIntoState(
       disconnectUrl: response.urls.disconnect,
       connectDeadlineAt: response.connect_deadline_at,
       sseState: "connecting",
+      explicitAbortRequested: false,
+      lastServerActivityAt: null,
     },
     remote: {
       ...state.remote,
@@ -600,6 +602,13 @@ export function createResearchSessionStore(
     },
     applyEvent: (event: EventEnvelope) => {
       set((state) => {
+        if (
+          state.stream.lastEventSeq !== null &&
+          event.seq <= state.stream.lastEventSeq
+        ) {
+          return state;
+        }
+
         let nextState: ResearchSessionState = state;
 
         if (

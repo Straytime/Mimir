@@ -94,3 +94,13 @@ export function useResearchSessionStore<T>(
 
   return useStore(store, selector);
 }
+
+export function useResearchSessionStoreApi() {
+  const store = useContext(ResearchSessionStoreContext);
+
+  if (store === null) {
+    throw new Error("useResearchSessionStoreApi must be used within providers.");
+  }
+
+  return store;
+}

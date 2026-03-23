@@ -21,6 +21,7 @@ export function useDisconnectGuard() {
   const disconnectUrl = useResearchSessionStore((state) => state.session.disconnectUrl);
   const pendingAction = useResearchSessionStore((state) => state.ui.pendingAction);
   const setPendingAction = useResearchSessionStore((state) => state.setPendingAction);
+  const setSessionContext = useResearchSessionStore((state) => state.setSessionContext);
   const { taskApiClient } = useResearchRuntime();
 
   const shouldGuardSession =
@@ -39,6 +40,9 @@ export function useDisconnectGuard() {
       event.returnValue = "";
     };
     const handlePageHide = () => {
+      setSessionContext({
+        explicitAbortRequested: true,
+      });
       navigator.sendBeacon(
         disconnectUrl,
         createDisconnectBeaconPayload(taskToken),
@@ -65,6 +69,10 @@ export function useDisconnectGuard() {
     }
 
     setPendingAction("disconnecting");
+    setSessionContext({
+      explicitAbortRequested: true,
+    });
+    let disconnectAccepted = false;
 
     try {
       await taskApiClient.disconnectTask({
@@ -72,7 +80,13 @@ export function useDisconnectGuard() {
         token: taskToken,
         reason: "client_manual_abort",
       });
+      disconnectAccepted = true;
     } finally {
+      if (!disconnectAccepted) {
+        setSessionContext({
+          explicitAbortRequested: false,
+        });
+      }
       setPendingAction(null);
     }
   };

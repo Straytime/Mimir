@@ -235,7 +235,7 @@ export function ResearchWorkspaceShell() {
       <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/85 p-5">
         <p className="text-sm font-semibold text-slate-950">v1 约束</p>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          不支持断线恢复、自动重连或跨刷新保留 task_token；feedback 进入新 revision 时也只按当前流式事件切换，不做刷新恢复。
+          不支持跨刷新恢复或持久化 task_token；同页面内的观察流若短暂断开会自动重连，但离开页面后不会恢复旧任务。
         </p>
       </div>
     </article>

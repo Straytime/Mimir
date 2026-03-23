@@ -2732,3 +2732,58 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 后续继续排查 production writer 截断时，优先按 `agent_runs.provider_finish_reason` 与 `provider_usage_json` 定界，不再使用应用层 `finish_reason` 反推 provider 行为
   - 若再次遇到“正文中断但任务成功交付”，先查相应 writer rounds 的 `provider_finish_reason` 是否为 `length`，再决定是否需要单开 guardrail / max_tokens 任务包
+
+## R1-040 In-Page SSE Reconnect + Activity Indicator
+
+- 日期时间: 2026-03-23 18:55:40 CST (+0800)
+- 任务包编号: R1-040
+- session 标识: `codex/r1-040-inpage-sse-reconnect`
+- 目标摘要:
+  - 修复同一页面会话内 SSE 断线后不可恢复观察的问题，在 `task_token` 仍在内存且页面未显式离开时支持页内自动重连
+  - 保持“无跨刷新恢复、无 `task_token` 持久化”边界不变
+  - 将状态栏从“最近心跳”调整为不误导的“最近服务端活动”
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Frontend_IA.md`
+  - `docs/Release_Readiness_Checklist.md`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/features/research/hooks/use-disconnect-guard.ts`
+  - `apps/web/features/research/hooks/use-task-stream.ts`
+  - `apps/web/features/research/providers/research-workspace-providers.tsx`
+  - `apps/web/features/research/reducers/event-reducer.ts`
+  - `apps/web/features/research/store/research-session-store.ts`
+  - `apps/web/features/research/store/research-session-store.types.ts`
+  - `apps/web/tests/component/session-status-bar.spec.tsx`
+  - `apps/web/tests/integration/clarification-flow.spec.tsx`
+  - `apps/web/tests/integration/task-stream-lifecycle.spec.tsx`
+- 测试 / 验证:
+  - 红测:
+    - `cd apps/web && pnpm exec vitest run tests/integration/task-stream-lifecycle.spec.tsx tests/component/session-status-bar.spec.tsx`
+    - 初次结果: `5 failed`
+    - 缺口定位:
+      - `use-task-stream` 在 `onError` / `onClose` / 初次 connect deadline 超时后只会把 `sseState` 置为 `failed` / `closed`，不会安排任何页内重连
+      - store 没有 `seq` 去重，若直接对 `/events` 重连并重放历史事件，会重复应用旧事件
+      - 状态栏仍展示“最近心跳”，把 heartbeat 误当作任务活跃性的唯一指标
+    - 修补后结果: `19 passed`
+  - 回归:
+    - `cd apps/web && pnpm exec vitest run tests/integration/task-stream-lifecycle.spec.tsx tests/integration/clarification-flow.spec.tsx tests/integration/research-transparency.spec.tsx tests/component/session-status-bar.spec.tsx`
+    - 结果: `29 passed`
+    - `cd apps/web && pnpm exec vitest run tests/unit/reducers/event-reducer.spec.ts`
+    - 结果: `19 passed`
+    - `cd apps/web && pnpm typecheck`
+    - 结果: passed
+- 验收结论:
+  - v1 现在支持**同一页面生命周期内**的 SSE 自动重连；只要 `task_token` 仍在内存、页面未刷新/关闭、任务未终态且用户未显式终止，`use-task-stream` 会在 `onError` / `onClose` / 首连 connect deadline 超时后按最小 backoff 重新连接 `/events`
+  - 该能力严格停留在页内语义：未持久化 `task_token`，也未新增跨刷新恢复或接管能力
+  - `applyEvent()` 现在按 `stream.lastEventSeq` 做最小去重，确保从头重连重放旧事件时不会重复污染时间线或流式文本
+  - 显式 abort 语义保持成立：手动终止会在本地标记 `explicitAbortRequested` 并停止后续重连；`pagehide` 仍走 `sendBeacon` best-effort 终止；终态与页面卸载也会清理重连定时器
+  - 状态栏改为展示“最近服务端活动”，时间戳由任意被接受的 SSE 事件更新；heartbeat 仍保留为遥测，不再承担唯一活跃性展示职责
+  - clarification / transparency / task stream lifecycle 现有前端回归未退化
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前重连仍是“重新打开 `/events` 并依赖 `seq` 去重”的实现；若后续后端改为更复杂的历史回放策略，需要继续保留这条幂等性测试
+- 下一步建议:
+  - 生产 smoke 可补一条“同一页面内人为断开 SSE 后，时间线能继续向前推进”的证据，验证真实 Railway + Vercel 环境下的页内观察恢复
+  - 若后续需要更细的连接态展示，可在不改变当前产品语义的前提下区分“重连中”与“连接失败待重试”
