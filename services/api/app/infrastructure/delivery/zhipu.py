@@ -137,6 +137,7 @@ class ZhipuWriterAgent:
         return WriterDecision(
             text=result.text.strip(),
             tool_calls=tuple(tool_calls),
+            reasoning_text=result.reasoning_text.strip(),
         )
 
 

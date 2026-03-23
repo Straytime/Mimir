@@ -22,6 +22,7 @@ class ZhipuClientProtocol(Protocol):
 class ZhipuCompletionResult:
     text: str
     request_id: str | None = None
+    reasoning_text: str = ""
     tool_calls: tuple[dict[str, Any], ...] = ()
 
 
@@ -127,6 +128,7 @@ class ZhipuChatClient:
         return ZhipuCompletionResult(
             text=text,
             request_id=request_id,
+            reasoning_text=str(diag.get("reasoning_text") or ""),
             tool_calls=tool_calls,
         )
 
@@ -245,8 +247,10 @@ def _extract_response_with_diagnostics(
     content = getattr(message, "content", None)
     if isinstance(message, dict):
         content = message.get("content")
+    reasoning = _extract_reasoning_text(message)
     diag["content_type"] = type(content).__name__
     diag["content_repr"] = _safe_repr(content, max_len=500)
+    diag["reasoning_text"] = reasoning
 
     tool_calls = _extract_tool_calls_from_message(message)
     return _coerce_text(content), diag, tool_calls
@@ -262,6 +266,7 @@ def _extract_stream_with_diagnostics(
     empty_content_chunks = 0
     content_chunks = 0
     finish_reasons: list[str | None] = []
+    reasoning_parts: list[str] = []
     last_chunk_repr: str | None = None
     usage: Any = None
     request_id: str | None = None
@@ -300,6 +305,9 @@ def _extract_stream_with_diagnostics(
         delta = getattr(choice, "delta", None)
         if isinstance(choice, dict):
             delta = choice.get("delta")
+        reasoning_part = _extract_reasoning_text(delta)
+        if reasoning_part:
+            reasoning_parts.append(reasoning_part)
         content = getattr(delta, "content", None)
         if isinstance(delta, dict):
             content = delta.get("content")
@@ -320,9 +328,28 @@ def _extract_stream_with_diagnostics(
     diag["empty_content_chunks"] = empty_content_chunks
     diag["content_chunks"] = content_chunks
     diag["finish_reasons"] = finish_reasons
+    diag["reasoning_text"] = "".join(reasoning_parts)
     diag["usage"] = _safe_repr(usage)
     diag["last_chunk"] = last_chunk_repr
     return "".join(parts), diag, tool_calls
+
+
+def _extract_reasoning_text(payload: Any) -> str:
+    if payload is None:
+        return ""
+    if isinstance(payload, dict):
+        reasoning = (
+            payload.get("reasoning_content")
+            or payload.get("reasoning")
+            or payload.get("thinking")
+        )
+        return _coerce_text(reasoning)
+    reasoning = (
+        getattr(payload, "reasoning_content", None)
+        or getattr(payload, "reasoning", None)
+        or getattr(payload, "thinking", None)
+    )
+    return _coerce_text(reasoning)
 
 
 def _extract_tool_calls_from_message(message: Any) -> tuple[dict[str, Any], ...]:

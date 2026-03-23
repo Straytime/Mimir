@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.application.dto.invocation import InvocationProfile, PromptBundle, ToolSchema
+from app.application.dto.invocation import (
+    InvocationProfile,
+    PromptBundle,
+    PromptMessage,
+    ToolSchema,
+)
 from app.domain.enums import CollectSummaryStatus
 from app.domain.schemas import CollectPlan, CollectSummary, RequirementDetail
 
@@ -14,6 +19,7 @@ class PlannerInvocation:
     call_index: int
     collect_agent_calls_used: int
     now: datetime
+    transcript: tuple[PromptMessage, ...] = ()
     profile: InvocationProfile | None = None
     prompt_bundle: PromptBundle | None = None
     tool_schemas: tuple[ToolSchema, ...] = ()

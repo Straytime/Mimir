@@ -9,9 +9,15 @@ from app.application.dto.invocation import (
     PromptBundle,
     PromptMessage,
 )
+from app.application.dto.delivery import (
+    OutlineSection,
+    ResearchOutline,
+    WriterInvocation,
+)
 from app.application.dto.research import PlannerInvocation, SearchResponse
 from app.application.invocation_contracts import (
     build_collect_agent_tool_schema,
+    build_python_interpreter_tool_schema,
     build_stage_profile,
 )
 from app.application.services.invocation import (
@@ -24,12 +30,14 @@ from app.domain.enums import FreshnessRequirement, OutputFormat
 from app.domain.schemas import RequirementDetail
 from app.infrastructure.llm.zhipu import (
     ZhipuClarificationGenerator,
+    ZhipuChatClient,
     _extract_response_with_diagnostics,
     _extract_stream_with_diagnostics,
     _safe_repr,
 )
 from app.infrastructure.research.jina import JinaWebFetchClient
 from app.infrastructure.research.real_http import ZhipuPlannerAgent, ZhipuWebSearchClient
+from app.infrastructure.delivery.zhipu import ZhipuWriterAgent
 
 
 class FakeChatCompletionsAPI:
@@ -75,6 +83,33 @@ def _build_requirement_detail() -> RequirementDetail:
         output_format=OutputFormat.BUSINESS_REPORT,
         freshness_requirement=FreshnessRequirement.HIGH,
         language="zh-CN",
+    )
+
+
+def _build_writer_invocation() -> WriterInvocation:
+    return WriterInvocation(
+        prompt_name="writer_round",
+        requirement_detail=_build_requirement_detail(),
+        formatted_sources=(),
+        outline=ResearchOutline(
+            title="中国 AI 搜索产品竞争格局研究",
+            sections=(
+                OutlineSection(
+                    section_id="section_1",
+                    title="研究背景",
+                    description="界定研究边界。",
+                    order=1,
+                ),
+            ),
+            entities=("AI 搜索",),
+        ),
+        now=SimpleNamespace(isoformat=lambda: "2026-03-16T15:00:00+00:00"),
+        profile=build_stage_profile(Settings(), stage="writer"),
+        prompt_bundle=PromptBundle(
+            system_prompt="writer-system",
+            user_prompt="writer-user",
+        ),
+        tool_schemas=(build_python_interpreter_tool_schema(),),
     )
 
 
@@ -465,6 +500,27 @@ class TestExtractResponseWithDiagnostics:
         assert tool_calls[0]["name"] == "collect_agent"
         assert tool_calls[0]["arguments"] == '{"collect_target":"目标"}'
 
+    def test_response_extracts_reasoning_content_separately_from_text(self) -> None:
+        response = SimpleNamespace(
+            id="req_reasoning",
+            usage=None,
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(
+                        content="最终正文。",
+                        reasoning_content="先分析结构，再补正文。",
+                    ),
+                )
+            ],
+        )
+
+        text, diag, tool_calls = _extract_response_with_diagnostics(response)
+
+        assert text == "最终正文。"
+        assert tool_calls == ()
+        assert diag["reasoning_text"] == "先分析结构，再补正文。"
+
 
 class TestExtractStreamWithDiagnostics:
     def test_normal_stream_returns_text_and_diagnostics(self) -> None:
@@ -688,6 +744,42 @@ class TestExtractStreamWithDiagnostics:
         assert tool_calls[0]["id"] == "call_a"
         assert tool_calls[1]["id"] == "call_b"
 
+    def test_stream_extracts_reasoning_content_without_mixing_into_text(self) -> None:
+        chunks = [
+            SimpleNamespace(
+                id="req_writer_stream",
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        finish_reason=None,
+                        delta=SimpleNamespace(
+                            reasoning_content="先分析图表结构。",
+                            content="第一段正文。",
+                        ),
+                    )
+                ],
+            ),
+            SimpleNamespace(
+                id="req_writer_stream",
+                usage=None,
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        delta=SimpleNamespace(
+                            reasoning_content="继续完成结论。",
+                            content="第二段正文。",
+                        ),
+                    )
+                ],
+            ),
+        ]
+
+        text, diag, tool_calls = _extract_stream_with_diagnostics(iter(chunks))
+
+        assert text == "第一段正文。第二段正文。"
+        assert tool_calls == ()
+        assert diag["reasoning_text"] == "先分析图表结构。继续完成结论。"
+
 
 class TestSafeRepr:
     def test_none_returns_none(self) -> None:
@@ -809,6 +901,41 @@ async def test_complete_empty_text_with_tool_calls_does_not_raise() -> None:
     assert result.text == ""
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0]["name"] == "collect_agent"
+
+
+@pytest.mark.asyncio
+async def test_zhipu_writer_agent_maps_provider_reasoning_to_writer_decision() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            id="req_writer_reasoning",
+            choices=[
+                SimpleNamespace(
+                    finish_reason="tool_calls",
+                    message=SimpleNamespace(
+                        content="先给出上半段正文。",
+                        reasoning_content="先总结背景，再决定画图。",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_writer_1",
+                                function=SimpleNamespace(
+                                    name="python_interpreter",
+                                    arguments='{"code":"print(1)"}',
+                                ),
+                            )
+                        ],
+                    ),
+                )
+            ],
+        )
+    )
+    agent = ZhipuWriterAgent(client=ZhipuChatClient(client=raw_client), model="glm-test")
+
+    decision = await agent.write(_build_writer_invocation())
+
+    assert decision.text == "先给出上半段正文。"
+    assert decision.reasoning_text == "先总结背景，再决定画图。"
+    assert len(decision.tool_calls) == 1
+    assert decision.tool_calls[0].tool_call_id == "call_writer_1"
 
 
 def _build_planner_invocation(*, call_index: int = 1) -> PlannerInvocation:

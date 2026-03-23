@@ -32,6 +32,15 @@ def test_stage_profiles_match_architecture_defaults() -> None:
     assert planner.clear_thinking is False
     assert planner.stream is True
 
+    collector = build_stage_profile(settings=settings, stage="collector")
+    assert collector.model == "glm-5"
+    assert collector.temperature == 1
+    assert collector.top_p == 1
+    assert collector.max_tokens == 98304
+    assert collector.thinking is True
+    assert collector.clear_thinking is False
+    assert collector.stream is True
+
     summary = build_stage_profile(settings=settings, stage="summary")
     assert summary.model == "glm-5"
     assert summary.temperature == 0.6
@@ -49,6 +58,15 @@ def test_stage_profiles_match_architecture_defaults() -> None:
     assert writer.thinking is True
     assert writer.clear_thinking is False
     assert writer.stream is True
+
+    outline = build_stage_profile(settings=settings, stage="outline")
+    assert outline.model == "glm-5"
+    assert outline.temperature == 1
+    assert outline.top_p == 1
+    assert outline.max_tokens == 98304
+    assert outline.thinking is True
+    assert outline.clear_thinking is False
+    assert outline.stream is True
 
 
 def test_tool_schemas_match_current_architecture_contract() -> None:

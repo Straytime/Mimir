@@ -103,3 +103,4 @@ class SandboxExecutionResult:
 class WriterDecision:
     text: str
     tool_calls: tuple[WriterToolCall, ...]
+    reasoning_text: str = ""

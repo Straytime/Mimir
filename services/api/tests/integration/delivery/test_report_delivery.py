@@ -33,7 +33,12 @@ from app.application.ports.delivery import (
 from app.application.services.invocation import RetryableOperationError
 from app.core.config import Settings
 from app.domain.enums import AccessTokenResourceType
-from app.infrastructure.db.models import ArtifactRecord, TaskRevisionRecord, TaskToolCallRecord
+from app.infrastructure.db.models import (
+    AgentRunRecord,
+    ArtifactRecord,
+    TaskRevisionRecord,
+    TaskToolCallRecord,
+)
 from app.infrastructure.delivery.local import LocalArtifactStore, LocalReportExportService
 from app.main import create_app
 from tests.contract.rest.test_task_events import assert_stream_closed, read_sse_event, read_until_event
@@ -164,6 +169,44 @@ class EmptyTextWriterAgent(WriterAgent):
         return WriterDecision(
             text=self.text,
             tool_calls=(),
+        )
+
+
+class MultiRoundAssemblyWriterAgent(WriterAgent):
+    def __init__(self) -> None:
+        self.invocations: list[WriterInvocation] = []
+
+    async def write(self, invocation: WriterInvocation) -> WriterDecision:
+        self.invocations.append(invocation)
+        round_num = len(self.invocations)
+        if round_num == 1:
+            return WriterDecision(
+                text="# 中国 AI 搜索产品竞争格局研究\n\n第一部分正文，并以“让我们绘制市场份额图”收尾。",
+                tool_calls=(
+                    WriterToolCall(
+                        tool_call_id="call_writer_round_1",
+                        tool_name="python_interpreter",
+                        code="plot_round_1",
+                    ),
+                ),
+                reasoning_text="先写研究背景，再请求第一张图。",
+            )
+        if round_num == 2:
+            return WriterDecision(
+                text="第二部分正文，承接第一张图后的分析，并继续请求趋势图。",
+                tool_calls=(
+                    WriterToolCall(
+                        tool_call_id="call_writer_round_2",
+                        tool_name="python_interpreter",
+                        code="plot_round_2",
+                    ),
+                ),
+                reasoning_text="第一张图返回后补中段分析，再请求第二张图。",
+            )
+        return WriterDecision(
+            text="第三部分正文，承接第二张图并给出最终结论。",
+            tool_calls=(),
+            reasoning_text="收到第二张图后完成结尾。",
         )
 
 
@@ -481,6 +524,86 @@ async def test_writer_creates_sandbox_lazily_reuses_it_and_destroys_it_on_delive
             ]
 
         await _close_stream(stream_context, response)
+
+
+@pytest.mark.asyncio
+async def test_writer_persists_reasoning_text_and_assembles_multi_round_markdown_in_order(
+    make_stage6_client,
+    db_session: Session,
+) -> None:
+    writer_agent = MultiRoundAssemblyWriterAgent()
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={
+                "plot_round_1": (
+                    GeneratedArtifact(
+                        filename="chart_market_share.png",
+                        mime_type="image/png",
+                        content=b"png-chart-1",
+                    ),
+                ),
+                "plot_round_2": (
+                    GeneratedArtifact(
+                        filename="chart_growth.png",
+                        mime_type="image/png",
+                        content=b"png-chart-2",
+                    ),
+                ),
+            },
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        task_detail_response = await client.get(
+            f"/api/v1/tasks/{create_body['task_id']}",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+        )
+        assert task_detail_response.status_code == 200
+        markdown_zip_response = await client.get(
+            task_detail_response.json()["delivery"]["markdown_zip_url"]
+        )
+        await _close_stream(stream_context, response)
+
+    writer_runs = list(
+        db_session.scalars(
+            select(AgentRunRecord)
+            .where(AgentRunRecord.task_id == create_body["task_id"])
+            .where(AgentRunRecord.agent_type == "writer")
+            .order_by(AgentRunRecord.created_at.asc(), AgentRunRecord.id.asc())
+        )
+    )
+
+    assert markdown_zip_response.status_code == 200
+    with zipfile.ZipFile(BytesIO(markdown_zip_response.content)) as archive:
+        report_markdown = archive.read("report.md").decode("utf-8")
+
+    assert len(writer_runs) == 3
+    assert [run.reasoning_text for run in writer_runs] == [
+        "先写研究背景，再请求第一张图。",
+        "第一张图返回后补中段分析，再请求第二张图。",
+        "收到第二张图后完成结尾。",
+    ]
+
+    round_two_transcript = writer_agent.invocations[1].prompt_bundle.transcript
+    assert round_two_transcript is not None
+    assert [message.role for message in round_two_transcript] == ["assistant", "tool"]
+    assert round_two_transcript[0].reasoning_content == "先写研究背景，再请求第一张图。"
+    assert round_two_transcript[0].tool_calls is not None
+    assert round_two_transcript[0].tool_calls[0]["id"] == "call_writer_round_1"
+    assert round_two_transcript[1].tool_call_id == "call_writer_round_1"
+    assert json.loads(round_two_transcript[1].content)["summary"] == "ok"
+
+    first_idx = report_markdown.index("第一部分正文，并以“让我们绘制市场份额图”收尾。")
+    second_idx = report_markdown.index("第二部分正文，承接第一张图后的分析，并继续请求趋势图。")
+    third_idx = report_markdown.index("第三部分正文，承接第二张图并给出最终结论。")
+    assert first_idx < second_idx < third_idx
+    assert report_markdown.count("# 中国 AI 搜索产品竞争格局研究") == 1
+    assert "![chart_market_share.png](artifacts/chart_market_share.png)" not in report_markdown
 
 
 @pytest.mark.asyncio

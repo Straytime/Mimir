@@ -329,6 +329,7 @@ class DeliveryOrchestrator:
 
         transcript: list[PromptMessage] = []
         all_artifacts: list = []
+        round_texts: list[str] = []
         max_rounds = self._settings.writer_max_rounds
 
         for round_num in range(1, max_rounds + 1):
@@ -346,6 +347,9 @@ class DeliveryOrchestrator:
             )
             if decision is None:
                 return None
+
+            if decision.text.strip():
+                round_texts.append(decision.text)
 
             if decision.tool_calls:
                 if round_num == max_rounds:
@@ -373,7 +377,20 @@ class DeliveryOrchestrator:
                     )
                     await self._destroy_sandbox(runtime=runtime)
                     return None
-                return (decision.text, all_artifacts)
+                final_markdown = _assemble_writer_markdown(round_texts)
+                if not final_markdown.strip():
+                    logger.error(
+                        "writer assembled blank markdown",
+                        extra={"task_id": task_id},
+                    )
+                    await self._fail_task(
+                        task_id=task_id,
+                        error_code="upstream_service_error",
+                        message="writer 最终输出为空白，无法交付报告。",
+                    )
+                    await self._destroy_sandbox(runtime=runtime)
+                    return None
+                return (final_markdown, all_artifacts)
 
             tc_payloads = tuple(
                 {
@@ -390,6 +407,7 @@ class DeliveryOrchestrator:
                 role="assistant",
                 content=decision.text,
                 tool_calls=tc_payloads,
+                reasoning_content=decision.reasoning_text or None,
             ))
 
             for tc in decision.tool_calls:
@@ -471,7 +489,7 @@ class DeliveryOrchestrator:
                 agent_type="writer",
                 prompt_name=invocation.prompt_name,
                 status="completed",
-                reasoning_text="",
+                reasoning_text=decision.reasoning_text or None,
                 content_text=json.dumps(
                     {
                         "prompt_bundle": dump_prompt_bundle(prompt_bundle),
@@ -881,6 +899,16 @@ def _split_markdown_deltas(markdown: str, *, chunk_size: int = 200) -> list[str]
         if chunk:
             chunks.append(chunk)
     return chunks or [markdown]
+
+
+def _assemble_writer_markdown(round_texts: tuple[str, ...] | list[str]) -> str:
+    original_segments = [segment for segment in round_texts if segment.strip()]
+    if not original_segments:
+        return ""
+    if len(original_segments) == 1:
+        return original_segments[0]
+    segments = [segment.strip() for segment in original_segments]
+    return "\n\n".join(segments)
 
 
 def _normalize_python_success_summary(stdout: str) -> str:

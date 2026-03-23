@@ -6,11 +6,12 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 logger = logging.getLogger(__name__)
 
-from app.application.dto.invocation import PromptBundle, dump_prompt_bundle
+from app.application.dto.invocation import PromptBundle, PromptMessage, dump_prompt_bundle
 from app.application.dto.research import (
     CollectResult,
     CollectedSourceItem,
@@ -47,6 +48,7 @@ from app.core.config import Settings
 from app.core.ids import generate_id
 from app.domain.enums import CollectSummaryStatus, TaskPhase, TaskStatus
 from app.domain.schemas import CollectPlan, CollectSummary, RequirementDetail
+from app.infrastructure.db.models import AgentRunRecord
 
 
 @dataclass(slots=True)
@@ -280,6 +282,11 @@ class CollectionOrchestrator:
             call_index=call_index,
             collect_agent_calls_used=collect_agent_calls_used,
             now=self._clock(),
+            transcript=self._load_planner_history_transcript(
+                task_id=task_id,
+                revision_id=revision_id,
+                summaries=summaries,
+            ),
             profile=build_stage_profile(
                 settings=self._settings,
                 stage="planner",
@@ -942,6 +949,55 @@ class CollectionOrchestrator:
         )
         return result
 
+    def _load_planner_history_transcript(
+        self,
+        *,
+        task_id: str,
+        revision_id: str,
+        summaries: tuple[CollectSummary, ...],
+    ) -> tuple[PromptMessage, ...]:
+        if not summaries:
+            return ()
+        with self._session_factory() as session:
+            prior_runs = list(
+                session.scalars(
+                    select(AgentRunRecord)
+                    .where(AgentRunRecord.task_id == task_id)
+                    .where(AgentRunRecord.revision_id == revision_id)
+                    .where(AgentRunRecord.agent_type == "planner")
+                    .order_by(AgentRunRecord.created_at.asc(), AgentRunRecord.id.asc())
+                )
+            )
+        if not prior_runs:
+            return ()
+
+        transcript: list[PromptMessage] = []
+        summary_index = 0
+        for run in prior_runs:
+            plan_payloads = _extract_planner_plan_payloads(run.content_text)
+            if not plan_payloads:
+                continue
+
+            tool_calls = _planner_tool_call_payloads_from_plan_payloads(plan_payloads)
+            transcript.append(
+                PromptMessage(
+                    role="assistant",
+                    content="",
+                    tool_calls=tool_calls,
+                    reasoning_content=run.reasoning_text or None,
+                )
+            )
+
+            round_summaries = summaries[summary_index : summary_index + len(plan_payloads)]
+            if len(round_summaries) != len(plan_payloads):
+                return ()
+            transcript.extend(_planner_tool_messages(round_summaries))
+            summary_index += len(plan_payloads)
+
+        if summary_index != len(summaries):
+            return ()
+        return tuple(transcript)
+
     async def _invoke_operation(self, operation: Callable[[], Awaitable[object]]) -> object:
         return await self._operation_invoker.invoke(operation)
 
@@ -1022,3 +1078,61 @@ class CollectionOrchestrator:
             )
             session.commit()
             return True
+
+
+def _extract_planner_plan_payloads(content_text: str | None) -> tuple[dict[str, object], ...]:
+    if not content_text:
+        return ()
+    try:
+        payload = json.loads(content_text)
+    except json.JSONDecodeError:
+        return ()
+    raw_plans = payload.get("plans")
+    if not isinstance(raw_plans, list):
+        return ()
+    return tuple(item for item in raw_plans if isinstance(item, dict))
+
+
+def _planner_tool_call_payloads_from_plan_payloads(
+    plans: tuple[dict[str, object], ...],
+) -> tuple[dict[str, object], ...]:
+    return tuple(
+        {
+            "id": str(plan.get("tool_call_id") or ""),
+            "type": "function",
+            "function": {
+                "name": "collect_agent",
+                "arguments": json.dumps(
+                    {
+                        key: value
+                        for key, value in {
+                            "collect_target": plan.get("collect_target"),
+                            "additional_info": plan.get("additional_info"),
+                            "freshness_requirement": plan.get("freshness_requirement"),
+                        }.items()
+                        if value is not None
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        }
+        for plan in plans
+    )
+
+
+def _planner_tool_messages(
+    summaries: tuple[CollectSummary, ...],
+) -> tuple[PromptMessage, ...]:
+    return tuple(
+        PromptMessage(
+            role="tool",
+            name="collect_agent",
+            tool_call_id=summary.tool_call_id,
+            content=json.dumps(
+                summary.model_dump(mode="json", exclude_none=True),
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+        for summary in summaries
+    )

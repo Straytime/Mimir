@@ -795,6 +795,15 @@ Writer 阶段最终交付结构。
 }
 ```
 
+规则：
+
+- writer 的 reasoning content 与 content 是两个不同维度：
+  - reasoning 用于 debug、诊断与 prompt / provider 优化依据
+  - content 用于最终报告交付
+- 若 provider 返回独立 reasoning 字段，必须单独持久化到 `agent_runs.reasoning_text`，不能混入最终 markdown。
+- writer 单轮内的流式 chunk 仍由 provider adapter 在轮内聚合；最终交付 markdown 的 source of truth 是“所有 writer rounds 的 `content` 按顺序组装结果”，而不是仅最后一轮 `content`。
+- 多轮组装只处理跨 round 边界；不得把 tool transcript、reasoning content 或 expiring artifact URL 混入最终 markdown。
+
 ## 7.13 AgentTranscriptMessage
 
 这是“完整 agent loop 信息”的标准落库结构，用于下一轮调用时重建上下文。
@@ -857,6 +866,12 @@ Writer 阶段最终交付结构。
 - `RequirementDetail`
 - 当前 Revision 已有的 `CollectSummary[]`
 - 历史 master agent reasoning / tool messages
+
+回放约束：
+
+- `planner` 属于 `thinking.type = enabled` 的多轮调用；当进入第 2 轮及以后时，下一轮 prompt 必须回灌历史 planner reasoning content、历史 tool calls 与对应 tool results。
+- 回灌时序必须保持为：`assistant(reasoning/content/tool_calls)` -> `tool(result)`，再进入下一轮 user prompt；不得把不同 round 的 reasoning 与 tool result 乱序拼接。
+- `planner` 的 reasoning content 仅用于模型连续推理与 debug，不属于任何用户可见正文输出。
 
 输出二选一：
 
@@ -932,6 +947,10 @@ E2B 生命周期约束：
 6. writer loop 的最大 tool-call 轮次上限必须可配置，统一使用 `MIMIR_WRITER_MAX_ROUNDS`，默认值为 `5`。
 7. 若 writer 到达最大允许轮次后仍返回 `tool_calls`，后端必须将任务收口为 `task.failed`；禁止忽略剩余 tool call 后继续交付空报告或半成品报告。
 8. writer 最终用于交付的 markdown 在 `strip()` 后必须非空；若最终正文为空白，后端必须将任务收口为 `task.failed`，且不得发出 `report.completed`。
+9. writer 若经历多轮 `python_interpreter` tool loop，最终交付 markdown 必须按 round 顺序组装所有 `decision.content`；禁止只取 terminal round 的 `content`。
+10. 若 provider 返回独立 reasoning content，adapter 必须把它映射到 writer round 的单独字段并落库到 `agent_runs.reasoning_text`；最终报告正文不得包含 reasoning 内容。
+11. `writer` 属于 `thinking.type = enabled` 的多轮调用；从第 2 轮开始，下一轮 prompt 必须回灌上一轮及更早轮次的 `reasoning_content`、`content`、`tool_calls` 与 `tool_results`，并保持原始时序。
+12. `collector` 与 `outline` 虽然同样启用 thinking，但当前实现仍是单轮调用；在未引入真正的多轮 transcript 之前，不额外发明 reasoning replay 机制。
 
 ## 8.5 外部调用契约与 PRD 收敛
 
@@ -971,6 +990,7 @@ E2B 生命周期约束：
 1. `planner`、`collector`、`outline`、`writer` 四类 thinking-enabled 调用，还必须显式传递 `clear_thinking=false`，不得依赖 SDK 默认值。
 2. 未在上表列出的任意 LLM 调用，都不能绕过本表自行选择新的模型 profile。
 3. `stream=true` 是真实 provider 调用契约的一部分；即使后端内部最终把结果聚合后再持久化或发事件，也不能把上游请求默认为非流式。
+4. 对 `thinking.type = enabled` 且存在多轮 transcript 的调用，历史 reasoning content 必须作为 transcript 的一部分回灌；当前明确适用的只有 `planner` 与 `writer`。
 
 ### 8.5.2 Prompt source of truth 与组织规则
 
@@ -1477,6 +1497,12 @@ SSE 观察流与客户端心跳：
   - `finish_reason`
   - `tool_calls_json`
   - `compressed`
+
+writer 特别约束：
+
+- `reasoning_text` 保存 provider 独立返回的 reasoning content；若 provider 未提供，则允许为空。
+- `content_text` 保存该 round 的正文内容与 round metadata，不得混入 reasoning。
+- 最终交付 markdown 由同一 revision 下 writer 各 round 的 `content_text` 中正文部分按顺序组装，不得只取最后一轮。
 
 ### `task_tool_calls`
 
