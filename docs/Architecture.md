@@ -907,7 +907,7 @@ Writer 阶段最终交付结构。
 - 保存 `search_query_list`
 - 截断 `web_fetch` 返回内容到前 10000 字符
 - 工具 adapter 必须返回标准化成功/失败结果，避免 sub agent 因超时、空响应或非法响应而挂起
-- `search_recency_filter` 内部统一枚举值使用 `noLimit`；若上游或 prompt 历史中出现 `nolimit`，由 adapter 层做兼容映射
+- `search_recency_filter` 的模型可见枚举与真实 `web_search` 请求参数统一使用 PRD `oneDay | oneWeek | oneMonth | oneYear | noLimit`；adapter 只负责历史兼容归一化，不得擅自改写为另一套枚举
 
 ## 8.3 Summary Loop
 
@@ -950,7 +950,8 @@ E2B 生命周期约束：
 9. writer 若经历多轮 `python_interpreter` tool loop，最终交付 markdown 必须按 round 顺序组装所有 `decision.content`；禁止只取 terminal round 的 `content`。
 10. 若 provider 返回独立 reasoning content，adapter 必须把它映射到 writer round 的单独字段并落库到 `agent_runs.reasoning_text`；最终报告正文不得包含 reasoning 内容。
 11. `writer` 属于 `thinking.type = enabled` 的多轮调用；从第 2 轮开始，下一轮 prompt 必须回灌上一轮及更早轮次的 `reasoning_content`、`content`、`tool_calls` 与 `tool_results`，并保持原始时序。
-12. `collector` 与 `outline` 虽然同样启用 thinking，但当前实现仍是单轮调用；在未引入真正的多轮 transcript 之前，不额外发明 reasoning replay 机制。
+12. `collector` 对应 PRD `func_8`，必须作为真正的多轮 sub-agent loop 直接面向 `web_search` / `web_fetch` tool-calling；从第 2 轮开始，下一轮 prompt 必须回灌上一轮及更早轮次的 `reasoning_content`、`content`、`tool_calls` 与 `tool_results`，并保持原始时序。
+13. `outline` 虽然同样启用 thinking，但当前实现仍是单轮调用；在未引入真正的多轮 transcript 之前，不额外发明 reasoning replay 机制。
 
 ## 8.5 外部调用契约与 PRD 收敛
 
@@ -990,7 +991,7 @@ E2B 生命周期约束：
 1. `planner`、`collector`、`outline`、`writer` 四类 thinking-enabled 调用，还必须显式传递 `clear_thinking=false`，不得依赖 SDK 默认值。
 2. 未在上表列出的任意 LLM 调用，都不能绕过本表自行选择新的模型 profile。
 3. `stream=true` 是真实 provider 调用契约的一部分；即使后端内部最终把结果聚合后再持久化或发事件，也不能把上游请求默认为非流式。
-4. 对 `thinking.type = enabled` 且存在多轮 transcript 的调用，历史 reasoning content 必须作为 transcript 的一部分回灌；当前明确适用的只有 `planner` 与 `writer`。
+4. 对 `thinking.type = enabled` 且存在多轮 transcript 的调用，历史 reasoning content 必须作为 transcript 的一部分回灌；当前明确适用的是 `planner`、`collector` 与 `writer`。
 
 ### 8.5.2 Prompt source of truth 与组织规则
 
@@ -1002,17 +1003,18 @@ E2B 生命周期约束：
 - `clarification options`
 - `requirement analysis`
 - `feedback analysis`
+- `collector`
 
 约束：
 
-1. 以上四类 prompt 的模型可见文本，以 PRD 原文为准逐字落实；允许的变化只有运行时变量插值、空白规范化和 JSON 示例中的动态值替换。
+1. 以上五类 prompt 的模型可见文本，以 PRD 原文为准逐字落实；允许的变化只有运行时变量插值、空白规范化和 JSON 示例中的动态值替换。
 2. `clarification natural` 与 `clarification options` 必须保持 PRD 的“空 system prompt”约束，不能再由 adapter 私自补一个新的 system prompt。
 3. `requirement analysis` 与 `feedback analysis` 的 system prompt / user prompt 边界，以 PRD 为准；不得把 PRD 中模型可见的角色说明挪到 adapter 不可见的默认字符串里。
+4. `collector` 对应 PRD `func_8`，其 system prompt 与最终输出格式文本以 PRD 原文为准；user prompt 以 PRD 原文为主，并允许在 `<补充信息>` 之后追加显式 `<时效要求>` runtime block，以保留 `freshness_requirement` 的独立信号。除此之外只允许运行时变量插值、空白规范化，以及 transcript 作为独立 message 注入。
 
 第二类：允许等价改写，但语义必须与 PRD 一致
 
 - `planner`
-- `collector`
 - `summary`
 - `outline`
 - `writer`
@@ -1041,7 +1043,7 @@ system / user prompt 组织规则：
 | tool | 可用阶段 | 模型可见 request schema | 设计约束 |
 | --- | --- | --- | --- |
 | `collect_agent` | planner | `collect_target`、`additional_info`、`freshness_requirement` | 对模型暴露的 schema 以 PRD 为准，不额外暴露 `tool_call_id`、`revision_id`、`subtask_id`；这些内部元数据由后端在解析后补齐。 |
-| `web_search` | collector | `search_query`、`search_recency_filter` | `search_recency_filter` 的规范值为 `day | week | month | year | noLimit`；若历史 transcript 中出现 `nolimit`，只允许 adapter 做兼容归一化。 |
+| `web_search` | collector | `search_query`、`search_recency_filter` | `search_recency_filter` 的模型可见规范值与真实 provider 请求值一致，均为 `oneDay | oneWeek | oneMonth | oneYear | noLimit`；adapter 只负责 `nolimit` 等历史兼容归一化。 |
 | `web_fetch` | collector | `url` | 只允许模型传目标 URL，不对模型暴露 header、timeout、parser 等实现细节。 |
 | `python_interpreter` | writer | `code` | 只允许模型提交待执行 Python 代码；sandbox 创建、复用、上传 artifact、下载签名 URL 都由后端 orchestrator / adapter 负责。 |
 
@@ -1069,8 +1071,9 @@ tool result 归一化规则：
 额外约束：
 
 1. `search_engine`、`query_rewrite`、`count` 属于固定 provider contract，不允许由 planner / collector prompt 或 adapter 默认值自由漂移。
-2. tool result 回灌给 collector 时，只保留 `search_result` 列表中的核心字段；`icon`、`media` 及其他展示性厂商字段一律剔除。
-3. provider 如果返回 `results`、`data.search_result` 等兼容形态，adapter 负责归一到同一内部结构，再返回给上层。
+2. collector 对模型可见的 `search_recency_filter` 与真实 provider 请求值统一为 PRD `oneDay | oneWeek | oneMonth | oneYear | noLimit`；adapter 只允许做 `nolimit -> noLimit`、历史旧值回放等兼容归一化，不得改成另一套 request enum。
+3. tool result 回灌给 collector 时，只保留 `search_result` 列表中的核心字段；`icon`、`media` 及其他展示性厂商字段一律剔除。
+4. provider 如果返回 `results`、`data.search_result` 等兼容形态，adapter 负责归一到同一内部结构，再返回给上层。
 
 #### Jina Reader `web_fetch`
 

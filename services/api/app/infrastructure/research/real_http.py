@@ -11,6 +11,8 @@ from app.application.dto.invocation import LLMInvocation, PromptBundle
 from app.application.dto.research import (
     CollectorDecision,
     CollectorInvocation,
+    CollectorToolCall,
+    CollectedSourceItem,
     FetchResponse,
     PlannerDecision,
     PlannerInvocation,
@@ -34,8 +36,27 @@ from app.infrastructure.llm.zhipu import (
 )
 
 
-def normalize_recency_filter(value: str) -> str:
-    return "noLimit" if value.strip().lower() == "nolimit" else value
+def normalize_model_recency_filter(value: str) -> str:
+    normalized = value.strip()
+    lowered = normalized.lower()
+    mapping = {
+        "oneday": "oneDay",
+        "day": "oneDay",
+        "oneweek": "oneWeek",
+        "week": "oneWeek",
+        "onemonth": "oneMonth",
+        "month": "oneMonth",
+        "oneyear": "oneYear",
+        "year": "oneYear",
+        "nolimit": "noLimit",
+    }
+    if not normalized:
+        return "noLimit"
+    return mapping.get(lowered, normalized)
+
+
+def map_recency_filter_to_provider(value: str) -> str:
+    return normalize_model_recency_filter(value)
 
 
 class ZhipuPlannerAgent:
@@ -160,16 +181,105 @@ class ZhipuCollectorAgent:
         self._model = model
 
     async def plan(self, invocation: CollectorInvocation) -> CollectorDecision:
-        payload = await _complete_json(
-            client=self._client,
-            invocation=invocation,
-        )
+        if invocation.prompt_bundle is None or invocation.profile is None:
+            raise RetryableOperationError("zhipu invocation contract is incomplete")
+        try:
+            result = await self._client.complete(
+                invocation=LLMInvocation(
+                    profile=invocation.profile,
+                    prompt_bundle=invocation.prompt_bundle,
+                    tool_schemas=invocation.tool_schemas,
+                )
+            )
+        except RiskControlTriggered:
+            raise
+        except RetryableLLMError as exc:
+            raise RetryableOperationError("zhipu upstream request failed") from exc
+
+        if result.tool_calls:
+            return self._parse_tool_calls(result)
+        return self._parse_stop_content(result)
+
+    @staticmethod
+    def _parse_tool_calls(result: "ZhipuCompletionResult") -> CollectorDecision:
+        tool_calls: list[CollectorToolCall] = []
+        for tc in result.tool_calls:
+            tool_name = str(tc.get("name") or "").strip()
+            if tool_name not in {"web_search", "web_fetch"}:
+                continue
+            try:
+                args = json.loads(tc.get("arguments") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(args, dict):
+                continue
+            if tool_name == "web_search":
+                query = str(args.get("search_query") or "").strip()
+                if not query:
+                    continue
+                arguments_json = {"search_query": query}
+                if "search_recency_filter" in args:
+                    arguments_json["search_recency_filter"] = normalize_model_recency_filter(
+                        str(args.get("search_recency_filter") or "noLimit")
+                    )
+                else:
+                    arguments_json["search_recency_filter"] = "noLimit"
+            else:
+                url = str(args.get("url") or "").strip()
+                if not url:
+                    continue
+                arguments_json = {"url": url}
+
+            tool_calls.append(
+                CollectorToolCall(
+                    tool_call_id=str(tc.get("id") or ""),
+                    tool_name=tool_name,
+                    arguments_json=arguments_json,
+                )
+            )
+
         return CollectorDecision(
-            reasoning_deltas=_coerce_string_tuple(payload.get("reasoning_deltas")),
-            search_queries=_coerce_string_tuple(payload.get("search_queries")),
-            search_recency_filter=normalize_recency_filter(
-                str(payload.get("search_recency_filter", "noLimit"))
-            ),
+            reasoning_text=result.reasoning_text.strip(),
+            content_text=result.text.strip(),
+            tool_calls=tuple(tool_calls),
+            stop=False,
+            items=(),
+        )
+
+    @staticmethod
+    def _parse_stop_content(result: "ZhipuCompletionResult") -> CollectorDecision:
+        try:
+            parsed = json.loads(strip_markdown_code_fence(result.text))
+        except json.JSONDecodeError as exc:
+            logger.error("collector returned invalid JSON response", exc_info=True)
+            raise RetryableOperationError("zhipu returned invalid JSON") from exc
+
+        if not isinstance(parsed, list):
+            raise RetryableOperationError("zhipu returned invalid JSON")
+
+        items: list[CollectedSourceItem] = []
+        for item in parsed:
+            if not isinstance(item, dict):
+                continue
+            title = _coerce_optional_string(item.get("title"))
+            link = _coerce_optional_string(item.get("link"))
+            info = _coerce_optional_string(item.get("info"))
+            if not title or not link or not info:
+                continue
+            items.append(
+                CollectedSourceItem(
+                    title=title,
+                    link=link,
+                    info=info,
+                )
+            )
+
+        return CollectorDecision(
+            reasoning_text=result.reasoning_text.strip(),
+            content_text=result.text.strip(),
+            tool_calls=(),
+            stop=True,
+            items=tuple(items),
         )
 
 
@@ -213,8 +323,9 @@ class ZhipuWebSearchClient:
         )
 
     async def search(self, query: str, recency_filter: str) -> SearchResponse:
-        normalized_filter = normalize_recency_filter(recency_filter)
-        logger.info("web_search starting: query=%s, recency=%s", query, normalized_filter)
+        model_filter = normalize_model_recency_filter(recency_filter)
+        provider_filter = map_recency_filter_to_provider(model_filter)
+        logger.info("web_search starting: query=%s, recency=%s", query, model_filter)
         try:
             response = await self._client.post(
                 self._endpoint_path,
@@ -223,7 +334,7 @@ class ZhipuWebSearchClient:
                     "query_rewrite": False,
                     "count": 10,
                     "search_query": query,
-                    "search_recency_filter": normalized_filter,
+                    "search_recency_filter": provider_filter,
                 },
             )
         except httpx.HTTPError as exc:
@@ -260,7 +371,7 @@ class ZhipuWebSearchClient:
         logger.info("web_search completed: query=%s, results_count=%d", query, len(results))
         return SearchResponse(
             query=query,
-            recency_filter=normalized_filter,
+            recency_filter=model_filter,
             results=tuple(results),
         )
 
@@ -319,7 +430,7 @@ class HttpWebFetchClient:
 async def _complete_json(
     *,
     client: ZhipuChatClient,
-    invocation: CollectorInvocation | SummaryInvocation,
+    invocation: SummaryInvocation,
 ) -> dict[str, Any]:
     if invocation.prompt_bundle is None or invocation.profile is None:
         raise RetryableOperationError("zhipu invocation contract is incomplete")
@@ -328,7 +439,7 @@ async def _complete_json(
         user_prompt=(
             invocation.prompt_bundle.user_prompt
             + "\n\n"
-            + _json_instruction_for_invocation(invocation)
+            + _summary_json_instruction()
         ).strip(),
         transcript=invocation.prompt_bundle.transcript,
     )
@@ -368,15 +479,7 @@ def _coerce_chat_client(
     return ZhipuChatClient(client=client)
 
 
-def _json_instruction_for_invocation(
-    invocation: CollectorInvocation | SummaryInvocation,
-) -> str:
-    if isinstance(invocation, CollectorInvocation):
-        return (
-            '请输出合法 JSON：{"reasoning_deltas": string[], "search_queries": string[], '
-            '"search_recency_filter": "day|week|month|year|noLimit"}。'
-            "不要输出 Markdown 代码块，不要输出额外解释。"
-        )
+def _summary_json_instruction() -> str:
     return (
         '请输出合法 JSON：{"status": "completed|partial|risk_blocked", '
         '"key_findings_markdown": string|null, "message": string|null}。'

@@ -12,8 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.application.dto.invocation import LLMInvocation
 from app.application.dto.research import (
+    CollectedSourceItem,
     CollectorDecision,
     CollectorInvocation,
+    CollectorToolCall,
     FetchResponse,
     PlannerDecision,
     PlannerInvocation,
@@ -87,10 +89,47 @@ class SixRoundPlannerAgent(PlannerAgent):
 
 class MinimalCollectorAgent(CollectorAgent):
     async def plan(self, invocation: CollectorInvocation) -> CollectorDecision:
+        if invocation.call_index == 1:
+            return CollectorDecision(
+                reasoning_text="执行最小搜索。",
+                content_text="",
+                tool_calls=(
+                    CollectorToolCall(
+                        tool_call_id=f"call_search_{invocation.plan.tool_call_id}",
+                        tool_name="web_search",
+                        arguments_json={
+                            "search_query": f"{invocation.plan.collect_target} 官方",
+                            "search_recency_filter": "noLimit",
+                        },
+                    ),
+                ),
+                stop=False,
+            )
+        if invocation.call_index == 2:
+            return CollectorDecision(
+                reasoning_text="读取最相关来源。",
+                content_text="",
+                tool_calls=(
+                    CollectorToolCall(
+                        tool_call_id=f"call_fetch_{invocation.plan.tool_call_id}",
+                        tool_name="web_fetch",
+                        arguments_json={"url": "https://example.com/b2b"},
+                    ),
+                ),
+                stop=False,
+            )
         return CollectorDecision(
-            reasoning_deltas=("执行最小搜索。",),
-            search_queries=(f"{invocation.plan.collect_target} 官方",),
-            search_recency_filter="noLimit",
+            reasoning_text="当前信息已足够。",
+            content_text='[{"info":"某产品发布面向政企客户的新能力。","title":"企业版能力发布","link":"https://example.com/b2b"}]',
+            tool_calls=(),
+            stop=True,
+            items=(
+                CollectedSourceItem(
+                    title="企业版能力发布",
+                    link="https://example.com/b2b",
+                    info="某产品发布面向政企客户的新能力。",
+                ),
+            ),
         )
 
 

@@ -795,7 +795,7 @@ DoD：
 - merge 后 refer 编号稳定、可预测
 - 并发 sub-agent 场景具备 integration tests
 - planner 多轮 replay 时，历史 reasoning content 与历史 tool messages 会一起进入下一轮 transcript
-- collector 当前虽启用 thinking，但仍是单轮调用；测试需明确其不发明额外 transcript replay
+- collector 必须按 PRD `func_8` 进行多轮 tool-calling；第 2 轮及以后，历史 reasoning content、历史 tool_calls 与对应 tool results 必须按原始时序回灌
 - Stage 5 的 Alembic migration 可正向和反向迁移
 
 ## 9.7 Stage 6: 撰写、E2B 与交付

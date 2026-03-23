@@ -108,7 +108,7 @@ def build_collector_prompt(*, invocation: CollectorInvocation) -> PromptBundle:
 
 <任务>
 核心目标：基于用户的目标和补充信息，进行高质量的信息搜集和整理。
-你应当使用提供的搜索和网页读取工具（web_search / web_fetch），获得需要的信息，当决定下一步动作时，遵循以下逻辑：
+你应当使用提供的搜索和网页读取工具，获得需要的信息，当决定下一步动作时，遵循以下逻辑：
 - 仔细观察并分析已有信息
 - 当未进行任何搜集，或历史结果不佳时，按需设置合理的工具参数使用工具进行搜集。
 - 当你的历史上下文中，搜索结果或网页内容已足够支撑用户目标时，停止进一步搜集，输出信息搜集结果。
@@ -133,6 +133,7 @@ def build_collector_prompt(*, invocation: CollectorInvocation) -> PromptBundle:
 {invocation.plan.freshness_requirement.value}
 </时效要求>
 """.strip(),
+        transcript=invocation.transcript,
     )
 
 

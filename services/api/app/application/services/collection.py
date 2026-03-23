@@ -5,6 +5,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -15,7 +16,9 @@ from app.application.dto.invocation import PromptBundle, PromptMessage, dump_pro
 from app.application.dto.research import (
     CollectResult,
     CollectedSourceItem,
+    CollectorDecision,
     CollectorInvocation,
+    CollectorToolCall,
     PlannerInvocation,
     SummaryInvocation,
 )
@@ -390,297 +393,526 @@ class CollectionOrchestrator:
         plan: CollectPlan,
         subtask_id: str,
     ) -> CollectResult:
-        invocation = CollectorInvocation(
-            prompt_name="collector_round",
-            subtask_id=subtask_id,
-            plan=plan,
-            call_index=1,
-            tool_call_limit=self._settings.subtask_tool_call_limit,
-            now=self._clock(),
-            profile=build_stage_profile(
-                settings=self._settings,
-                stage="collector",
-            ),
-            tool_schemas=(
-                build_web_search_tool_schema(),
-                build_web_fetch_tool_schema(),
-            ),
-        )
-        prompt_bundle = build_collector_prompt(invocation=invocation)
-        invocation = replace(invocation, prompt_bundle=prompt_bundle)
         logger.info(
             "collector subtask starting",
-            extra={"task_id": task_id, "subtask_id": subtask_id, "collect_target": plan.collect_target},
+            extra={
+                "task_id": task_id,
+                "subtask_id": subtask_id,
+                "collect_target": plan.collect_target,
+            },
         )
-        try:
-            decision = await self._invoke_operation(
-                lambda: self._collector_agent.plan(invocation)
-            )
-        except RiskControlTriggered:
-            logger.error(
-                "collector risk control triggered",
-                extra={"task_id": task_id, "subtask_id": subtask_id, "error_code": "risk_control_triggered"},
-                exc_info=True,
-            )
-            return await self._build_risk_blocked_collect_result(
-                task_id=task_id,
-                revision_id=revision_id,
-                subtask_id=subtask_id,
-                plan=plan,
-                prompt=prompt_bundle,
-                reasoning_text="collector 风控",
-            )
-        except RetryableOperationError:
-            logger.error(
-                "collector upstream error after retries",
-                extra={"task_id": task_id, "subtask_id": subtask_id, "error_code": "upstream_service_error"},
-                exc_info=True,
-            )
-            await self._fail_task(
-                task_id=task_id,
-                error_code="upstream_service_error",
-                message="collector 调用失败且重试耗尽。",
-            )
-            return CollectResult(
-                subtask_id=subtask_id,
-                tool_call_id=plan.tool_call_id,
-                collect_target=plan.collect_target,
-                status=CollectSummaryStatus.PARTIAL,
-                search_queries=tuple(),
-                tool_call_count=0,
-                items=tuple(),
-            )
 
-        for delta in decision.reasoning_deltas:
-            await self._append_event(
-                task_id=task_id,
-                event="collector.reasoning.delta",
-                payload={
-                    "subtask_id": subtask_id,
-                    "tool_call_id": plan.tool_call_id,
-                    "delta": delta,
-                },
-            )
-
-        tool_call_count = 0
+        call_index = 1
+        transcript: list[PromptMessage] = []
         search_queries: list[str] = []
         collected_items: list[CollectedSourceItem] = []
+        tool_call_count = 0
         partial = False
 
-        for query in decision.search_queries:
-            if tool_call_count >= self._settings.subtask_tool_call_limit:
-                partial = True
-                break
-
-            search_queries.append(query)
-            await self._append_event(
-                task_id=task_id,
-                event="collector.search.started",
-                payload={
-                    "subtask_id": subtask_id,
-                    "tool_call_id": plan.tool_call_id,
-                    "search_query": query,
-                    "search_recency_filter": decision.search_recency_filter,
-                },
+        while True:
+            invocation = CollectorInvocation(
+                prompt_name="collector_round",
+                subtask_id=subtask_id,
+                plan=plan,
+                call_index=call_index,
+                tool_call_limit=self._settings.subtask_tool_call_limit,
+                now=self._clock(),
+                transcript=tuple(transcript),
+                profile=build_stage_profile(
+                    settings=self._settings,
+                    stage="collector",
+                ),
+                tool_schemas=(
+                    build_web_search_tool_schema(),
+                    build_web_fetch_tool_schema(),
+                ),
             )
+            prompt_bundle = build_collector_prompt(invocation=invocation)
+            invocation = replace(invocation, prompt_bundle=prompt_bundle)
             try:
-                search_response = await self._invoke_operation(
-                    lambda query=query: self._web_search_client.search(
-                        query,
-                        decision.search_recency_filter,
-                    )
+                decision = await self._invoke_operation(
+                    lambda: self._collector_agent.plan(invocation)
                 )
-                search_status = "completed"
-                search_error_code = None
             except RiskControlTriggered:
+                logger.error(
+                    "collector risk control triggered",
+                    extra={
+                        "task_id": task_id,
+                        "subtask_id": subtask_id,
+                        "error_code": "risk_control_triggered",
+                    },
+                    exc_info=True,
+                )
                 return await self._build_risk_blocked_collect_result(
                     task_id=task_id,
                     revision_id=revision_id,
                     subtask_id=subtask_id,
                     plan=plan,
                     prompt=prompt_bundle,
-                    reasoning_text="\n".join(decision.reasoning_deltas),
+                    reasoning_text="collector 风控",
                 )
             except RetryableOperationError:
-                search_response = None
-                search_status = "failed"
-                search_error_code = "retry_exhausted"
-                partial = True
+                logger.error(
+                    "collector upstream error after retries",
+                    extra={
+                        "task_id": task_id,
+                        "subtask_id": subtask_id,
+                        "error_code": "upstream_service_error",
+                    },
+                    exc_info=True,
+                )
+                await self._fail_task(
+                    task_id=task_id,
+                    error_code="upstream_service_error",
+                    message="collector 调用失败且重试耗尽。",
+                )
+                return CollectResult(
+                    subtask_id=subtask_id,
+                    tool_call_id=plan.tool_call_id,
+                    collect_target=plan.collect_target,
+                    status=CollectSummaryStatus.PARTIAL,
+                    search_queries=tuple(search_queries),
+                    tool_call_count=tool_call_count,
+                    items=tuple(),
+                )
 
-            tool_call_count += 1
+            if decision.reasoning_text.strip():
+                await self._append_event(
+                    task_id=task_id,
+                    event="collector.reasoning.delta",
+                    payload={
+                        "subtask_id": subtask_id,
+                        "tool_call_id": plan.tool_call_id,
+                        "delta": decision.reasoning_text.strip(),
+                    },
+                )
+
+            now = self._clock()
             with self._session_factory() as session:
-                self._task_service.repository.append_tool_call(
+                self._task_service.repository.append_agent_run(
                     session=session,
                     task_id=task_id,
                     revision_id=revision_id,
                     subtask_id=subtask_id,
-                    tool_call_id=plan.tool_call_id,
-                    tool_name="web_search",
-                    status=search_status,
-                    error_code=search_error_code,
-                    request_json={
-                        "search_query": query,
-                        "search_recency_filter": decision.search_recency_filter,
-                    },
-                    response_json=None
-                    if search_response is None
-                    else {
-                        "result_count": len(search_response.results),
-                        "titles": [result.title for result in search_response.results],
-                    },
-                    created_at=self._clock(),
+                    agent_type="collector",
+                    prompt_name=invocation.prompt_name,
+                    status="stop" if decision.stop else "completed",
+                    reasoning_text=decision.reasoning_text or None,
+                    content_text=json.dumps(
+                        {
+                            "prompt_bundle": dump_prompt_bundle(prompt_bundle),
+                            "content_text": decision.content_text,
+                            "items": [
+                                {
+                                    "title": item.title,
+                                    "link": item.link,
+                                    "info": item.info,
+                                }
+                                for item in decision.items
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    finish_reason="stop" if decision.stop else "tool_calls_requested",
+                    tool_calls_json={
+                        "tool_calls": [
+                            {
+                                "tool_call_id": tool_call.tool_call_id,
+                                "tool_name": tool_call.tool_name,
+                                "arguments_json": tool_call.arguments_json,
+                            }
+                            for tool_call in decision.tool_calls
+                        ]
+                    }
+                    if decision.tool_calls
+                    else None,
+                    created_at=now,
+                    updated_at=now,
                 )
                 session.commit()
 
-            result_count = 0 if search_response is None else len(search_response.results)
-            titles = [] if search_response is None else [result.title for result in search_response.results]
-            await self._append_event(
-                task_id=task_id,
-                event="collector.search.completed",
-                payload={
-                    "subtask_id": subtask_id,
-                    "tool_call_id": plan.tool_call_id,
-                    "search_query": query,
-                    "result_count": result_count,
-                    "titles": titles,
-                },
+            if decision.stop:
+                final_items = decision.items or tuple(collected_items)
+                status = (
+                    CollectSummaryStatus.PARTIAL
+                    if partial or not final_items
+                    else CollectSummaryStatus.COMPLETED
+                )
+                result = CollectResult(
+                    subtask_id=subtask_id,
+                    tool_call_id=plan.tool_call_id,
+                    collect_target=plan.collect_target,
+                    status=status,
+                    search_queries=tuple(search_queries),
+                    tool_call_count=tool_call_count,
+                    items=tuple(final_items),
+                )
+                await self._persist_collect_result(
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    result=result,
+                )
+                await self._append_event(
+                    task_id=task_id,
+                    event="collector.completed",
+                    payload={
+                        "subtask_id": subtask_id,
+                        "tool_call_id": plan.tool_call_id,
+                        "status": result.status.value,
+                        "item_count": len(result.items),
+                        "search_queries": list(result.search_queries),
+                    },
+                )
+                return result
+
+            if not decision.tool_calls:
+                await self._fail_task(
+                    task_id=task_id,
+                    error_code="collector_invalid_output",
+                    message="collector 未返回有效工具调用或最终结果。",
+                )
+                return CollectResult(
+                    subtask_id=subtask_id,
+                    tool_call_id=plan.tool_call_id,
+                    collect_target=plan.collect_target,
+                    status=CollectSummaryStatus.PARTIAL,
+                    search_queries=tuple(search_queries),
+                    tool_call_count=tool_call_count,
+                    items=tuple(collected_items),
+                )
+
+            assistant_tool_calls = _collector_tool_call_payloads(decision.tool_calls)
+            transcript.append(
+                PromptMessage(
+                    role="assistant",
+                    content=decision.content_text,
+                    tool_calls=assistant_tool_calls,
+                    reasoning_content=decision.reasoning_text or None,
+                )
             )
 
-            if search_response is None:
-                continue
-
-            for result in search_response.results:
+            tool_messages: list[PromptMessage] = []
+            for tool_call in decision.tool_calls:
+                if tool_call_count >= self._settings.subtask_tool_call_limit:
+                    partial = True
+                    break
+                try:
+                    tool_message, tool_payload, new_items = await self._execute_collector_tool_call(
+                        task_id=task_id,
+                        revision_id=revision_id,
+                        subtask_id=subtask_id,
+                        plan=plan,
+                        tool_call=tool_call,
+                    )
+                except RiskControlTriggered:
+                    return await self._build_risk_blocked_collect_result(
+                        task_id=task_id,
+                        revision_id=revision_id,
+                        subtask_id=subtask_id,
+                        plan=plan,
+                        prompt=prompt_bundle,
+                        reasoning_text=decision.reasoning_text,
+                    )
+                tool_messages.append(tool_message)
+                if tool_call.tool_name == "web_search":
+                    search_query = str(tool_call.arguments_json.get("search_query") or "")
+                    if search_query:
+                        search_queries.append(search_query)
+                collected_items.extend(new_items)
+                tool_call_count += 1
+                if tool_payload.get("success") is False:
+                    partial = True
                 if tool_call_count >= self._settings.subtask_tool_call_limit:
                     partial = True
                     break
 
+            transcript.extend(tool_messages)
+            if partial and tool_call_count >= self._settings.subtask_tool_call_limit:
+                result = CollectResult(
+                    subtask_id=subtask_id,
+                    tool_call_id=plan.tool_call_id,
+                    collect_target=plan.collect_target,
+                    status=CollectSummaryStatus.PARTIAL,
+                    search_queries=tuple(search_queries),
+                    tool_call_count=tool_call_count,
+                    items=tuple(collected_items),
+                )
+                await self._persist_collect_result(
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    result=result,
+                )
                 await self._append_event(
                     task_id=task_id,
-                    event="collector.fetch.started",
+                    event="collector.completed",
                     payload={
                         "subtask_id": subtask_id,
                         "tool_call_id": plan.tool_call_id,
-                        "url": result.link,
+                        "status": result.status.value,
+                        "item_count": len(result.items),
+                        "search_queries": list(result.search_queries),
                     },
                 )
-                try:
-                    fetch_response = await self._invoke_operation(
-                        lambda url=result.link: self._web_fetch_client.fetch(url)
-                    )
-                    fetch_status = "completed"
-                    fetch_error_code = None
-                except RetryableOperationError:
-                    fetch_response = None
-                    fetch_status = "failed"
-                    fetch_error_code = "retry_exhausted"
-                    partial = True
+                return result
 
-                tool_call_count += 1
-                with self._session_factory() as session:
-                    self._task_service.repository.append_tool_call(
-                        session=session,
-                        task_id=task_id,
-                        revision_id=revision_id,
-                        subtask_id=subtask_id,
-                        tool_call_id=plan.tool_call_id,
-                        tool_name="web_fetch",
-                        status=fetch_status,
-                        error_code=fetch_error_code,
-                        request_json={"url": result.link},
-                        response_json=None
-                        if fetch_response is None
-                        else {
-                            "success": fetch_response.success,
-                            "title": fetch_response.title,
-                        },
-                        created_at=self._clock(),
-                    )
-                    session.commit()
+            call_index += 1
 
-                await self._append_event(
-                    task_id=task_id,
-                    event="collector.fetch.completed",
-                    payload={
-                        "subtask_id": subtask_id,
-                        "tool_call_id": plan.tool_call_id,
-                        "url": result.link,
-                        "success": False if fetch_response is None else fetch_response.success,
-                        "title": None if fetch_response is None else fetch_response.title,
-                    },
-                )
-                if fetch_response is None or not fetch_response.success:
-                    continue
-
-                collected_items.append(
-                    CollectedSourceItem(
-                        title=fetch_response.title or result.title,
-                        link=result.link,
-                        info=(fetch_response.content or "")[
-                            : self._settings.fetched_content_limit
-                        ],
-                    )
-                )
-
-        status = CollectSummaryStatus.PARTIAL if partial else CollectSummaryStatus.COMPLETED
-        result = CollectResult(
-            subtask_id=subtask_id,
-            tool_call_id=plan.tool_call_id,
-            collect_target=plan.collect_target,
-            status=status,
-            search_queries=tuple(search_queries),
-            tool_call_count=tool_call_count,
-            items=tuple(collected_items),
+    async def _execute_collector_tool_call(
+        self,
+        *,
+        task_id: str,
+        revision_id: str,
+        subtask_id: str,
+        plan: CollectPlan,
+        tool_call: CollectorToolCall,
+    ) -> tuple[PromptMessage, dict[str, object], tuple[CollectedSourceItem, ...]]:
+        if tool_call.tool_name == "web_search":
+            return await self._execute_collector_search(
+                task_id=task_id,
+                revision_id=revision_id,
+                subtask_id=subtask_id,
+                plan=plan,
+                tool_call=tool_call,
+            )
+        if tool_call.tool_name == "web_fetch":
+            return await self._execute_collector_fetch(
+                task_id=task_id,
+                revision_id=revision_id,
+                subtask_id=subtask_id,
+                plan=plan,
+                tool_call=tool_call,
+            )
+        payload = {
+            "success": False,
+            "error_code": "unsupported_tool",
+            "tool_name": tool_call.tool_name,
+        }
+        return (
+            PromptMessage(
+                role="tool",
+                name=tool_call.tool_name,
+                tool_call_id=tool_call.tool_call_id,
+                content=json.dumps(payload, ensure_ascii=False, indent=2),
+            ),
+            payload,
+            (),
         )
-        now = self._clock()
+
+    async def _execute_collector_search(
+        self,
+        *,
+        task_id: str,
+        revision_id: str,
+        subtask_id: str,
+        plan: CollectPlan,
+        tool_call: CollectorToolCall,
+    ) -> tuple[PromptMessage, dict[str, object], tuple[CollectedSourceItem, ...]]:
+        search_query = str(tool_call.arguments_json.get("search_query") or "").strip()
+        search_recency_filter = str(
+            tool_call.arguments_json.get("search_recency_filter") or "noLimit"
+        ).strip()
+        await self._append_event(
+            task_id=task_id,
+            event="collector.search.started",
+            payload={
+                "subtask_id": subtask_id,
+                "tool_call_id": plan.tool_call_id,
+                "search_query": search_query,
+                "search_recency_filter": search_recency_filter,
+            },
+        )
+        try:
+            search_response = await self._invoke_operation(
+                lambda: self._web_search_client.search(search_query, search_recency_filter)
+            )
+            status = "completed"
+            error_code = None
+        except RiskControlTriggered:
+            raise
+        except RetryableOperationError:
+            search_response = None
+            status = "failed"
+            error_code = "retry_exhausted"
+
         with self._session_factory() as session:
-            self._task_service.repository.append_agent_run(
+            self._task_service.repository.append_tool_call(
                 session=session,
                 task_id=task_id,
                 revision_id=revision_id,
                 subtask_id=subtask_id,
-                agent_type="collector",
-                prompt_name=invocation.prompt_name,
-                status=result.status.value,
-                reasoning_text="\n".join(decision.reasoning_deltas),
-                content_text=json.dumps(
-                    {
-                        "prompt_bundle": dump_prompt_bundle(prompt_bundle),
-                        "search_queries": list(result.search_queries),
-                        "tool_call_count": result.tool_call_count,
-                    },
-                    ensure_ascii=False,
-                ),
-                finish_reason=result.status.value,
-                tool_calls_json={
-                    "search_queries": list(result.search_queries),
+                tool_call_id=tool_call.tool_call_id,
+                tool_name="web_search",
+                status=status,
+                error_code=error_code,
+                request_json={
+                    "search_query": search_query,
+                    "search_recency_filter": search_recency_filter,
                 },
-                created_at=now,
-                updated_at=now,
+                response_json=None
+                if search_response is None
+                else {
+                    "result_count": len(search_response.results),
+                    "titles": [result.title for result in search_response.results],
+                },
+                created_at=self._clock(),
             )
-            if result.items:
-                self._task_service.repository.append_collected_sources(
-                    session=session,
-                    task_id=task_id,
-                    revision_id=revision_id,
-                    subtask_id=subtask_id,
-                    tool_call_id=plan.tool_call_id,
-                    items=result.items,
-                    created_at=now,
-                )
+            session.commit()
+
+        titles = [] if search_response is None else [result.title for result in search_response.results]
+        await self._append_event(
+            task_id=task_id,
+            event="collector.search.completed",
+            payload={
+                "subtask_id": subtask_id,
+                "tool_call_id": plan.tool_call_id,
+                "search_query": search_query,
+                "result_count": 0 if search_response is None else len(search_response.results),
+                "titles": titles,
+            },
+        )
+
+        payload: dict[str, object] = {
+            "success": search_response is not None,
+            "search_query": search_query,
+            "search_recency_filter": search_recency_filter,
+            "results": []
+            if search_response is None
+            else [
+                {
+                    "title": result.title,
+                    "link": result.link,
+                    "snippet": result.snippet,
+                }
+                for result in search_response.results
+            ],
+        }
+        if error_code is not None:
+            payload["error_code"] = error_code
+        return (
+            PromptMessage(
+                role="tool",
+                name="web_search",
+                tool_call_id=tool_call.tool_call_id,
+                content=json.dumps(payload, ensure_ascii=False, indent=2),
+            ),
+            payload,
+            (),
+        )
+
+    async def _execute_collector_fetch(
+        self,
+        *,
+        task_id: str,
+        revision_id: str,
+        subtask_id: str,
+        plan: CollectPlan,
+        tool_call: CollectorToolCall,
+    ) -> tuple[PromptMessage, dict[str, object], tuple[CollectedSourceItem, ...]]:
+        url = str(tool_call.arguments_json.get("url") or "").strip()
+        await self._append_event(
+            task_id=task_id,
+            event="collector.fetch.started",
+            payload={
+                "subtask_id": subtask_id,
+                "tool_call_id": plan.tool_call_id,
+                "url": url,
+            },
+        )
+        try:
+            fetch_response = await self._invoke_operation(
+                lambda: self._web_fetch_client.fetch(url)
+            )
+            status = "completed"
+            error_code = None
+        except RetryableOperationError:
+            fetch_response = None
+            status = "failed"
+            error_code = "retry_exhausted"
+
+        with self._session_factory() as session:
+            self._task_service.repository.append_tool_call(
+                session=session,
+                task_id=task_id,
+                revision_id=revision_id,
+                subtask_id=subtask_id,
+                tool_call_id=tool_call.tool_call_id,
+                tool_name="web_fetch",
+                status=status,
+                error_code=error_code,
+                request_json={"url": url},
+                response_json=None
+                if fetch_response is None
+                else {
+                    "success": fetch_response.success,
+                    "title": fetch_response.title,
+                },
+                created_at=self._clock(),
+            )
             session.commit()
 
         await self._append_event(
             task_id=task_id,
-            event="collector.completed",
+            event="collector.fetch.completed",
             payload={
                 "subtask_id": subtask_id,
                 "tool_call_id": plan.tool_call_id,
-                "status": result.status.value,
-                "item_count": len(result.items),
-                "search_queries": list(result.search_queries),
+                "url": url,
+                "success": False if fetch_response is None else fetch_response.success,
+                "title": None if fetch_response is None else fetch_response.title,
             },
         )
-        return result
+
+        truncated_content = None
+        collected_items: tuple[CollectedSourceItem, ...] = ()
+        if fetch_response is not None and fetch_response.success:
+            truncated_content = (fetch_response.content or "")[: self._settings.fetched_content_limit]
+            collected_items = (
+                CollectedSourceItem(
+                    title=fetch_response.title or url,
+                    link=url,
+                    info=truncated_content,
+                ),
+            )
+
+        payload: dict[str, object] = {
+            "success": fetch_response is not None and fetch_response.success,
+            "url": url,
+            "title": None if fetch_response is None else fetch_response.title,
+            "content": truncated_content,
+        }
+        if error_code is not None:
+            payload["error_code"] = error_code
+        return (
+            PromptMessage(
+                role="tool",
+                name="web_fetch",
+                tool_call_id=tool_call.tool_call_id,
+                content=json.dumps(payload, ensure_ascii=False, indent=2),
+            ),
+            payload,
+            collected_items,
+        )
+
+    async def _persist_collect_result(
+        self,
+        *,
+        task_id: str,
+        revision_id: str,
+        result: CollectResult,
+    ) -> None:
+        if not result.items:
+            return
+        with self._session_factory() as session:
+            self._task_service.repository.append_collected_sources(
+                session=session,
+                task_id=task_id,
+                revision_id=revision_id,
+                subtask_id=result.subtask_id,
+                tool_call_id=result.tool_call_id,
+                items=result.items,
+                created_at=self._clock(),
+            )
+            session.commit()
 
     async def _run_summary_round(
         self,
@@ -1117,6 +1349,22 @@ def _planner_tool_call_payloads_from_plan_payloads(
             },
         }
         for plan in plans
+    )
+
+
+def _collector_tool_call_payloads(
+    tool_calls: tuple[CollectorToolCall, ...],
+) -> tuple[dict[str, object], ...]:
+    return tuple(
+        {
+            "id": tool_call.tool_call_id,
+            "type": "function",
+            "function": {
+                "name": tool_call.tool_name,
+                "arguments": json.dumps(tool_call.arguments_json, ensure_ascii=False),
+            },
+        }
+        for tool_call in tool_calls
     )
 
 
