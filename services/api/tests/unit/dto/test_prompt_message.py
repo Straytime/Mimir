@@ -26,3 +26,17 @@ def test_prompt_message_no_tool_calls_omits_field() -> None:
 
     assert "tool_calls" not in payload
     assert payload == {"role": "user", "content": "hello"}
+
+
+def test_prompt_message_includes_reasoning_content_when_present() -> None:
+    msg = PromptMessage(
+        role="assistant",
+        content="正文",
+        reasoning_content="先思考框架，再给正文。",
+    )
+
+    payload = msg.to_provider_payload()
+
+    assert payload["role"] == "assistant"
+    assert payload["content"] == "正文"
+    assert payload["reasoning_content"] == "先思考框架，再给正文。"

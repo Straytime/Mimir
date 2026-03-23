@@ -771,6 +771,8 @@ DoD：
 - 搜集目标执行 prompt invariant tests
 - 目标执行总结 prompt invariant tests
 - planner / collector / summary 调用 profile contract tests
+- 所有 `thinking=True` stage 的 `clear_thinking` 必须显式为 `false`
+- planner 第 2 轮及以后必须回灌历史 reasoning content + tool_calls + tool_results，且顺序稳定
 - `collect_agent` / `web_search` / `web_fetch` request construction contract tests
 
 实现内容：
@@ -792,6 +794,8 @@ DoD：
 - 风控与通用重试逻辑全部具备回归测试
 - merge 后 refer 编号稳定、可预测
 - 并发 sub-agent 场景具备 integration tests
+- planner 多轮 replay 时，历史 reasoning content 与历史 tool messages 会一起进入下一轮 transcript
+- collector 当前虽启用 thinking，但仍是单轮调用；测试需明确其不发明额外 transcript replay
 - Stage 5 的 Alembic migration 可正向和反向迁移
 
 ## 9.7 Stage 6: 撰写、E2B 与交付
@@ -820,6 +824,8 @@ DoD：
 - 无图片的 `python_interpreter` 结果仍返回 `summary`，且 zip 不误改写非图片正文
 - provider 返回独立 writer reasoning 字段时，`agent_runs.reasoning_text` 会落库，且不混入最终 markdown
 - writer 多轮 `content`（round1/2/3）会按顺序组装成交付 markdown，不能只取 terminal round
+- 所有 `thinking=True` stage 的 `clear_thinking` 必须显式为 `false`
+- writer 第 2 轮及以后必须回灌历史 reasoning content + tool_calls + tool_results，且顺序稳定
 - writer 达到 `MIMIR_WRITER_MAX_ROUNDS` 后若仍有 `tool_calls`，必须 `task.failed`，不能继续 `report.completed`
 - writer 最终 markdown 为空白时必须 `task.failed`，不能交付 `0 字 / 0 配图` 空报告
 - `Settings` 必须能正确读取 `MIMIR_WRITER_MAX_ROUNDS`，默认值保持 `5`
@@ -847,6 +853,7 @@ DoD：
 - 正文 markdown 只保存 canonical artifact path，在线渲染与 zip 导出各自完成映射
 - writer reasoning content 仅进入 `agent_runs.reasoning_text` / 调试持久化，不进入最终 `report.md`
 - writer 成功交付时，最终 markdown 必须包含所有 round 的正文片段，顺序与 round 顺序一致
+- writer 多轮 replay 时，历史 reasoning content、历史正文和历史 tool messages 都会进入下一轮 transcript
 - writer 成功交付的前提是：无剩余 `tool_calls` 且最终 markdown 非空白
 - sandbox 代码执行失败不应直接触发 `task.failed`；只有 infra / upload / store 路径仍可直接失败收口
 - PDF / ZIP 均能从 temp artifact store 正常生成

@@ -9,52 +9,9 @@ from app.application.dto.research import (
 
 
 def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
-    tool_messages = tuple(
-        PromptMessage(
-            role="tool",
-            name="collect_agent",
-            tool_call_id=summary.tool_call_id,
-            content=json.dumps(
-                summary.model_dump(mode="json", exclude_none=True),
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-        for summary in invocation.summaries
+    transcript = invocation.transcript or _build_default_planner_transcript(
+        invocation.summaries
     )
-    if tool_messages:
-        assistant_tool_calls = tuple(
-            {
-                "id": summary.tool_call_id,
-                "type": "function",
-                "function": {
-                    "name": "collect_agent",
-                    "arguments": json.dumps(
-                        {
-                            k: v
-                            for k, v in {
-                                "collect_target": summary.collect_target,
-                                "additional_info": summary.additional_info,
-                                "freshness_requirement": summary.freshness_requirement,
-                            }.items()
-                            if v is not None
-                        },
-                        ensure_ascii=False,
-                    ),
-                },
-            }
-            for summary in invocation.summaries
-        )
-        transcript = (
-            PromptMessage(
-                role="assistant",
-                content="",
-                tool_calls=assistant_tool_calls,
-            ),
-            *tool_messages,
-        )
-    else:
-        transcript = ()
     return PromptBundle(
         system_prompt="""
 <背景>
@@ -91,6 +48,54 @@ def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
 </需求详情>
 """.strip(),
         transcript=transcript,
+    )
+
+
+def _build_default_planner_transcript(summaries) -> tuple[PromptMessage, ...]:
+    tool_messages = tuple(
+        PromptMessage(
+            role="tool",
+            name="collect_agent",
+            tool_call_id=summary.tool_call_id,
+            content=json.dumps(
+                summary.model_dump(mode="json", exclude_none=True),
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+        for summary in summaries
+    )
+    if not tool_messages:
+        return ()
+    assistant_tool_calls = tuple(
+        {
+            "id": summary.tool_call_id,
+            "type": "function",
+            "function": {
+                "name": "collect_agent",
+                "arguments": json.dumps(
+                    {
+                        k: v
+                        for k, v in {
+                            "collect_target": summary.collect_target,
+                            "additional_info": summary.additional_info,
+                            "freshness_requirement": summary.freshness_requirement,
+                        }.items()
+                        if v is not None
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        }
+        for summary in summaries
+    )
+    return (
+        PromptMessage(
+            role="assistant",
+            content="",
+            tool_calls=assistant_tool_calls,
+        ),
+        *tool_messages,
     )
 
 

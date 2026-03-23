@@ -95,7 +95,7 @@ class ZhipuPlannerAgent:
                 )
             except (KeyError, ValueError):
                 continue
-        reasoning_text = result.text.strip()
+        reasoning_text = (result.reasoning_text or result.text).strip()
         reasoning_deltas = (reasoning_text,) if reasoning_text else ()
         return PlannerDecision(
             reasoning_deltas=reasoning_deltas,
@@ -121,6 +121,8 @@ class ZhipuPlannerAgent:
             return PlannerDecision(reasoning_deltas=(), plans=(), stop=True)
 
         reasoning_deltas = _coerce_string_tuple(parsed.get("reasoning_deltas"))
+        if not reasoning_deltas and result.reasoning_text.strip():
+            reasoning_deltas = (result.reasoning_text.strip(),)
         stop = bool(parsed.get("stop", False))
         raw_plans = parsed.get("plans") or ()
         plans: list[CollectPlan] = []

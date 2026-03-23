@@ -395,6 +395,26 @@ async def test_full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_m
     assert search.scenario.max_concurrent_calls == 3
     assert len(planner.invocations) == 2
     assert len(planner.invocations[1].summaries) == 3
+    replay_transcript = planner.invocations[1].prompt_bundle.transcript
+    assert replay_transcript is not None
+    assert [message.role for message in replay_transcript] == [
+        "assistant",
+        "tool",
+        "tool",
+        "tool",
+    ]
+    assert replay_transcript[0].reasoning_content == "当前还缺少代表性玩家与市场趋势信息。"
+    assert replay_transcript[0].tool_calls is not None
+    assert [tc["id"] for tc in replay_transcript[0].tool_calls] == [
+        "call_1",
+        "call_2",
+        "call_3",
+    ]
+    assert [message.tool_call_id for message in replay_transcript[1:]] == [
+        "call_1",
+        "call_2",
+        "call_3",
+    ]
     assert revision is not None
     assert revision.collect_agent_calls_used == 3
     assert [source.refer for source in merged_sources] == ["ref_1", "ref_2", "ref_3"]

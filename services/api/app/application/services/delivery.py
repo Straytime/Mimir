@@ -407,6 +407,7 @@ class DeliveryOrchestrator:
                 role="assistant",
                 content=decision.text,
                 tool_calls=tc_payloads,
+                reasoning_content=decision.reasoning_text or None,
             ))
 
             for tc in decision.tool_calls:

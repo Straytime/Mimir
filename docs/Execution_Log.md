@@ -2538,3 +2538,47 @@ Copy the template below for each completed session:
     - `agent_runs.content_text`
     - 最终 `report.md`
   - 若后续要做前端 typewriter streaming 或更细粒度 writer 增量展示，应单独开任务包，不在本次范围内扩张
+
+## R1-036 Thinking Replay Contract For Multi-Round LLM Calls
+
+- 日期时间: 2026-03-23 15:18:30 CST (+0800)
+- 任务包编号: R1-036
+- session 标识: `codex/r1-035-writer-reasoning-assembly`
+- 目标摘要:
+  - 收敛 `thinking.type = enabled` 的调用契约，明确 `clear_thinking=false`
+  - 为当前真实存在多轮 transcript 的 `planner` / `writer` 路径补上历史 reasoning replay
+  - 保持 reasoning 只用于模型连续推理与 debug，不污染最终业务正文
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `services/api/app/application/dto/invocation.py`
+  - `services/api/app/application/dto/research.py`
+  - `services/api/app/application/prompts/collection.py`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/infrastructure/research/real_http.py`
+  - `services/api/tests/unit/application/test_invocation_contracts.py`
+  - `services/api/tests/unit/dto/test_prompt_message.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_invocation_contracts.py tests/unit/dto/test_prompt_message.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py -k 'stage_profiles_match_architecture_defaults or prompt_message_includes_reasoning_content_when_present or full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_merge or persists_reasoning_text_and_assembles_multi_round_markdown_in_order'`
+    - 初次结果: `3 failed`
+    - 修补后结果: `4 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_invocation_contracts.py tests/unit/application/prompts/test_planner_prompt.py tests/unit/application/test_collection_prompts.py tests/unit/dto/test_prompt_message.py tests/unit/infrastructure/test_zhipu_adapters.py tests/unit/infrastructure/test_zhipu_outline_agent.py tests/unit/infrastructure/test_zhipu_writer_agent.py tests/contract/rest/test_collection_events.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `88 passed`
+- 验收结论:
+  - 所有 `thinking=True` stage 现在都由测试锁定 `clear_thinking=false`：`planner`、`collector`、`outline`、`writer`
+  - `PromptMessage` 新增 `reasoning_content`，会进入 provider payload 与 prompt bundle dump
+  - `writer` 第 2 轮及以后会回灌上一轮及更早轮次的 `reasoning_content`、`content`、`tool_calls`、`tool_results`，时序保持为 `assistant -> tool`
+  - `planner` 第 2 轮及以后会基于历史 `agent_runs` 与 `CollectSummary[]` 重建 transcript，并回灌上一轮 reasoning content、tool calls 与 tool results
+  - `collector` 与 `outline` 虽然启用 thinking，但当前仍是单轮调用；本次未凭空发明新的 transcript replay 机制
+  - reasoning content 仅用于下一轮推理与调试，不会进入最终 `report.md` 或其他用户正文输出
+- blocker / 风险:
+  - 无当前 blocker
+  - `planner` replay 依赖历史 `agent_runs.content_text.plans` 与 `CollectSummary[]` 数量对齐；若后续修改 planner 落库结构，需要同步调整 replay 组装测试
+- 下一步建议:
+  - 若继续做真实 provider 联调，可优先观察生产 `planner` / `writer` 多轮调用中，下一轮 transcript 是否已稳定携带历史 reasoning content
+  - 若未来要给 `collector` 引入真正多轮 agent loop，应复用本次 `reasoning_content + assistant/tool 时序` 契约，不要再发明平行格式

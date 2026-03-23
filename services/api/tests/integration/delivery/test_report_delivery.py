@@ -589,6 +589,15 @@ async def test_writer_persists_reasoning_text_and_assembles_multi_round_markdown
         "收到第二张图后完成结尾。",
     ]
 
+    round_two_transcript = writer_agent.invocations[1].prompt_bundle.transcript
+    assert round_two_transcript is not None
+    assert [message.role for message in round_two_transcript] == ["assistant", "tool"]
+    assert round_two_transcript[0].reasoning_content == "先写研究背景，再请求第一张图。"
+    assert round_two_transcript[0].tool_calls is not None
+    assert round_two_transcript[0].tool_calls[0]["id"] == "call_writer_round_1"
+    assert round_two_transcript[1].tool_call_id == "call_writer_round_1"
+    assert json.loads(round_two_transcript[1].content)["summary"] == "ok"
+
     first_idx = report_markdown.index("第一部分正文，并以“让我们绘制市场份额图”收尾。")
     second_idx = report_markdown.index("第二部分正文，承接第一张图后的分析，并继续请求趋势图。")
     third_idx = report_markdown.index("第三部分正文，承接第二张图并给出最终结论。")
