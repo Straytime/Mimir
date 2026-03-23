@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from app.application.dto.invocation import (
     InvocationProfile,
@@ -40,16 +41,26 @@ class CollectorInvocation:
     call_index: int
     tool_call_limit: int
     now: datetime
+    transcript: tuple[PromptMessage, ...] = ()
     profile: InvocationProfile | None = None
     prompt_bundle: PromptBundle | None = None
     tool_schemas: tuple[ToolSchema, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
+class CollectorToolCall:
+    tool_call_id: str
+    tool_name: str
+    arguments_json: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
 class CollectorDecision:
-    reasoning_deltas: tuple[str, ...]
-    search_queries: tuple[str, ...]
-    search_recency_filter: str = "noLimit"
+    reasoning_text: str
+    content_text: str
+    tool_calls: tuple[CollectorToolCall, ...]
+    stop: bool
+    items: tuple["CollectedSourceItem", ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

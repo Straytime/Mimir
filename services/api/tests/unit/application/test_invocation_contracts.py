@@ -88,10 +88,10 @@ def test_tool_schemas_match_current_architecture_contract() -> None:
         "search_recency_filter",
     }
     assert web_search.parameters["search_recency_filter"]["enum"] == [
-        "day",
-        "week",
-        "month",
-        "year",
+        "oneDay",
+        "oneWeek",
+        "oneMonth",
+        "oneYear",
         "noLimit",
     ]
 

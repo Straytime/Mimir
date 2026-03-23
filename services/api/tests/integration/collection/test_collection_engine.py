@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
@@ -13,6 +14,7 @@ from app.application.dto.research import (
     CollectedSourceItem,
     CollectorDecision,
     CollectorInvocation,
+    CollectorToolCall,
     FetchResponse,
     PlannerDecision,
     PlannerInvocation,
@@ -78,17 +80,99 @@ class ScriptedPlannerAgent(PlannerAgent):
 
 
 class ScriptedCollectorAgent(CollectorAgent):
-    def __init__(self, query_by_tool_call: dict[str, Sequence[str]]) -> None:
-        self.query_by_tool_call = query_by_tool_call
+    def __init__(self, rounds_by_tool_call: dict[str, Sequence[CollectorDecision]]) -> None:
+        self._rounds_by_tool_call = {
+            key: list(rounds)
+            for key, rounds in rounds_by_tool_call.items()
+        }
         self.invocations: list[CollectorInvocation] = []
+        self.invocations_by_tool_call: dict[str, list[CollectorInvocation]] = {}
 
     async def plan(self, invocation: CollectorInvocation) -> CollectorDecision:
         self.invocations.append(invocation)
-        return CollectorDecision(
-            reasoning_deltas=(f"开始处理 {invocation.plan.collect_target}",),
-            search_queries=tuple(self.query_by_tool_call[invocation.plan.tool_call_id]),
-            search_recency_filter="noLimit",
+        self.invocations_by_tool_call.setdefault(invocation.plan.tool_call_id, []).append(
+            invocation
         )
+        rounds = self._rounds_by_tool_call.get(invocation.plan.tool_call_id)
+        if not rounds:
+            raise AssertionError(
+                f"collector called more times than expected: {invocation.plan.tool_call_id}"
+            )
+        return rounds.pop(0)
+
+
+def _collector_search_round(
+    *,
+    tool_call_id: str,
+    query: str,
+    reasoning: str,
+    recency_filter: str = "noLimit",
+) -> CollectorDecision:
+    return CollectorDecision(
+        reasoning_text=reasoning,
+        content_text="",
+        tool_calls=(
+            CollectorToolCall(
+                tool_call_id=tool_call_id,
+                tool_name="web_search",
+                arguments_json={
+                    "search_query": query,
+                    "search_recency_filter": recency_filter,
+                },
+            ),
+        ),
+        stop=False,
+        items=(),
+    )
+
+
+def _collector_fetch_round(
+    *,
+    tool_call_id: str,
+    url: str,
+    reasoning: str,
+) -> CollectorDecision:
+    return CollectorDecision(
+        reasoning_text=reasoning,
+        content_text="",
+        tool_calls=(
+            CollectorToolCall(
+                tool_call_id=tool_call_id,
+                tool_name="web_fetch",
+                arguments_json={"url": url},
+            ),
+        ),
+        stop=False,
+        items=(),
+    )
+
+
+def _collector_stop_round(
+    *,
+    reasoning: str,
+    items: Sequence[CollectedSourceItem],
+) -> CollectorDecision:
+    return CollectorDecision(
+        reasoning_text=reasoning,
+        content_text="".join(
+            [
+                json.dumps(
+                    [
+                        {
+                            "info": item.info,
+                            "title": item.title,
+                            "link": item.link,
+                        }
+                        for item in items
+                    ],
+                    ensure_ascii=False,
+                )
+            ]
+        ),
+        tool_calls=(),
+        stop=True,
+        items=tuple(items),
+    )
 
 
 class ScriptedSummaryAgent(SummaryAgent):
@@ -292,10 +376,83 @@ async def test_full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_m
         ]
     )
     collector = ScriptedCollectorAgent(
-        query_by_tool_call={
-            "call_1": ("q_players",),
-            "call_2": ("q_trends",),
-            "call_3": ("q_opportunities",),
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_search_round(
+                    tool_call_id="call_search_players",
+                    query="q_players",
+                    reasoning="先搜索主要玩家。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_players_a",
+                    url="https://example.com/a",
+                    reasoning="需要读取来源 A。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_players_shared",
+                    url="https://example.com/shared",
+                    reasoning="再读取共享来源。",
+                ),
+                _collector_stop_round(
+                    reasoning="已有足够信息，结束收集。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 A",
+                            link="https://example.com/a",
+                            info="A 内容",
+                        ),
+                        CollectedSourceItem(
+                            title="来源 Shared",
+                            link="https://example.com/shared",
+                            info="Shared 内容",
+                        ),
+                    ),
+                ),
+            ),
+            "call_2": (
+                _collector_search_round(
+                    tool_call_id="call_search_trends",
+                    query="q_trends",
+                    reasoning="先搜索市场趋势。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_trends_shared",
+                    url="https://example.com/shared",
+                    reasoning="读取共享趋势来源。",
+                ),
+                _collector_stop_round(
+                    reasoning="趋势信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 Shared",
+                            link="https://example.com/shared",
+                            info="Shared 内容",
+                        ),
+                    ),
+                ),
+            ),
+            "call_3": (
+                _collector_search_round(
+                    tool_call_id="call_search_opportunities",
+                    query="q_opportunities",
+                    reasoning="搜索商业机会。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_opportunities_c",
+                    url="https://example.com/c",
+                    reasoning="读取商业机会来源。",
+                ),
+                _collector_stop_round(
+                    reasoning="商业机会信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 C",
+                            link="https://example.com/c",
+                            info="C 内容",
+                        ),
+                    ),
+                ),
+            ),
         }
     )
     summarizer = ScriptedSummaryAgent()
@@ -421,8 +578,26 @@ async def test_full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_m
     assert merged_sources[1].link == "https://example.com/shared"
     assert merged_sources[1].info == "Shared 内容"
     assert [run.agent_type for run in agent_runs].count("planner") == 2
-    assert [run.agent_type for run in agent_runs].count("collector") == 3
+    assert [run.agent_type for run in agent_runs].count("collector") == 10
     assert [run.agent_type for run in agent_runs].count("summary") == 3
+    collector_replay_round_2 = collector.invocations_by_tool_call["call_1"][1].prompt_bundle.transcript
+    assert collector_replay_round_2 is not None
+    assert [message.role for message in collector_replay_round_2] == ["assistant", "tool"]
+    assert collector_replay_round_2[0].reasoning_content == "先搜索主要玩家。"
+    assert collector_replay_round_2[0].tool_calls is not None
+    assert collector_replay_round_2[0].tool_calls[0]["function"]["name"] == "web_search"
+    assert collector_replay_round_2[1].tool_call_id == "call_search_players"
+    assert "\"q_players\"" in collector_replay_round_2[1].content
+    collector_replay_round_3 = collector.invocations_by_tool_call["call_1"][2].prompt_bundle.transcript
+    assert collector_replay_round_3 is not None
+    assert [message.role for message in collector_replay_round_3] == [
+        "assistant",
+        "tool",
+        "assistant",
+        "tool",
+    ]
+    assert collector_replay_round_3[2].reasoning_content == "需要读取来源 A。"
+    assert collector_replay_round_3[3].tool_call_id == "call_fetch_players_a"
 
 
 @pytest.mark.asyncio
@@ -466,10 +641,58 @@ async def test_collect_loop_handles_one_risk_blocked_and_two_successful_subtasks
         ]
     )
     collector = ScriptedCollectorAgent(
-        query_by_tool_call={
-            "call_1": ("q_players",),
-            "call_2": ("q_risk",),
-            "call_3": ("q_opportunities",),
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_search_round(
+                    tool_call_id="call_search_players",
+                    query="q_players",
+                    reasoning="搜索主要玩家。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_players_a",
+                    url="https://example.com/a",
+                    reasoning="读取主要玩家来源。",
+                ),
+                _collector_stop_round(
+                    reasoning="主要玩家信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 A",
+                            link="https://example.com/a",
+                            info="A 内容",
+                        ),
+                    ),
+                ),
+            ),
+            "call_2": (
+                _collector_search_round(
+                    tool_call_id="call_search_risk",
+                    query="q_risk",
+                    reasoning="搜索市场趋势。",
+                ),
+            ),
+            "call_3": (
+                _collector_search_round(
+                    tool_call_id="call_search_opportunities",
+                    query="q_opportunities",
+                    reasoning="搜索商业机会。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_opportunities_c",
+                    url="https://example.com/c",
+                    reasoning="读取商业机会来源。",
+                ),
+                _collector_stop_round(
+                    reasoning="商业机会信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 C",
+                            link="https://example.com/c",
+                            info="C 内容",
+                        ),
+                    ),
+                ),
+            ),
         }
     )
     summarizer = ScriptedSummaryAgent()
@@ -562,9 +785,21 @@ async def test_risk_control_threshold_terminates_task_after_two_risk_blocked_sum
         ]
     )
     collector = ScriptedCollectorAgent(
-        query_by_tool_call={
-            "call_1": ("q_risk_1",),
-            "call_2": ("q_risk_2",),
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_search_round(
+                    tool_call_id="call_search_risk_1",
+                    query="q_risk_1",
+                    reasoning="先搜第一条高风险目标。",
+                ),
+            ),
+            "call_2": (
+                _collector_search_round(
+                    tool_call_id="call_search_risk_2",
+                    query="q_risk_2",
+                    reasoning="再搜第二条高风险目标。",
+                ),
+            ),
         }
     )
     summarizer = ScriptedSummaryAgent()
@@ -668,12 +903,30 @@ async def test_collect_agent_limit_exceeded_triggers_merge_not_fail(
         ]
     )
     collector = ScriptedCollectorAgent(
-        query_by_tool_call={
-            "call_1": ("q1",),
-            "call_2": ("q2",),
-            "call_3": ("q3",),
-            "call_4": ("q4",),
-            "call_5": ("q5",),
+        rounds_by_tool_call={
+            f"call_{index}": (
+                _collector_search_round(
+                    tool_call_id=f"call_search_{index}",
+                    query=f"q{index}",
+                    reasoning=f"搜索目标 {index}。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id=f"call_fetch_{index}",
+                    url=f"https://example.com/{index}",
+                    reasoning=f"读取目标 {index}。",
+                ),
+                _collector_stop_round(
+                    reasoning=f"目标 {index} 信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title=str(index),
+                            link=f"https://example.com/{index}",
+                            info=f"内容 {index}",
+                        ),
+                    ),
+                ),
+            )
+            for index in range(1, 6)
         }
     )
     summarizer = ScriptedSummaryAgent()
@@ -713,8 +966,8 @@ async def test_collect_agent_limit_exceeded_triggers_merge_not_fail(
         await _close_stream(stream_context, response)
 
     assert merged_name == "sources.merged"
-    # 5 collector invocations from rounds 1+2; round 3 skipped due to limit
-    assert len(collector.invocations) == 5
+    # 5 subtasks, each uses search -> fetch -> stop
+    assert len(collector.invocations) == 15
 
     db_session.expire_all()
     revision = db_session.get(
@@ -752,7 +1005,36 @@ async def test_sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result(
             ),
         ]
     )
-    collector = ScriptedCollectorAgent(query_by_tool_call={"call_1": ("q_dense",)})
+    collector = ScriptedCollectorAgent(
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_search_round(
+                    tool_call_id="call_search_dense",
+                    query="q_dense",
+                    reasoning="先做密集搜索。",
+                ),
+                *tuple(
+                    _collector_fetch_round(
+                        tool_call_id=f"call_fetch_dense_{index}",
+                        url=f"https://example.com/{index}",
+                        reasoning=f"读取来源 {index}。",
+                    )
+                    for index in range(1, 20)
+                ),
+                _collector_stop_round(
+                    reasoning="达到上限后结束。",
+                    items=tuple(
+                        CollectedSourceItem(
+                            title=f"来源 {index}",
+                            link=f"https://example.com/{index}",
+                            info=f"内容 {index}",
+                        )
+                        for index in range(1, 20)
+                    ),
+                ),
+            ),
+        }
+    )
     summarizer = ScriptedSummaryAgent()
     search = ScriptedWebSearchClient(
         SearchScenario(
@@ -842,7 +1124,30 @@ async def test_planner_empty_plans_with_existing_data_triggers_merge(
         ]
     )
     collector = ScriptedCollectorAgent(
-        query_by_tool_call={"call_1": ("q1",)}
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_search_round(
+                    tool_call_id="call_search_1",
+                    query="q1",
+                    reasoning="搜索目标 1。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_1",
+                    url="https://example.com/1",
+                    reasoning="读取目标 1。",
+                ),
+                _collector_stop_round(
+                    reasoning="目标 1 信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="1",
+                            link="https://example.com/1",
+                            info="内容 1",
+                        ),
+                    ),
+                ),
+            ),
+        }
     )
     summarizer = ScriptedSummaryAgent()
     search = ScriptedWebSearchClient(
@@ -875,7 +1180,7 @@ async def test_planner_empty_plans_with_existing_data_triggers_merge(
         await _close_stream(stream_context, response)
 
     assert merged_name == "sources.merged"
-    assert len(collector.invocations) == 1
+    assert len(collector.invocations) == 3
 
     db_session.expire_all()
     task = db_session.get(
@@ -900,7 +1205,7 @@ async def test_planner_empty_plans_first_round_still_fails(
             ),
         ]
     )
-    collector = ScriptedCollectorAgent(query_by_tool_call={})
+    collector = ScriptedCollectorAgent(rounds_by_tool_call={})
     summarizer = ScriptedSummaryAgent()
     search = ScriptedWebSearchClient(SearchScenario(results_by_query={}))
     fetch = ScriptedWebFetchClient(content_by_url={})

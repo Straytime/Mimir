@@ -14,11 +14,13 @@ from app.application.dto.delivery import (
     ResearchOutline,
     WriterInvocation,
 )
-from app.application.dto.research import PlannerInvocation, SearchResponse
+from app.application.dto.research import CollectorInvocation, PlannerInvocation, SearchResponse
 from app.application.invocation_contracts import (
     build_collect_agent_tool_schema,
     build_python_interpreter_tool_schema,
     build_stage_profile,
+    build_web_fetch_tool_schema,
+    build_web_search_tool_schema,
 )
 from app.application.services.invocation import (
     RetryableOperationError,
@@ -27,7 +29,7 @@ from app.application.services.invocation import (
 from app.application.services.llm import RetryableLLMError, TextGeneration
 from app.core.config import Settings
 from app.domain.enums import FreshnessRequirement, OutputFormat
-from app.domain.schemas import RequirementDetail
+from app.domain.schemas import CollectPlan, RequirementDetail
 from app.infrastructure.llm.zhipu import (
     ZhipuClarificationGenerator,
     ZhipuChatClient,
@@ -36,7 +38,11 @@ from app.infrastructure.llm.zhipu import (
     _safe_repr,
 )
 from app.infrastructure.research.jina import JinaWebFetchClient
-from app.infrastructure.research.real_http import ZhipuPlannerAgent, ZhipuWebSearchClient
+from app.infrastructure.research.real_http import (
+    ZhipuCollectorAgent,
+    ZhipuPlannerAgent,
+    ZhipuWebSearchClient,
+)
 from app.infrastructure.delivery.zhipu import ZhipuWriterAgent
 
 
@@ -230,6 +236,133 @@ async def test_zhipu_planner_adapter_uses_prompt_bundle_and_tool_schema_instead_
 
 
 @pytest.mark.asyncio
+async def test_zhipu_collector_adapter_returns_tool_calls_with_reasoning_and_prd_schema() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    finish_reason="tool_calls",
+                    message=SimpleNamespace(
+                        content="",
+                        reasoning_content="先做最近一周搜索。",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_search_1",
+                                function=SimpleNamespace(
+                                    name="web_search",
+                                    arguments='{"search_query":"中国 AI 搜索 产品 2026","search_recency_filter":"oneWeek"}',
+                                ),
+                            )
+                        ],
+                    ),
+                )
+            ]
+        )
+    )
+    adapter = ZhipuCollectorAgent(client=raw_client, model="glm-test")
+
+    decision = await adapter.plan(
+        CollectorInvocation(
+            prompt_name="collector_round",
+            subtask_id="sub_1",
+            plan=CollectPlan(
+                tool_call_id="call_collect_1",
+                revision_id="rev_1",
+                collect_target="收集主要玩家",
+                additional_info="优先官方与高可信媒体。",
+                freshness_requirement=FreshnessRequirement.HIGH,
+            ),
+            call_index=1,
+            tool_call_limit=10,
+            now=SimpleNamespace(isoformat=lambda: "2026-03-16T15:00:00+00:00"),
+            profile=build_stage_profile(Settings(), stage="collector"),
+            prompt_bundle=PromptBundle(
+                system_prompt="collector-system",
+                user_prompt="collector-user",
+            ),
+            tool_schemas=(
+                build_web_search_tool_schema(),
+                build_web_fetch_tool_schema(),
+            ),
+        )
+    )
+
+    assert decision.stop is False
+    assert decision.reasoning_text == "先做最近一周搜索。"
+    assert len(decision.tool_calls) == 1
+    assert decision.tool_calls[0].tool_call_id == "call_search_1"
+    assert decision.tool_calls[0].tool_name == "web_search"
+    assert decision.tool_calls[0].arguments_json == {
+        "search_query": "中国 AI 搜索 产品 2026",
+        "search_recency_filter": "oneWeek",
+    }
+    call = raw_client.chat.completions.calls[0]
+    assert call["thinking"] == {"type": "enabled", "clear_thinking": False}
+    assert call["tools"][0]["function"]["parameters"]["properties"][
+        "search_recency_filter"
+    ]["enum"] == ["oneDay", "oneWeek", "oneMonth", "oneYear", "noLimit"]
+
+
+@pytest.mark.asyncio
+async def test_zhipu_collector_adapter_parses_stop_json_into_collect_result_items() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(
+                        content=json.dumps(
+                            [
+                                {
+                                    "info": "某产品在 2026 年扩展企业搜索能力。",
+                                    "title": "企业搜索能力发布",
+                                    "link": "https://example.com/a",
+                                }
+                            ],
+                            ensure_ascii=False,
+                        ),
+                        reasoning_content="已有信息足够，停止搜集。",
+                    ),
+                )
+            ]
+        )
+    )
+    adapter = ZhipuCollectorAgent(client=raw_client, model="glm-test")
+
+    decision = await adapter.plan(
+        CollectorInvocation(
+            prompt_name="collector_round",
+            subtask_id="sub_1",
+            plan=CollectPlan(
+                tool_call_id="call_collect_1",
+                revision_id="rev_1",
+                collect_target="收集主要玩家",
+                additional_info="优先官方与高可信媒体。",
+                freshness_requirement=FreshnessRequirement.HIGH,
+            ),
+            call_index=3,
+            tool_call_limit=10,
+            now=SimpleNamespace(isoformat=lambda: "2026-03-16T15:00:00+00:00"),
+            profile=build_stage_profile(Settings(), stage="collector"),
+            prompt_bundle=PromptBundle(
+                system_prompt="collector-system",
+                user_prompt="collector-user",
+            ),
+            tool_schemas=(
+                build_web_search_tool_schema(),
+                build_web_fetch_tool_schema(),
+            ),
+        )
+    )
+
+    assert decision.stop is True
+    assert decision.reasoning_text == "已有信息足够，停止搜集。"
+    assert decision.content_text.startswith("[")
+    assert decision.tool_calls == ()
+    assert [item.title for item in decision.items] == ["企业搜索能力发布"]
+
+
+@pytest.mark.asyncio
 async def test_zhipu_llm_adapter_maps_risk_control_code_1301() -> None:
     adapter = ZhipuClarificationGenerator(
         client=FakeZhipuClient(
@@ -332,6 +465,34 @@ async def test_web_search_uses_fixed_provider_contract_fields() -> None:
     assert result.query == "智谱 AI 搜索"
     assert result.recency_filter == "noLimit"
     assert result.results[0].title == "智谱 AI 搜索进展"
+
+
+@pytest.mark.asyncio
+async def test_web_search_maps_prd_recency_filter_to_provider_request_value() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert json.loads(request.content)["search_recency_filter"] == "oneWeek"
+        return httpx.Response(
+            status_code=200,
+            json={
+                "search_result": [
+                    {
+                        "title": "近一周动态",
+                        "link": "https://example.com/week",
+                        "content": "近一周新增企业版动态。",
+                    }
+                ]
+            },
+        )
+
+    adapter = ZhipuWebSearchClient(
+        api_key="secret-key",
+        base_url="https://open.bigmodel.cn/api/paas/v4/",
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await adapter.search("中国 AI 搜索 产品 2026", "oneWeek")
+
+    assert result.recency_filter == "oneWeek"
 
 
 @pytest.mark.asyncio

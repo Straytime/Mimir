@@ -1,3 +1,4 @@
+from app.application.dto.invocation import PromptMessage
 from datetime import UTC, datetime
 
 from app.application.dto.research import (
@@ -84,7 +85,7 @@ def test_planner_prompt_semantic_lock_keeps_role_limits_and_transcript_order() -
     assert "收集目标 2" in tool_msgs[1].content
 
 
-def test_collector_prompt_semantic_lock_keeps_tool_range_and_limits() -> None:
+def test_collector_prompt_semantic_lock_matches_prd_literal_prompt_and_transcript() -> None:
     prompt = build_collector_prompt(
         invocation=CollectorInvocation(
             prompt_name="collector_round",
@@ -93,18 +94,37 @@ def test_collector_prompt_semantic_lock_keeps_tool_range_and_limits() -> None:
             call_index=1,
             tool_call_limit=10,
             now=NOW,
+            transcript=(
+                PromptMessage(
+                    role="assistant",
+                    content="",
+                    reasoning_content="先搜一次。",
+                    tool_calls=(
+                        {
+                            "id": "call_search_1",
+                            "type": "function",
+                            "function": {
+                                "name": "web_search",
+                                "arguments": '{"search_query":"收集目标 1","search_recency_filter":"oneWeek"}',
+                            },
+                        },
+                    ),
+                ),
+            ),
         )
     )
 
     assert "你是一个信息搜集 agent" in prompt.system_prompt
     assert "max_tool_calls = 10" in prompt.system_prompt
-    assert "web_search" in prompt.system_prompt
-    assert "web_fetch" in prompt.system_prompt
+    assert "使用提供的搜索和网页读取工具" in prompt.system_prompt
     assert "高质量的关键信息和数据" in prompt.system_prompt
     assert "<信息获取目标>" in prompt.user_prompt
     assert "收集目标 1" in prompt.user_prompt
     assert "优先官方发布与高可信媒体。" in prompt.user_prompt
+    assert "<时效要求>" in prompt.user_prompt
     assert "high" in prompt.user_prompt
+    assert prompt.transcript[0].reasoning_content == "先搜一次。"
+    assert prompt.transcript[0].tool_calls is not None
 
 
 def test_summary_prompt_semantic_lock_keeps_schema_and_runtime_inputs() -> None:

@@ -2582,3 +2582,59 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若继续做真实 provider 联调，可优先观察生产 `planner` / `writer` 多轮调用中，下一轮 transcript 是否已稳定携带历史 reasoning content
   - 若未来要给 `collector` 引入真正多轮 agent loop，应复用本次 `reasoning_content + assistant/tool 时序` 契约，不要再发明平行格式
+
+## R1-037 Collector Sub-Agent Loop PRD Alignment
+
+- 日期时间: 2026-03-23 16:23:37 CST (+0800)
+- 任务包编号: R1-037
+- session 标识: `codex/r1-037-collector-subagent-loop`
+- 目标摘要:
+  - 将 `collector` 从单轮 JSON 规划器修正为 PRD `func_8` 的真正多轮 sub-agent tool loop
+  - 严格收敛 `collector` 的 thinking profile、prompt、tools schema、reasoning replay 与 tool replay
+  - 保持现有 `collector.search.*` / `collector.fetch.*` / `collector.completed` SSE 事件与 `planner -> collector -> summary -> merge` 主链路不回退
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `services/api/app/application/dto/research.py`
+  - `services/api/app/application/invocation_contracts.py`
+  - `services/api/app/application/prompts/collection.py`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/app/infrastructure/research/real_http.py`
+  - `services/api/app/infrastructure/research/local_stub.py`
+  - `services/api/tests/unit/application/test_invocation_contracts.py`
+  - `services/api/tests/unit/application/test_collection_prompts.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+  - `services/api/tests/integration/feedback/test_feedback_revision.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_invocation_contracts.py tests/unit/application/test_collection_prompts.py tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/collection/test_collection_engine.py -k 'tool_schemas_match_current_architecture_contract or collector_prompt_semantic_lock_matches_prd_literal_prompt_and_transcript or zhipu_collector_adapter_returns_tool_calls_with_reasoning_and_prd_schema or zhipu_collector_adapter_parses_stop_json_into_collect_result_items or full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_merge or sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result'`
+    - 初次结果: `1 error`
+    - 缺口定位: `CollectorToolCall` / 多轮 collector DTO 与 loop 实现尚不存在
+    - 修补后结果: `6 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_invocation_contracts.py tests/unit/application/test_collection_prompts.py tests/unit/infrastructure/test_zhipu_adapters.py tests/contract/rest/test_collection_events.py tests/integration/collection/test_collection_engine.py tests/integration/feedback/test_feedback_revision.py`
+    - 结果: `51 passed, 1 failed`
+    - 失败项: `tests/integration/feedback/test_feedback_revision.py::test_feedback_rollover_reuses_sources_resets_counter_and_advances_to_planning_collection`
+    - 失败定位: seeded delivered task 的 SSE 首事件 bootstrap 在 `POST /feedback` 之前即超时，无 collector 调用参与，判定为与本任务 collector loop 改动无直接关联
+    - 进一步核对:
+      - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/contract/rest/test_collection_events.py tests/integration/collection/test_collection_engine.py -k 'web_search_maps_prd_recency_filter_to_provider_request_value or test_collection_loop_streams_stage_five_contract_events or full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_merge or sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result'`
+      - 结果: `4 passed`
+- 验收结论:
+  - `collector` 不再是“一次 LLM 决策 + 后端代执行全部 search/fetch”的单轮 JSON 规划器，而是多轮 sub-agent loop
+  - `CollectorInvocation` 已补上 `transcript`，每轮会按 `assistant(reasoning/content/tool_calls) -> tool(result)` 顺序回灌完整历史
+  - `collector` 的 stage profile 继续锁定为 `glm-5 / temperature=1 / top_p=1 / max_tokens=98304 / thinking=true / clear_thinking=false / stream=true`
+  - `build_collector_prompt()` 已回到 PRD `func_8` 口径；同时按本次放行结论，在 user prompt 中保留显式 `<时效要求>` runtime block
+  - `web_search` 的模型可见 schema 与真实 provider 请求值已统一收敛为 PRD `oneDay | oneWeek | oneMonth | oneYear | noLimit`；adapter 只负责 `nolimit -> noLimit` 等历史兼容归一化，不再做另一套枚举映射
+  - `ZhipuCollectorAgent` 现在真正消费 LLM `tool_calls`；收到 `tool_calls` 时进入下一轮 replay，收到 `stop` 时解析最终 JSON 为 `CollectResult.items`
+  - subtask 工具调用总上限仍为 `10`；达到上限时 collector 会强制收口为 `partial`，不再继续等待模型下一轮
+  - 现有 `collector.search.*` / `collector.fetch.*` / `collector.completed`、summary 与 merge 主链路回归通过
+- blocker / 风险:
+  - 无当前 blocker
+  - 已知非本包问题: `feedback_rollover` 测试使用 seeded delivered task 时，SSE 首事件 bootstrap 会在 `POST /feedback` 之前超时；该失败发生在 collector 调用之前，需单独任务包处理，不在本次 collector PRD 对齐范围内
+- 下一步建议:
+  - 若继续做 production collector 联调，应优先核对真实 provider 下的 collector 多轮 transcript 是否已稳定包含：
+    - 历史 `reasoning_content`
+    - 历史 `tool_calls`
+    - 对应 `tool results`
+  - 若要继续排查 `feedback_rollover` 的 seeded stream bootstrap，应单开小任务包，避免与 collector PRD 对齐问题混在一起

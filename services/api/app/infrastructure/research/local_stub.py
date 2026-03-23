@@ -1,6 +1,8 @@
 from app.application.dto.research import (
+    CollectedSourceItem,
     CollectorDecision,
     CollectorInvocation,
+    CollectorToolCall,
     FetchResponse,
     PlannerDecision,
     PlannerInvocation,
@@ -44,10 +46,47 @@ class LocalStubPlannerAgent:
 
 class LocalStubCollectorAgent:
     async def plan(self, invocation: CollectorInvocation) -> CollectorDecision:
+        if invocation.call_index == 1:
+            return CollectorDecision(
+                reasoning_text="先做高时效搜索，再读取官方来源。",
+                content_text="",
+                tool_calls=(
+                    CollectorToolCall(
+                        tool_call_id="call_local_search_1",
+                        tool_name="web_search",
+                        arguments_json={
+                            "search_query": "中国 AI 搜索 产品 2025",
+                            "search_recency_filter": "noLimit",
+                        },
+                    ),
+                ),
+                stop=False,
+            )
+        if invocation.call_index == 2:
+            return CollectorDecision(
+                reasoning_text="读取最相关官方来源。",
+                content_text="",
+                tool_calls=(
+                    CollectorToolCall(
+                        tool_call_id="call_local_fetch_1",
+                        tool_name="web_fetch",
+                        arguments_json={"url": "https://example.com/article"},
+                    ),
+                ),
+                stop=False,
+            )
         return CollectorDecision(
-            reasoning_deltas=("先做高时效搜索，再读取官方来源。",),
-            search_queries=("中国 AI 搜索 产品 2025",),
-            search_recency_filter="noLimit",
+            reasoning_text="当前信息已足够，停止搜集。",
+            content_text='[{"info":"某产品在 2025 年发布企业版能力。","title":"某公司发布会回顾","link":"https://example.com/article"}]',
+            tool_calls=(),
+            stop=True,
+            items=(
+                CollectedSourceItem(
+                    title="某公司发布会回顾",
+                    link="https://example.com/article",
+                    info="某产品在 2025 年发布企业版能力。",
+                ),
+            ),
         )
 
 

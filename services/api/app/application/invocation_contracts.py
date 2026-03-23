@@ -142,7 +142,7 @@ def build_web_search_tool_schema() -> ToolSchema:
             },
             "search_recency_filter": {
                 "type": "string",
-                "enum": ["day", "week", "month", "year", "noLimit"],
+                "enum": ["oneDay", "oneWeek", "oneMonth", "oneYear", "noLimit"],
                 "description": "限定搜索结果的时间范围，最近一日、一周、一月、一年或不限制",
             },
         },
