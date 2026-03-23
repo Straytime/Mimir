@@ -36,7 +36,7 @@ from app.application.services.llm import TextGeneration
 from app.core.config import Settings
 from app.domain.enums import CollectSummaryStatus, FreshnessRequirement
 from app.domain.schemas import CollectPlan
-from app.infrastructure.db.models import CollectedSourceRecord, ResearchTaskRecord, TaskRevisionRecord
+from app.infrastructure.db.models import AgentRunRecord, CollectedSourceRecord, ResearchTaskRecord, TaskRevisionRecord
 from app.infrastructure.delivery.local import LocalArtifactStore
 from app.main import create_app
 from tests.contract.rest.test_task_events import read_sse_event, read_until_event
@@ -240,6 +240,8 @@ async def test_feedback_rollover_reuses_sources_resets_counter_and_advances_to_p
                   "language": "zh-CN"
                 }
                 """,
+                provider_finish_reason="stop",
+                provider_usage={"prompt_tokens": 14, "completion_tokens": 9, "total_tokens": 23},
             )
         ),
         planner_agent=planner,
@@ -294,6 +296,12 @@ async def test_feedback_rollover_reuses_sources_resets_counter_and_advances_to_p
                     .order_by(CollectedSourceRecord.id.asc())
                 )
             )
+            feedback_run = db_session.scalar(
+                select(AgentRunRecord)
+                .where(AgentRunRecord.task_id == seeded.task_id)
+                .where(AgentRunRecord.revision_id == new_revision_id)
+                .where(AgentRunRecord.agent_type == "feedback_analyzer")
+            )
 
             assert feedback_response.status_code == 202
             assert response_body["accepted"] is True
@@ -317,6 +325,14 @@ async def test_feedback_rollover_reuses_sources_resets_counter_and_advances_to_p
             assert len(new_sources) == len(old_sources)
             assert {(source.title, source.link, source.is_merged) for source in new_sources} == {
                 (source.title, source.link, source.is_merged) for source in old_sources
+            }
+            assert feedback_run is not None
+            assert feedback_run.finish_reason == "analysis_completed"
+            assert feedback_run.provider_finish_reason == "stop"
+            assert feedback_run.provider_usage_json == {
+                "prompt_tokens": 14,
+                "completion_tokens": 9,
+                "total_tokens": 23,
             }
 
         planner.release.set()

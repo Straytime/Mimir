@@ -31,6 +31,8 @@ class PlannerDecision:
     reasoning_deltas: tuple[str, ...]
     plans: tuple[CollectPlan, ...]
     stop: bool
+    provider_finish_reason: str | None = None
+    provider_usage: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +63,8 @@ class CollectorDecision:
     tool_calls: tuple[CollectorToolCall, ...]
     stop: bool
     items: tuple["CollectedSourceItem", ...] = ()
+    provider_finish_reason: str | None = None
+    provider_usage: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +126,8 @@ class SummaryDecision:
     status: CollectSummaryStatus
     key_findings_markdown: str | None = None
     message: str | None = None
+    provider_finish_reason: str | None = None
+    provider_usage: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)

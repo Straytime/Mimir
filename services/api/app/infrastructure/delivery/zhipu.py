@@ -92,6 +92,8 @@ class ZhipuOutlineAgent:
                 sections=tuple(sections),
                 entities=entity_values,
             ),
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
         )
 
 
@@ -138,6 +140,8 @@ class ZhipuWriterAgent:
             text=result.text.strip(),
             tool_calls=tuple(tool_calls),
             reasoning_text=result.reasoning_text.strip(),
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
         )
 
 

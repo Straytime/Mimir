@@ -24,6 +24,8 @@ class ZhipuCompletionResult:
     request_id: str | None = None
     reasoning_text: str = ""
     tool_calls: tuple[dict[str, Any], ...] = ()
+    provider_finish_reason: str | None = None
+    provider_usage: dict[str, Any] | None = None
 
 
 def create_default_zhipu_client(
@@ -119,17 +121,25 @@ class ZhipuChatClient:
                 diag,
             )
             raise RetryableLLMError("zhipu upstream request failed")
+        provider_finish_reason = _normalize_provider_finish_reason(diag)
+        provider_usage = _normalize_usage_payload(diag.get("usage_json"))
         logger.info(
-            "zhipu LLM call completed: request_id=%s, response_length=%d, tool_calls=%d",
-            request_id,
-            len(text),
-            len(tool_calls),
+            "zhipu LLM call completed",
+            extra={
+                "request_id": request_id,
+                "provider_finish_reason": provider_finish_reason,
+                "provider_usage": provider_usage,
+                "response_length": len(text),
+                "tool_calls_count": len(tool_calls),
+            },
         )
         return ZhipuCompletionResult(
             text=text,
             request_id=request_id,
             reasoning_text=str(diag.get("reasoning_text") or ""),
             tool_calls=tool_calls,
+            provider_finish_reason=provider_finish_reason,
+            provider_usage=provider_usage,
         )
 
 
@@ -155,6 +165,8 @@ class _BaseTextGenerator:
         return TextGeneration(
             deltas=(text,),
             full_text=text,
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
         )
 
 
@@ -229,6 +241,7 @@ def _extract_response_with_diagnostics(
         choices = response.get("choices")
     diag["request_id"] = getattr(response, "id", None)
     diag["usage"] = _safe_repr(getattr(response, "usage", None))
+    diag["usage_json"] = _normalize_usage_payload(getattr(response, "usage", None))
     if not choices:
         diag["choices_count"] = 0
         diag["raw_response_type"] = type(response).__name__
@@ -330,8 +343,53 @@ def _extract_stream_with_diagnostics(
     diag["finish_reasons"] = finish_reasons
     diag["reasoning_text"] = "".join(reasoning_parts)
     diag["usage"] = _safe_repr(usage)
+    diag["usage_json"] = _normalize_usage_payload(usage)
     diag["last_chunk"] = last_chunk_repr
     return "".join(parts), diag, tool_calls
+
+
+def _normalize_provider_finish_reason(diag: dict[str, Any]) -> str | None:
+    finish_reason = diag.get("finish_reason")
+    if finish_reason is not None and str(finish_reason).strip():
+        return str(finish_reason).strip()
+    finish_reasons = diag.get("finish_reasons")
+    if isinstance(finish_reasons, list):
+        normalized = [str(item).strip() for item in finish_reasons if str(item).strip()]
+        if normalized:
+            return normalized[-1]
+    return None
+
+
+def _normalize_usage_payload(value: Any) -> dict[str, Any] | None:
+    normalized = _normalize_json_value(value)
+    if normalized is None:
+        return None
+    if isinstance(normalized, dict):
+        return normalized
+    return {"value": normalized}
+
+
+def _normalize_json_value(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key, item in value.items():
+            item_value = _normalize_json_value(item)
+            if item_value is not None:
+                normalized[str(key)] = item_value
+        return normalized
+    if isinstance(value, (list, tuple)):
+        return [_normalize_json_value(item) for item in value]
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return _normalize_json_value(model_dump(mode="json"))
+    dump = getattr(value, "dict", None)
+    if callable(dump):
+        return _normalize_json_value(dump())
+    if hasattr(value, "__dict__"):
+        return _normalize_json_value(vars(value))
+    return repr(value)
 
 
 def _extract_reasoning_text(payload: Any) -> str:

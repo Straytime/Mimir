@@ -40,6 +40,13 @@ def test_stage_two_migrations_upgrade_and_downgrade(
     }
     assert "cleanup_pending" in research_task_columns
 
+    agent_run_columns = {
+        column["name"]
+        for column in inspect(upgraded_engine).get_columns("agent_runs")
+    }
+    assert "provider_finish_reason" in agent_run_columns
+    assert "provider_usage_json" in agent_run_columns
+
     command.downgrade(alembic_config, "base")
 
     downgraded_engine = create_engine(database_url, future=True)

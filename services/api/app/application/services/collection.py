@@ -361,6 +361,8 @@ class CollectionOrchestrator:
                     ensure_ascii=False,
                 ),
                 finish_reason="stop" if decision.stop else "plans_generated",
+                provider_finish_reason=decision.provider_finish_reason,
+                provider_usage_json=decision.provider_usage,
                 tool_calls_json={
                     "summary_messages": [
                         summary.model_dump(mode="json", exclude_none=True)
@@ -514,6 +516,8 @@ class CollectionOrchestrator:
                         ensure_ascii=False,
                     ),
                     finish_reason="stop" if decision.stop else "tool_calls_requested",
+                    provider_finish_reason=decision.provider_finish_reason,
+                    provider_usage_json=decision.provider_usage,
                     tool_calls_json={
                         "tool_calls": [
                             {
@@ -1082,6 +1086,12 @@ class CollectionOrchestrator:
                     ensure_ascii=False,
                 ),
                 finish_reason=summary.status.value,
+                provider_finish_reason=(
+                    decision.provider_finish_reason if decision is not None else None
+                ),
+                provider_usage_json=(
+                    decision.provider_usage if decision is not None else None
+                ),
                 tool_calls_json=None,
                 created_at=now,
                 updated_at=now,

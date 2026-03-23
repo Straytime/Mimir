@@ -350,6 +350,8 @@ class TaskRepository:
         tool_calls_json: dict[str, object] | None,
         created_at: datetime,
         updated_at: datetime,
+        provider_finish_reason: str | None = None,
+        provider_usage_json: dict[str, object] | None = None,
     ) -> AgentRunRecord:
         record = AgentRunRecord(
             task_id=task_id,
@@ -361,6 +363,8 @@ class TaskRepository:
             reasoning_text=reasoning_text,
             content_text=content_text,
             finish_reason=finish_reason,
+            provider_finish_reason=provider_finish_reason,
+            provider_usage_json=provider_usage_json,
             tool_calls_json=tool_calls_json,
             compressed=False,
             created_at=created_at,

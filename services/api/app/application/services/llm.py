@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from app.core.retry import RetryPolicy
 
@@ -13,6 +14,8 @@ class RetryableLLMError(Exception):
 class TextGeneration:
     deltas: tuple[str, ...]
     full_text: str
+    provider_finish_reason: str | None = None
+    provider_usage: dict[str, Any] | None = None
 
 
 class RetryingLLMInvoker:
