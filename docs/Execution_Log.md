@@ -2673,3 +2673,62 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若继续扩 seeded task fixture，优先沿用“让 `/events` 真正补 bootstrap event”的路径，不要回到 fixture 直接塞假首帧
   - 若后续再改 broker 连接建立流程，应保留“先 bootstrap 唯一 `task.created`，再切换到实时流”的测试锁定
+
+## R1-039 Provider Finish Reason + Usage Observability
+
+- 日期时间: 2026-03-23 18:05:23 CST (+0800)
+- 任务包编号: R1-039
+- session 标识: `codex/r1-039-provider-finish-usage-observability`
+- 目标摘要:
+  - 为所有会落库到 `agent_runs` 的 LLM agent 路径持久化真实 provider `finish_reason` 与 `usage`
+  - 明确区分应用层 `finish_reason` 与 provider 层 `finish_reason`
+  - 为后续定位 writer 截断、`length stop`、`tool_calls stop`、空返回等问题建立可靠观测基础
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `services/api/app/application/dto/delivery.py`
+  - `services/api/app/application/dto/research.py`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/application/services/feedback.py`
+  - `services/api/app/application/services/llm.py`
+  - `services/api/app/infrastructure/db/models.py`
+  - `services/api/app/infrastructure/db/repositories.py`
+  - `services/api/app/infrastructure/db/migrations/versions/20260323_0006_provider_finish_usage_observability.py`
+  - `services/api/app/infrastructure/delivery/zhipu.py`
+  - `services/api/app/infrastructure/llm/zhipu.py`
+  - `services/api/app/infrastructure/research/real_http.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `services/api/tests/integration/feedback/test_feedback_revision.py`
+  - `services/api/tests/integration/db/test_migrations.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py tests/integration/feedback/test_feedback_revision.py tests/integration/db/test_migrations.py -k 'provider_finish_reason or provider_usage or observability'`
+    - 初次结果: `5 failed`
+    - 缺口定位:
+      - `ZhipuCompletionResult` / `PlannerDecision` / `CollectorDecision` / `OutlineDecision` / `WriterDecision` / `SummaryDecision` / `TextGeneration` 尚无 provider 观测字段
+      - `agent_runs` 表尚无 `provider_finish_reason` / `provider_usage_json`
+      - `zhipu` 完成日志尚未输出结构化 `request_id / provider_finish_reason / provider_usage / response_length / tool_calls_count`
+    - 修补后结果: `5 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py tests/integration/feedback/test_feedback_revision.py tests/integration/db/test_migrations.py`
+    - 结果: `67 passed`
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_collection_events.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py`
+    - 结果: `4 passed`
+- 验收结论:
+  - `agent_runs.finish_reason` 保持应用层语义，例如 `plans_generated`、`tool_calls_requested`、`writer_completed`、`analysis_completed`
+  - 新增 `agent_runs.provider_finish_reason` 与 `agent_runs.provider_usage_json`，专门保存 provider 原始结束原因与 token usage
+  - `ZhipuChatClient.complete()` 现在会同时提取 non-stream / stream 的 provider `finish_reason` 与结构化 `usage`
+  - stream 场景若收到多个非空 `finish_reason`，持久化规则收敛为“最后一个非空值”
+  - planner / collector / summary / outline / writer / feedback_analysis 的 `agent_runs` 现在都会落库 provider 观测字段
+  - clarification / requirement_analysis 当前没有 `agent_runs` 持久化路径；本次未发明新的落库点
+  - `zhipu LLM call completed` 结构化日志现已输出 `request_id / provider_finish_reason / provider_usage / response_length / tool_calls_count`
+  - 对外 REST / SSE 契约未变；本次只补内部 observability
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前仅持久化归一后的 `provider_finish_reason` 与结构化 `usage`，未额外持久化 stream 原始 `finish_reasons[]` 数组；若后续需要更细粒度 provider 诊断，可在不改变现有字段语义的前提下增量补充
+- 下一步建议:
+  - 后续继续排查 production writer 截断时，优先按 `agent_runs.provider_finish_reason` 与 `provider_usage_json` 定界，不再使用应用层 `finish_reason` 反推 provider 行为
+  - 若再次遇到“正文中断但任务成功交付”，先查相应 writer rounds 的 `provider_finish_reason` 是否为 `length`，再决定是否需要单开 guardrail / max_tokens 任务包

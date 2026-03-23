@@ -165,6 +165,8 @@ class AgentRunRecord(Base):
     reasoning_text: Mapped[str | None] = mapped_column(Text)
     content_text: Mapped[str | None] = mapped_column(Text)
     finish_reason: Mapped[str | None] = mapped_column(String(64))
+    provider_finish_reason: Mapped[str | None] = mapped_column(String(64))
+    provider_usage_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     tool_calls_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     compressed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

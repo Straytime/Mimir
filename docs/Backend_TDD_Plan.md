@@ -825,6 +825,9 @@ DoD：
 - 无图片的 `python_interpreter` 结果仍返回 `summary`，且 zip 不误改写非图片正文
 - provider 返回独立 writer reasoning 字段时，`agent_runs.reasoning_text` 会落库，且不混入最终 markdown
 - writer 多轮 `content`（round1/2/3）会按顺序组装成交付 markdown，不能只取 terminal round
+- Zhipu non-stream / stream 调用都会提取并传递 provider `finish_reason` 与 `usage`
+- `agent_runs.finish_reason` 保持应用层语义；provider 原始 `finish_reason` 与 `usage` 必须分别落到独立字段
+- planner / collector / summary / outline / writer / feedback_analysis 的持久化测试必须覆盖 `provider_finish_reason` 与 `provider_usage_json`
 - 所有 `thinking=True` stage 的 `clear_thinking` 必须显式为 `false`
 - writer 第 2 轮及以后必须回灌历史 reasoning content + tool_calls + tool_results，且顺序稳定
 - writer 达到 `MIMIR_WRITER_MAX_ROUNDS` 后若仍有 `tool_calls`，必须 `task.failed`，不能继续 `report.completed`

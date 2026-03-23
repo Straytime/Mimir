@@ -84,7 +84,13 @@ class ZhipuPlannerAgent:
             return self._parse_tool_calls(result, invocation)
         if result.text.strip():
             return self._parse_content_json(result, invocation)
-        return PlannerDecision(reasoning_deltas=(), plans=(), stop=True)
+        return PlannerDecision(
+            reasoning_deltas=(),
+            plans=(),
+            stop=True,
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
+        )
 
     def _parse_tool_calls(
         self,
@@ -122,6 +128,8 @@ class ZhipuPlannerAgent:
             reasoning_deltas=reasoning_deltas,
             plans=tuple(plans),
             stop=False,
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
         )
 
     @staticmethod
@@ -136,10 +144,22 @@ class ZhipuPlannerAgent:
                 "planner returned non-JSON text, treating as stop: request_id=%s",
                 result.request_id,
             )
-            return PlannerDecision(reasoning_deltas=(), plans=(), stop=True)
+            return PlannerDecision(
+                reasoning_deltas=(),
+                plans=(),
+                stop=True,
+                provider_finish_reason=result.provider_finish_reason,
+                provider_usage=result.provider_usage,
+            )
 
         if not isinstance(parsed, dict):
-            return PlannerDecision(reasoning_deltas=(), plans=(), stop=True)
+            return PlannerDecision(
+                reasoning_deltas=(),
+                plans=(),
+                stop=True,
+                provider_finish_reason=result.provider_finish_reason,
+                provider_usage=result.provider_usage,
+            )
 
         reasoning_deltas = _coerce_string_tuple(parsed.get("reasoning_deltas"))
         if not reasoning_deltas and result.reasoning_text.strip():
@@ -172,6 +192,8 @@ class ZhipuPlannerAgent:
             reasoning_deltas=reasoning_deltas,
             plans=tuple(plans),
             stop=stop,
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
         )
 
 
@@ -244,6 +266,8 @@ class ZhipuCollectorAgent:
             tool_calls=tuple(tool_calls),
             stop=False,
             items=(),
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
         )
 
     @staticmethod
@@ -280,6 +304,8 @@ class ZhipuCollectorAgent:
             tool_calls=(),
             stop=True,
             items=tuple(items),
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
         )
 
 
@@ -289,7 +315,7 @@ class ZhipuSummaryAgent:
         self._model = model
 
     async def summarize(self, invocation: SummaryInvocation) -> SummaryDecision:
-        payload = await _complete_json(
+        payload, result = await _complete_json(
             client=self._client,
             invocation=invocation,
         )
@@ -299,6 +325,8 @@ class ZhipuSummaryAgent:
                 payload.get("key_findings_markdown")
             ),
             message=_coerce_optional_string(payload.get("message")),
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
         )
 
 
@@ -431,7 +459,7 @@ async def _complete_json(
     *,
     client: ZhipuChatClient,
     invocation: SummaryInvocation,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], ZhipuCompletionResult]:
     if invocation.prompt_bundle is None or invocation.profile is None:
         raise RetryableOperationError("zhipu invocation contract is incomplete")
     prompt_bundle = PromptBundle(
@@ -468,7 +496,7 @@ async def _complete_json(
 
     if not isinstance(parsed, dict):
         raise RetryableOperationError("zhipu returned invalid JSON")
-    return parsed
+    return parsed, result
 
 
 def _coerce_chat_client(

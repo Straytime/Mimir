@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from app.application.dto.invocation import InvocationProfile, PromptBundle, ToolSchema
 from app.application.dto.research import FormattedSource
@@ -36,6 +37,8 @@ class OutlineInvocation:
 class OutlineDecision:
     deltas: tuple[str, ...]
     outline: ResearchOutline
+    provider_finish_reason: str | None = None
+    provider_usage: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,3 +107,5 @@ class WriterDecision:
     text: str
     tool_calls: tuple[WriterToolCall, ...]
     reasoning_text: str = ""
+    provider_finish_reason: str | None = None
+    provider_usage: dict[str, Any] | None = None

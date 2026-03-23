@@ -199,6 +199,8 @@ class FeedbackOrchestrator:
                 reasoning_text="\n".join(generation.deltas),
                 content_text=generation.full_text,
                 finish_reason="analysis_completed",
+                provider_finish_reason=generation.provider_finish_reason,
+                provider_usage_json=generation.provider_usage,
                 tool_calls_json=None,
                 created_at=now,
                 updated_at=now,

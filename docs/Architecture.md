@@ -1498,6 +1498,8 @@ SSE 观察流与客户端心跳：
   - `reasoning_text`
   - `content_text`
   - `finish_reason`
+  - `provider_finish_reason`
+  - `provider_usage_json`
   - `tool_calls_json`
   - `compressed`
 
@@ -1506,6 +1508,9 @@ writer 特别约束：
 - `reasoning_text` 保存 provider 独立返回的 reasoning content；若 provider 未提供，则允许为空。
 - `content_text` 保存该 round 的正文内容与 round metadata，不得混入 reasoning。
 - 最终交付 markdown 由同一 revision 下 writer 各 round 的 `content_text` 中正文部分按顺序组装，不得只取最后一轮。
+- `finish_reason` 保留应用层语义，例如 `writer_completed`、`plans_generated`、`analysis_completed`；不得再复用它承载 provider 原始 stop 原因。
+- `provider_finish_reason` 单独保存 provider 返回的真实结束原因，例如 `stop`、`length`、`tool_calls`；stream 场景若收到多个非空值，按“最后一个非空 finish reason”归一。
+- `provider_usage_json` 以结构化 JSON 保存 provider usage；后续凡是判断“截断”“length stop”“tool_calls stop”“空返回”，必须以这两个 provider 观测字段为依据，不能靠应用层 `finish_reason` 猜测。
 
 ### `task_tool_calls`
 

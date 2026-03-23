@@ -33,6 +33,7 @@ from app.domain.schemas import CollectPlan, RequirementDetail
 from app.infrastructure.llm.zhipu import (
     ZhipuClarificationGenerator,
     ZhipuChatClient,
+    ZhipuCompletionResult,
     _extract_response_with_diagnostics,
     _extract_stream_with_diagnostics,
     _safe_repr,
@@ -289,6 +290,7 @@ async def test_zhipu_collector_adapter_returns_tool_calls_with_reasoning_and_prd
 
     assert decision.stop is False
     assert decision.reasoning_text == "先做最近一周搜索。"
+    assert decision.provider_finish_reason == "tool_calls"
     assert len(decision.tool_calls) == 1
     assert decision.tool_calls[0].tool_call_id == "call_search_1"
     assert decision.tool_calls[0].tool_name == "web_search"
@@ -357,6 +359,7 @@ async def test_zhipu_collector_adapter_parses_stop_json_into_collect_result_item
 
     assert decision.stop is True
     assert decision.reasoning_text == "已有信息足够，停止搜集。"
+    assert decision.provider_finish_reason == "stop"
     assert decision.content_text.startswith("[")
     assert decision.tool_calls == ()
     assert [item.title for item in decision.items] == ["企业搜索能力发布"]
@@ -1025,6 +1028,80 @@ async def test_zhipu_starting_log_includes_prompt_chars(
 
 
 @pytest.mark.asyncio
+async def test_zhipu_completion_propagates_non_stream_provider_finish_reason_and_usage() -> None:
+    client = ZhipuChatClient(
+        client=FakeZhipuClient(
+            response=SimpleNamespace(
+                id="req_non_stream_obs",
+                usage=SimpleNamespace(prompt_tokens=11, completion_tokens=7, total_tokens=18),
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        message=SimpleNamespace(content="正文。"),
+                    )
+                ],
+            )
+        )
+    )
+
+    result = await client.complete(
+        invocation=LLMInvocation(
+            profile=build_stage_profile(Settings(), stage="clarification_natural"),
+            prompt_bundle=PromptBundle(system_prompt=None, user_prompt="test"),
+        )
+    )
+
+    assert isinstance(result, ZhipuCompletionResult)
+    assert result.provider_finish_reason == "stop"
+    assert result.provider_usage == {
+        "prompt_tokens": 11,
+        "completion_tokens": 7,
+        "total_tokens": 18,
+    }
+
+
+@pytest.mark.asyncio
+async def test_zhipu_completion_propagates_stream_provider_finish_reason_and_usage() -> None:
+    client = ZhipuChatClient(
+        client=FakeZhipuClient(
+            response=iter(
+                [
+                    {
+                        "id": "req_stream_obs",
+                        "usage": None,
+                        "choices": [
+                            {"finish_reason": None, "delta": {"content": "第一段"}},
+                        ],
+                    },
+                    {
+                        "id": "req_stream_obs",
+                        "usage": {"prompt_tokens": 20, "completion_tokens": 9, "total_tokens": 29},
+                        "choices": [
+                            {"finish_reason": "tool_calls", "delta": {"content": "第二段"}},
+                        ],
+                    },
+                ]
+            )
+        )
+    )
+
+    result = await client.complete(
+        invocation=LLMInvocation(
+            profile=build_stage_profile(Settings(), stage="planner"),
+            prompt_bundle=PromptBundle(system_prompt="system", user_prompt="user"),
+            tool_schemas=(build_collect_agent_tool_schema(),),
+        )
+    )
+
+    assert result.provider_finish_reason == "tool_calls"
+    assert result.provider_usage == {
+        "prompt_tokens": 20,
+        "completion_tokens": 9,
+        "total_tokens": 29,
+    }
+
+
+@pytest.mark.asyncio
 async def test_complete_empty_text_with_tool_calls_does_not_raise() -> None:
     """When text is empty but tool_calls are present, complete() should not raise."""
     from app.infrastructure.llm.zhipu import ZhipuChatClient, ZhipuCompletionResult
@@ -1095,8 +1172,46 @@ async def test_zhipu_writer_agent_maps_provider_reasoning_to_writer_decision() -
 
     assert decision.text == "先给出上半段正文。"
     assert decision.reasoning_text == "先总结背景，再决定画图。"
+    assert decision.provider_finish_reason == "tool_calls"
     assert len(decision.tool_calls) == 1
     assert decision.tool_calls[0].tool_call_id == "call_writer_1"
+
+
+@pytest.mark.asyncio
+async def test_zhipu_completed_log_includes_provider_observability_fields(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = ZhipuChatClient(
+        client=FakeZhipuClient(
+            response=SimpleNamespace(
+                id="req_obs_log",
+                usage=SimpleNamespace(prompt_tokens=5, completion_tokens=3),
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        message=SimpleNamespace(content="done"),
+                    )
+                ],
+            )
+        )
+    )
+
+    await client.complete(
+        invocation=LLMInvocation(
+            profile=build_stage_profile(Settings(), stage="clarification_natural"),
+            prompt_bundle=PromptBundle(system_prompt=None, user_prompt="test"),
+        )
+    )
+
+    record = next(r for r in caplog.records if "call completed" in r.message)
+    assert record.request_id == "req_obs_log"
+    assert record.provider_finish_reason == "stop"
+    assert record.provider_usage == {
+        "prompt_tokens": 5,
+        "completion_tokens": 3,
+    }
+    assert record.response_length == 4
+    assert record.tool_calls_count == 0
 
 
 def _build_planner_invocation(*, call_index: int = 1) -> PlannerInvocation:
@@ -1158,6 +1273,7 @@ async def test_planner_parses_tool_calls_response() -> None:
     decision = await adapter.plan(_build_planner_invocation())
 
     assert decision.stop is False
+    assert decision.provider_finish_reason == "tool_calls"
     assert len(decision.plans) == 2
     assert decision.plans[0].tool_call_id == "call_tc_1"
     assert decision.plans[0].collect_target == "中国 AI 市场"
@@ -1194,6 +1310,7 @@ async def test_planner_parses_content_json_response() -> None:
     decision = await adapter.plan(_build_planner_invocation())
 
     assert decision.stop is False
+    assert decision.provider_finish_reason is None
     assert len(decision.plans) == 1
     assert decision.plans[0].collect_target == "目标 A"
     assert decision.reasoning_deltas == ("先补公开资料",)

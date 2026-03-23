@@ -320,7 +320,11 @@ async def make_stage6_client(
         await app.router.shutdown()
 
 
-def build_outline_decision() -> OutlineDecision:
+def build_outline_decision(
+    *,
+    provider_finish_reason: str | None = None,
+    provider_usage: dict[str, object] | None = None,
+) -> OutlineDecision:
     return OutlineDecision(
         deltas=(),
         outline=ResearchOutline(
@@ -341,10 +345,17 @@ def build_outline_decision() -> OutlineDecision:
             ),
             entities=("AI 搜索产品", "中国市场", "竞争格局"),
         ),
+        provider_finish_reason=provider_finish_reason,
+        provider_usage=provider_usage,
     )
 
 
-def build_writer_decision(*, tool_call_count: int = 1) -> WriterDecision:
+def build_writer_decision(
+    *,
+    tool_call_count: int = 1,
+    provider_finish_reason: str | None = None,
+    provider_usage: dict[str, object] | None = None,
+) -> WriterDecision:
     return WriterDecision(
         text="# \u4e2d\u56fd AI \u641c\u7d22\u4ea7\u54c1\u7ade\u4e89\u683c\u5c40\u7814\u7a76\n\n## \u4e00\u3001\u7814\u7a76\u80cc\u666f\u4e0e\u95ee\u9898\u5b9a\u4e49\n\u6b63\u6587\u3002\n",
         tool_calls=tuple(
@@ -355,6 +366,8 @@ def build_writer_decision(*, tool_call_count: int = 1) -> WriterDecision:
             )
             for index in range(1, tool_call_count + 1)
         ),
+        provider_finish_reason=provider_finish_reason,
+        provider_usage=provider_usage,
     )
 
 
@@ -604,6 +617,65 @@ async def test_writer_persists_reasoning_text_and_assembles_multi_round_markdown
     assert first_idx < second_idx < third_idx
     assert report_markdown.count("# 中国 AI 搜索产品竞争格局研究") == 1
     assert "![chart_market_share.png](artifacts/chart_market_share.png)" not in report_markdown
+
+
+@pytest.mark.asyncio
+async def test_delivery_persists_provider_finish_reason_and_usage_for_outline_and_writer_runs(
+    make_stage6_client,
+    db_session: Session,
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(
+            build_outline_decision(
+                provider_finish_reason="stop",
+                provider_usage={"prompt_tokens": 30, "completion_tokens": 12, "total_tokens": 42},
+            )
+        ),
+        writer_agent=ScriptedWriterAgent(
+            build_writer_decision(
+                tool_call_count=0,
+                provider_finish_reason="stop",
+                provider_usage={"prompt_tokens": 44, "completion_tokens": 18, "total_tokens": 62},
+            )
+        ),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        await _close_stream(stream_context, response)
+
+    outline_run = db_session.scalar(
+        select(AgentRunRecord)
+        .where(AgentRunRecord.task_id == create_body["task_id"])
+        .where(AgentRunRecord.agent_type == "outliner")
+    )
+    writer_run = db_session.scalar(
+        select(AgentRunRecord)
+        .where(AgentRunRecord.task_id == create_body["task_id"])
+        .where(AgentRunRecord.agent_type == "writer")
+    )
+
+    assert outline_run is not None
+    assert outline_run.finish_reason == "outline_completed"
+    assert outline_run.provider_finish_reason == "stop"
+    assert outline_run.provider_usage_json == {
+        "prompt_tokens": 30,
+        "completion_tokens": 12,
+        "total_tokens": 42,
+    }
+    assert writer_run is not None
+    assert writer_run.finish_reason == "writer_completed"
+    assert writer_run.provider_finish_reason == "stop"
+    assert writer_run.provider_usage_json == {
+        "prompt_tokens": 44,
+        "completion_tokens": 18,
+        "total_tokens": 62,
+    }
 
 
 @pytest.mark.asyncio

@@ -107,6 +107,8 @@ def _collector_search_round(
     query: str,
     reasoning: str,
     recency_filter: str = "noLimit",
+    provider_finish_reason: str | None = None,
+    provider_usage: dict[str, object] | None = None,
 ) -> CollectorDecision:
     return CollectorDecision(
         reasoning_text=reasoning,
@@ -123,6 +125,8 @@ def _collector_search_round(
         ),
         stop=False,
         items=(),
+        provider_finish_reason=provider_finish_reason,
+        provider_usage=provider_usage,
     )
 
 
@@ -131,6 +135,8 @@ def _collector_fetch_round(
     tool_call_id: str,
     url: str,
     reasoning: str,
+    provider_finish_reason: str | None = None,
+    provider_usage: dict[str, object] | None = None,
 ) -> CollectorDecision:
     return CollectorDecision(
         reasoning_text=reasoning,
@@ -144,6 +150,8 @@ def _collector_fetch_round(
         ),
         stop=False,
         items=(),
+        provider_finish_reason=provider_finish_reason,
+        provider_usage=provider_usage,
     )
 
 
@@ -151,6 +159,8 @@ def _collector_stop_round(
     *,
     reasoning: str,
     items: Sequence[CollectedSourceItem],
+    provider_finish_reason: str | None = None,
+    provider_usage: dict[str, object] | None = None,
 ) -> CollectorDecision:
     return CollectorDecision(
         reasoning_text=reasoning,
@@ -172,18 +182,29 @@ def _collector_stop_round(
         tool_calls=(),
         stop=True,
         items=tuple(items),
+        provider_finish_reason=provider_finish_reason,
+        provider_usage=provider_usage,
     )
 
 
 class ScriptedSummaryAgent(SummaryAgent):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        provider_finish_reason: str | None = None,
+        provider_usage: dict[str, object] | None = None,
+    ) -> None:
         self.invocations: list[SummaryInvocation] = []
+        self.provider_finish_reason = provider_finish_reason
+        self.provider_usage = provider_usage
 
     async def summarize(self, invocation: SummaryInvocation) -> SummaryDecision:
         self.invocations.append(invocation)
         return SummaryDecision(
             status=CollectSummaryStatus.COMPLETED,
             key_findings_markdown=f"- {invocation.plan.collect_target} 已完成总结。",
+            provider_finish_reason=self.provider_finish_reason,
+            provider_usage=self.provider_usage,
         )
 
 
@@ -598,6 +619,128 @@ async def test_full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_m
     ]
     assert collector_replay_round_3[2].reasoning_content == "需要读取来源 A。"
     assert collector_replay_round_3[3].tool_call_id == "call_fetch_players_a"
+
+
+@pytest.mark.asyncio
+async def test_collection_persists_provider_finish_reason_and_usage_for_agent_runs(
+    make_stage5_client,
+    db_session: Session,
+) -> None:
+    planner = ScriptedPlannerAgent(
+        rounds=[
+            PlannerDecision(
+                reasoning_deltas=("开始搜集。",),
+                plans=(
+                    CollectPlan(
+                        tool_call_id="call_1",
+                        revision_id="rev_placeholder",
+                        collect_target="收集主要玩家",
+                        additional_info="官方与高可信媒体优先。",
+                        freshness_requirement=FreshnessRequirement.HIGH,
+                    ),
+                ),
+                stop=False,
+                provider_finish_reason="tool_calls",
+                provider_usage={"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+            ),
+            PlannerDecision(
+                reasoning_deltas=("准备进入 merge。",),
+                plans=(),
+                stop=True,
+                provider_finish_reason="stop",
+                provider_usage={"prompt_tokens": 12, "completion_tokens": 6, "total_tokens": 18},
+            ),
+        ]
+    )
+    collector = ScriptedCollectorAgent(
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_search_round(
+                    tool_call_id="call_search_players",
+                    query="q_players",
+                    reasoning="先搜索主要玩家。",
+                    provider_finish_reason="tool_calls",
+                    provider_usage={"prompt_tokens": 21, "completion_tokens": 9, "total_tokens": 30},
+                ),
+                _collector_stop_round(
+                    reasoning="当前信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 A",
+                            link="https://example.com/a",
+                            info="A 内容",
+                        ),
+                    ),
+                    provider_finish_reason="stop",
+                    provider_usage={"prompt_tokens": 15, "completion_tokens": 5, "total_tokens": 20},
+                ),
+            ),
+        }
+    )
+    summarizer = ScriptedSummaryAgent(
+        provider_finish_reason="stop",
+        provider_usage={"prompt_tokens": 18, "completion_tokens": 7, "total_tokens": 25},
+    )
+    search = ScriptedWebSearchClient(
+        SearchScenario(
+            results_by_query={
+                "q_players": (
+                    SearchHit(
+                        title="来源 A",
+                        link="https://example.com/a",
+                        snippet="A snippet",
+                    ),
+                ),
+            }
+        )
+    )
+    fetch = ScriptedWebFetchClient(content_by_url={})
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=collector,
+        summary_agent=summarizer,
+        web_search_client=search,
+        web_fetch_client=fetch,
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_collection_flow(client)
+        await read_until_event(lines, {"sources.merged"})
+        await _close_stream(stream_context, response)
+
+    agent_runs = list(
+        db_session.scalars(
+            select(AgentRunRecord)
+            .where(AgentRunRecord.task_id == create_body["task_id"])
+            .order_by(AgentRunRecord.id.asc())
+        )
+    )
+
+    planner_run = next(run for run in agent_runs if run.agent_type == "planner")
+    collector_run = next(run for run in agent_runs if run.agent_type == "collector")
+    summary_run = next(run for run in agent_runs if run.agent_type == "summary")
+
+    assert planner_run.finish_reason == "plans_generated"
+    assert planner_run.provider_finish_reason == "tool_calls"
+    assert planner_run.provider_usage_json == {
+        "prompt_tokens": 20,
+        "completion_tokens": 10,
+        "total_tokens": 30,
+    }
+    assert collector_run.finish_reason == "tool_calls_requested"
+    assert collector_run.provider_finish_reason == "tool_calls"
+    assert collector_run.provider_usage_json == {
+        "prompt_tokens": 21,
+        "completion_tokens": 9,
+        "total_tokens": 30,
+    }
+    assert summary_run.finish_reason == "completed"
+    assert summary_run.provider_finish_reason == "stop"
+    assert summary_run.provider_usage_json == {
+        "prompt_tokens": 18,
+        "completion_tokens": 7,
+        "total_tokens": 25,
+    }
 
 
 @pytest.mark.asyncio

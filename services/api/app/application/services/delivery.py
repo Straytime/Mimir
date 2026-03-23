@@ -292,6 +292,8 @@ class DeliveryOrchestrator:
                     ensure_ascii=False,
                 ),
                 finish_reason="outline_completed",
+                provider_finish_reason=decision.provider_finish_reason,
+                provider_usage_json=decision.provider_usage,
                 tool_calls_json=None,
                 created_at=now,
                 updated_at=now,
@@ -506,6 +508,8 @@ class DeliveryOrchestrator:
                     ensure_ascii=False,
                 ),
                 finish_reason="writer_completed",
+                provider_finish_reason=decision.provider_finish_reason,
+                provider_usage_json=decision.provider_usage,
                 tool_calls_json={
                     "tool_calls": [
                         {
