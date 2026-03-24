@@ -36,7 +36,7 @@ from app.application.services.llm import TextGeneration
 from app.core.config import Settings
 from app.domain.enums import CollectSummaryStatus, FreshnessRequirement
 from app.domain.schemas import CollectPlan
-from app.infrastructure.db.models import AgentRunRecord, CollectedSourceRecord, ResearchTaskRecord, TaskRevisionRecord
+from app.infrastructure.db.models import AgentRunRecord, CollectedSourceRecord, LLMCallTraceRecord, ResearchTaskRecord, TaskRevisionRecord
 from app.infrastructure.delivery.local import LocalArtifactStore
 from app.main import create_app
 from tests.contract.rest.test_task_events import read_sse_event, read_until_event
@@ -334,6 +334,20 @@ async def test_feedback_rollover_reuses_sources_resets_counter_and_advances_to_p
                 "completion_tokens": 9,
                 "total_tokens": 23,
             }
+            feedback_trace = db_session.scalar(
+                select(LLMCallTraceRecord)
+                .where(LLMCallTraceRecord.task_id == seeded.task_id)
+                .where(LLMCallTraceRecord.revision_id == new_revision_id)
+                .where(LLMCallTraceRecord.stage == "feedback_analysis")
+            )
+            assert feedback_trace is not None
+            assert feedback_trace.provider_finish_reason == "stop"
+            assert feedback_trace.provider_usage_json == {
+                "prompt_tokens": 14,
+                "completion_tokens": 9,
+                "total_tokens": 23,
+            }
+            assert feedback_trace.parsed_text.strip().startswith("{")
 
         planner.release.set()
 

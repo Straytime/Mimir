@@ -33,12 +33,17 @@ from app.application.ports.delivery import (
     ReportExportService,
     WriterAgent,
 )
-from app.application.services.invocation import RetryableOperationError
+from app.application.services.invocation import (
+    OperationTraceSnapshot,
+    RetryableOperationError,
+    TraceableOperationError,
+)
 from app.core.config import Settings
 from app.domain.enums import AccessTokenResourceType
 from app.infrastructure.db.models import (
     AgentRunRecord,
     ArtifactRecord,
+    LLMCallTraceRecord,
     TaskRevisionRecord,
     TaskToolCallRecord,
 )
@@ -87,6 +92,35 @@ class ScriptedOutlineAgent(OutlineAgent):
     async def prepare(self, invocation: OutlineInvocation) -> OutlineDecision:
         self.invocations.append(invocation)
         return self.decision
+
+
+class TraceFailingOutlineAgent(OutlineAgent):
+    def __init__(self, *, parsed_text: str) -> None:
+        self.parsed_text = parsed_text
+        self.invocations: list[OutlineInvocation] = []
+
+    async def prepare(self, invocation: OutlineInvocation) -> OutlineDecision:
+        self.invocations.append(invocation)
+        raise TraceableOperationError(
+            "zhipu returned invalid outline JSON",
+            trace_snapshot=OperationTraceSnapshot(
+                parsed_text=self.parsed_text,
+                reasoning_text="outline failed to emit valid JSON",
+                provider_finish_reason="stop",
+                provider_usage_json={
+                    "prompt_tokens": 28,
+                    "completion_tokens": 9,
+                    "total_tokens": 37,
+                },
+                request_id="req_outline_invalid",
+                request_payload={"model": invocation.profile.model},
+                response_payload={
+                    "request_id": "req_outline_invalid",
+                    "parsed_text": self.parsed_text,
+                    "provider_finish_reason": "stop",
+                },
+            ),
+        )
 
 
 class ScriptedWriterAgent(WriterAgent):
@@ -947,6 +981,96 @@ async def test_delivery_persists_provider_finish_reason_and_usage_for_outline_an
         "completion_tokens": 18,
         "total_tokens": 62,
     }
+
+
+@pytest.mark.asyncio
+async def test_delivery_persists_unified_llm_traces_for_outline_and_writer(
+    make_stage6_client,
+    db_session: Session,
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(
+            build_outline_decision(
+                provider_finish_reason="stop",
+                provider_usage={"prompt_tokens": 30, "completion_tokens": 12, "total_tokens": 42},
+            )
+        ),
+        writer_agent=ScriptedWriterAgent(
+            build_writer_decision(
+                tool_call_count=0,
+                provider_finish_reason="stop",
+                provider_usage={"prompt_tokens": 44, "completion_tokens": 18, "total_tokens": 62},
+            )
+        ),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        await _close_stream(stream_context, response)
+
+    traces = list(
+        db_session.scalars(
+            select(LLMCallTraceRecord)
+            .where(LLMCallTraceRecord.task_id == create_body["task_id"])
+            .where(LLMCallTraceRecord.stage.in_(("outline", "writer")))
+            .order_by(LLMCallTraceRecord.id.asc())
+        )
+    )
+
+    assert [trace.stage for trace in traces] == ["outline", "writer"]
+    assert traces[0].provider_finish_reason == "stop"
+    assert traces[0].provider_usage_json == {
+        "prompt_tokens": 30,
+        "completion_tokens": 12,
+        "total_tokens": 42,
+    }
+    assert traces[0].request_json["model"] == "glm-5"
+    assert traces[1].parsed_text.startswith("# 中国 AI 搜索产品竞争格局研究")
+
+
+@pytest.mark.asyncio
+async def test_delivery_persists_outline_trace_when_invalid_output_retries_exhaust(
+    make_stage6_client,
+    db_session: Session,
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=TraceFailingOutlineAgent(
+            parsed_text='{"research_outline": "broken"}'
+        ),
+        writer_agent=ScriptedWriterAgent(build_writer_decision(tool_call_count=0)),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        _, failed_name, failed_payload = await read_until_event(
+            lines,
+            {"task.failed"},
+            timeout=2.0,
+        )
+        await assert_stream_closed(lines)
+        await _close_stream(stream_context, response)
+
+    trace = db_session.scalar(
+        select(LLMCallTraceRecord)
+        .where(LLMCallTraceRecord.task_id == create_body["task_id"])
+        .where(LLMCallTraceRecord.stage == "outline")
+    )
+
+    assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
+    assert trace is not None
+    assert trace.parsed_text == '{"research_outline": "broken"}'
+    assert trace.provider_finish_reason == "stop"
+    assert trace.request_id == "req_outline_invalid"
 
 
 @pytest.mark.asyncio

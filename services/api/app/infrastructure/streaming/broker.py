@@ -319,6 +319,10 @@ class TaskLifecycleManager:
                     session=session,
                     cutoff=now - timedelta(hours=48),
                 )
+                self._task_service.repository.prune_llm_call_traces_before(
+                    session=session,
+                    cutoff=now - timedelta(hours=self._settings.llm_trace_retention_hours),
+                )
                 session.commit()
 
             for task in pending_tasks:

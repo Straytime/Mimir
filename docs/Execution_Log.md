@@ -3127,3 +3127,65 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 无当前 blocker
   - 本次没有发现第二个独立布局 bug；现有多图 PDF 回归已通过，但这仍是对当前 renderer 的最小修补，不包含新的版式美化或大规模重构
+
+## R1-049 Unified LLM Trace Retention
+
+- 日期时间: 2026-03-24 17:18:00 CST (+0800)
+- 任务包编号: R1-049
+- session 标识: `codex/r1-049-unified-llm-trace-retention`
+- 目标摘要:
+  - 为主要 LLM 调用建立统一的 `llm_call_traces` 持久化，独立于 `agent_runs`
+  - 为 trace 引入独立 retention，避免 task cleanup 后立即失去原始输入/输出证据
+  - 补齐 clarification / requirement_analysis / planner / collector / summary / outline / writer / feedback_analysis 的统一 trace 覆盖
+  - 额外补齐 invalid JSON / adapter parse failure 场景下的最后一次 trace 持久化，避免 retry exhaustion 后只剩日志摘要
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/application/dto/delivery.py`
+  - `services/api/app/application/dto/invocation.py`
+  - `services/api/app/application/dto/research.py`
+  - `services/api/app/application/services/clarification.py`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/application/services/feedback.py`
+  - `services/api/app/application/services/invocation.py`
+  - `services/api/app/application/services/llm.py`
+  - `services/api/app/core/config.py`
+  - `services/api/app/infrastructure/db/models.py`
+  - `services/api/app/infrastructure/db/repositories.py`
+  - `services/api/app/infrastructure/db/migrations/versions/20260324_0007_unified_llm_call_traces.py`
+  - `services/api/app/infrastructure/delivery/zhipu.py`
+  - `services/api/app/infrastructure/llm/zhipu.py`
+  - `services/api/app/infrastructure/research/real_http.py`
+  - `services/api/app/infrastructure/streaming/broker.py`
+  - `services/api/tests/integration/cleanup/test_cleanup_worker.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+  - `services/api/tests/integration/db/test_migrations.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `services/api/tests/integration/feedback/test_feedback_revision.py`
+  - `services/api/tests/integration/lifecycle/test_clarification_lifecycle.py`
+  - `services/api/tests/unit/core/test_config.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_outline_agent.py`
+- 测试 / 验证:
+  - 红测 / 失败场景收口:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/unit/infrastructure/test_zhipu_outline_agent.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py -k 'traceable_error or invalid_output_retries_exhaust or persists_outline_trace_when_invalid_output_retries_exhaust or persists_collector_trace_when_invalid_output_retries_exhaust or persists_summary_trace_when_invalid_output_retries_exhaust'`
+    - 结果: `5 passed`
+  - 相关回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/infrastructure/test_zhipu_adapters.py tests/unit/infrastructure/test_zhipu_outline_agent.py tests/integration/db/test_migrations.py tests/integration/cleanup/test_cleanup_worker.py tests/integration/lifecycle/test_clarification_lifecycle.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py tests/integration/feedback/test_feedback_revision.py`
+    - 结果: `113 passed`
+- 验收结论:
+  - 新增 `llm_call_traces` 诊断表，保存统一的 normalized `request_json` / `response_json`、`parsed_text`、`reasoning_text`、`tool_calls_json`、`provider_finish_reason`、`provider_usage_json`、`request_id`
+  - clarification_natural / clarification_options / requirement_analysis / planner / collector / summary / outline / writer / feedback_analysis 现在都会持久化统一 trace
+  - `agent_runs` 继续承担业务 round 观测；provider raw / near-raw 输入输出证据改由 `llm_call_traces` 独立承载
+  - `MIMIR_LLM_TRACE_RETENTION_HOURS` 已接入 `Settings`，默认值为 `72`；cleanup worker 现在会独立清理过期 trace，但不会在 task cleanup 时立即删除最近 trace
+  - Zhipu adapter 现在会把 normalized provider request / response payload 透传到上层；trace 中可直接查看 `model`、`messages`、`tools`、`parsed_text`、`reasoning_text`、`tool_calls`、`provider_finish_reason`、`provider_usage`
+  - JSON 解析失败路径也已补齐 trace：
+    - collector stop 输出 invalid JSON
+    - summary `_complete_json()` invalid JSON
+    - outline invalid JSON
+    - 上述场景在 retry exhaustion 后仍会留下最后一次 `llm_call_traces`，不再只剩 `task.failed` 和日志摘要
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次 retention 目标是短期诊断窗口，不是长期审计归档；72 小时后 trace 会被 cleanup worker 独立清理

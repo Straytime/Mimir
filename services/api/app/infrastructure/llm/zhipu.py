@@ -26,6 +26,8 @@ class ZhipuCompletionResult:
     tool_calls: tuple[dict[str, Any], ...] = ()
     provider_finish_reason: str | None = None
     provider_usage: dict[str, Any] | None = None
+    request_payload: dict[str, Any] | None = None
+    response_payload: dict[str, Any] | None = None
 
 
 def create_default_zhipu_client(
@@ -71,20 +73,7 @@ class ZhipuChatClient:
         prompt_chars = sum(
             len(str(m.get("content", ""))) for m in messages
         )
-        request_payload: dict[str, Any] = {
-            "model": invocation.profile.model,
-            "messages": messages,
-            "temperature": invocation.profile.temperature,
-            "top_p": invocation.profile.top_p,
-            "max_tokens": invocation.profile.max_tokens,
-            "thinking": invocation.profile.provider_thinking(),
-            "stream": invocation.profile.stream,
-        }
-        if invocation.tool_schemas:
-            request_payload["tools"] = [
-                tool_schema.to_provider_payload()
-                for tool_schema in invocation.tool_schemas
-            ]
+        request_payload = invocation.to_provider_payload()
 
         logger.info(
             "zhipu LLM call starting: model=%s, messages_count=%d, prompt_chars=%d, thinking=%s, stream=%s",
@@ -123,6 +112,16 @@ class ZhipuChatClient:
             raise RetryableLLMError("zhipu upstream request failed")
         provider_finish_reason = _normalize_provider_finish_reason(diag)
         provider_usage = _normalize_usage_payload(diag.get("usage_json"))
+        response_payload = {
+            "request_id": request_id,
+            "type": diag.get("type"),
+            "provider_finish_reason": provider_finish_reason,
+            "provider_usage": provider_usage,
+            "parsed_text": text,
+            "reasoning_text": str(diag.get("reasoning_text") or ""),
+            "tool_calls": list(tool_calls),
+            "diagnostics": diag,
+        }
         logger.info(
             "zhipu LLM call completed",
             extra={
@@ -140,6 +139,8 @@ class ZhipuChatClient:
             tool_calls=tool_calls,
             provider_finish_reason=provider_finish_reason,
             provider_usage=provider_usage,
+            request_payload=request_payload,
+            response_payload=response_payload,
         )
 
 
@@ -165,8 +166,13 @@ class _BaseTextGenerator:
         return TextGeneration(
             deltas=(text,),
             full_text=text,
+            request_id=result.request_id,
+            reasoning_text=result.reasoning_text,
+            tool_calls=result.tool_calls,
             provider_finish_reason=result.provider_finish_reason,
             provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
         )
 
 

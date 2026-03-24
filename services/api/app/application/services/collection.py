@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 logger = logging.getLogger(__name__)
 
-from app.application.dto.invocation import PromptBundle, PromptMessage, dump_prompt_bundle
+from app.application.dto.invocation import LLMInvocation, PromptBundle, PromptMessage, dump_prompt_bundle
 from app.application.dto.research import (
     CollectResult,
     CollectedSourceItem,
@@ -44,7 +44,9 @@ from app.application.services.invocation import (
     RetryableOperationError,
     RetryingOperationInvoker,
     RiskControlTriggered,
+    TraceableOperationError,
 )
+from app.application.services.llm import build_trace_request_payload, build_trace_response_payload
 from app.application.services.merge import SourceMergeService
 from app.application.services.tasks import TaskService
 from app.core.config import Settings
@@ -372,6 +374,26 @@ class CollectionOrchestrator:
                 created_at=now,
                 updated_at=now,
             )
+            self._persist_llm_trace(
+                session=session,
+                task_id=task_id,
+                revision_id=revision_id,
+                stage="planner",
+                invocation=LLMInvocation(
+                    profile=invocation.profile,
+                    prompt_bundle=prompt_bundle,
+                    tool_schemas=invocation.tool_schemas,
+                ),
+                parsed_text="\n".join(decision.reasoning_deltas),
+                reasoning_text="\n".join(decision.reasoning_deltas),
+                tool_calls_json=list(decision.tool_calls_json) or None,
+                provider_finish_reason=decision.provider_finish_reason,
+                provider_usage_json=decision.provider_usage,
+                request_id=decision.request_id,
+                request_payload=decision.request_payload,
+                response_payload=decision.response_payload,
+                created_at=now,
+            )
             session.commit()
 
         for plan in decision.plans:
@@ -453,6 +475,53 @@ class CollectionOrchestrator:
                     prompt=prompt_bundle,
                     reasoning_text="collector 风控",
                 )
+            except TraceableOperationError as exc:
+                now = self._clock()
+                with self._session_factory() as session:
+                    self._persist_llm_trace(
+                        session=session,
+                        task_id=task_id,
+                        revision_id=revision_id,
+                        stage="collector",
+                        invocation=LLMInvocation(
+                            profile=invocation.profile,
+                            prompt_bundle=prompt_bundle,
+                            tool_schemas=invocation.tool_schemas,
+                        ),
+                        parsed_text=exc.trace_snapshot.parsed_text,
+                        reasoning_text=exc.trace_snapshot.reasoning_text,
+                        tool_calls_json=list(exc.trace_snapshot.tool_calls_json) or None,
+                        provider_finish_reason=exc.trace_snapshot.provider_finish_reason,
+                        provider_usage_json=exc.trace_snapshot.provider_usage_json,
+                        request_id=exc.trace_snapshot.request_id,
+                        request_payload=exc.trace_snapshot.request_payload,
+                        response_payload=exc.trace_snapshot.response_payload,
+                        created_at=now,
+                    )
+                    session.commit()
+                logger.error(
+                    "collector invalid output after retries",
+                    extra={
+                        "task_id": task_id,
+                        "subtask_id": subtask_id,
+                        "error_code": "upstream_service_error",
+                    },
+                    exc_info=True,
+                )
+                await self._fail_task(
+                    task_id=task_id,
+                    error_code="upstream_service_error",
+                    message="collector 调用失败且重试耗尽。",
+                )
+                return CollectResult(
+                    subtask_id=subtask_id,
+                    tool_call_id=plan.tool_call_id,
+                    collect_target=plan.collect_target,
+                    status=CollectSummaryStatus.PARTIAL,
+                    search_queries=tuple(search_queries),
+                    tool_call_count=tool_call_count,
+                    items=tuple(),
+                )
             except RetryableOperationError:
                 logger.error(
                     "collector upstream error after retries",
@@ -532,6 +601,34 @@ class CollectionOrchestrator:
                     else None,
                     created_at=now,
                     updated_at=now,
+                )
+                self._persist_llm_trace(
+                    session=session,
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    stage="collector",
+                    invocation=LLMInvocation(
+                        profile=invocation.profile,
+                        prompt_bundle=prompt_bundle,
+                        tool_schemas=invocation.tool_schemas,
+                    ),
+                    parsed_text=decision.content_text,
+                    reasoning_text=decision.reasoning_text,
+                    tool_calls_json=[
+                        {
+                            "tool_call_id": tool_call.tool_call_id,
+                            "tool_name": tool_call.tool_name,
+                            "arguments_json": tool_call.arguments_json,
+                        }
+                        for tool_call in decision.tool_calls
+                    ]
+                    or None,
+                    provider_finish_reason=decision.provider_finish_reason,
+                    provider_usage_json=decision.provider_usage,
+                    request_id=decision.request_id,
+                    request_payload=decision.request_payload,
+                    response_payload=decision.response_payload,
+                    created_at=now,
                 )
                 session.commit()
 
@@ -1026,6 +1123,53 @@ class CollectionOrchestrator:
                 exc_info=True,
             )
             decision = None
+        except TraceableOperationError as exc:
+            with self._session_factory() as session:
+                self._persist_llm_trace(
+                    session=session,
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    stage="summary",
+                    invocation=LLMInvocation(
+                        profile=invocation.profile,
+                        prompt_bundle=prompt_bundle,
+                        tool_schemas=invocation.tool_schemas,
+                    ),
+                    parsed_text=exc.trace_snapshot.parsed_text,
+                    reasoning_text=exc.trace_snapshot.reasoning_text,
+                    tool_calls_json=list(exc.trace_snapshot.tool_calls_json) or None,
+                    provider_finish_reason=exc.trace_snapshot.provider_finish_reason,
+                    provider_usage_json=exc.trace_snapshot.provider_usage_json,
+                    request_id=exc.trace_snapshot.request_id,
+                    request_payload=exc.trace_snapshot.request_payload,
+                    response_payload=exc.trace_snapshot.response_payload,
+                    created_at=now,
+                )
+                session.commit()
+            logger.error(
+                "summary invalid output after retries",
+                extra={
+                    "task_id": task_id,
+                    "subtask_id": result.subtask_id,
+                    "error_code": "upstream_service_error",
+                },
+                exc_info=True,
+            )
+            await self._fail_task(
+                task_id=task_id,
+                error_code="upstream_service_error",
+                message="summary 调用失败且重试耗尽。",
+            )
+            return CollectSummary(
+                tool_call_id=plan.tool_call_id,
+                subtask_id=result.subtask_id,
+                status=CollectSummaryStatus.PARTIAL,
+                collect_target=plan.collect_target,
+                search_queries=list(result.search_queries),
+                key_findings_markdown="- summary 调用失败，结果不完整。",
+                additional_info=plan.additional_info,
+                freshness_requirement=plan.freshness_requirement.value,
+            )
         except RetryableOperationError:
             logger.error(
                 "summary upstream error after retries",
@@ -1095,6 +1239,34 @@ class CollectionOrchestrator:
                 tool_calls_json=None,
                 created_at=now,
                 updated_at=now,
+            )
+            self._persist_llm_trace(
+                session=session,
+                task_id=task_id,
+                revision_id=revision_id,
+                stage="summary",
+                invocation=LLMInvocation(
+                    profile=invocation.profile,
+                    prompt_bundle=prompt_bundle,
+                    tool_schemas=invocation.tool_schemas,
+                ),
+                parsed_text=summary.key_findings_markdown or summary.message or "",
+                reasoning_text="",
+                tool_calls_json=None,
+                provider_finish_reason=(
+                    decision.provider_finish_reason if decision is not None else None
+                ),
+                provider_usage_json=(
+                    decision.provider_usage if decision is not None else None
+                ),
+                request_id=decision.request_id if decision is not None else None,
+                request_payload=(
+                    decision.request_payload if decision is not None else None
+                ),
+                response_payload=(
+                    decision.response_payload if decision is not None else None
+                ),
+                created_at=now,
             )
             session.commit()
 
@@ -1270,6 +1442,52 @@ class CollectionOrchestrator:
                 target_phase=target_phase,
             )
             session.commit()
+
+    def _persist_llm_trace(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        revision_id: str,
+        stage: str,
+        invocation: LLMInvocation,
+        parsed_text: str,
+        reasoning_text: str,
+        tool_calls_json: list[object] | None,
+        provider_finish_reason: str | None,
+        provider_usage_json: dict[str, object] | None,
+        request_id: str | None,
+        request_payload: dict[str, object] | None,
+        response_payload: dict[str, object] | None,
+        created_at: datetime,
+    ) -> None:
+        self._task_service.repository.append_llm_call_trace(
+            session=session,
+            task_id=task_id,
+            revision_id=revision_id,
+            stage=stage,
+            model=invocation.profile.model,
+            request_json=build_trace_request_payload(
+                invocation=invocation,
+                explicit_payload=request_payload,
+            ),
+            response_json=build_trace_response_payload(
+                explicit_payload=response_payload,
+                parsed_text=parsed_text,
+                reasoning_text=reasoning_text,
+                tool_calls=tuple(tool_calls_json or ()),
+                provider_finish_reason=provider_finish_reason,
+                provider_usage=provider_usage_json,
+                request_id=request_id,
+            ),
+            parsed_text=parsed_text,
+            reasoning_text=reasoning_text or None,
+            tool_calls_json=tool_calls_json,
+            provider_finish_reason=provider_finish_reason,
+            provider_usage_json=provider_usage_json,
+            request_id=request_id,
+            created_at=created_at,
+        )
 
     async def _fail_task(self, *, task_id: str, error_code: str, message: str) -> None:
         logger.error(

@@ -24,7 +24,7 @@ from app.application.dto.delivery import (
     WriterToolCall,
     build_canonical_artifact_path,
 )
-from app.application.dto.invocation import PromptMessage, dump_prompt_bundle
+from app.application.dto.invocation import LLMInvocation, PromptMessage, dump_prompt_bundle
 from app.application.invocation_contracts import (
     build_python_interpreter_tool_schema,
     build_stage_profile,
@@ -41,7 +41,9 @@ from app.application.services.invocation import (
     RetryableOperationError,
     RetryingOperationInvoker,
     RiskControlTriggered,
+    TraceableOperationError,
 )
+from app.application.services.llm import build_trace_request_payload, build_trace_response_payload
 from app.application.services.tasks import TaskService
 from app.core.config import Settings
 from app.core.ids import generate_id
@@ -263,6 +265,37 @@ class DeliveryOrchestrator:
                 message="outline 阶段触发风控。",
             )
             return None
+        except TraceableOperationError as exc:
+            now = self._clock()
+            with self._session_factory() as session:
+                self._persist_llm_trace(
+                    session=session,
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    stage="outline",
+                    invocation=LLMInvocation(
+                        profile=invocation.profile,
+                        prompt_bundle=prompt_bundle,
+                        tool_schemas=invocation.tool_schemas,
+                    ),
+                    parsed_text=exc.trace_snapshot.parsed_text,
+                    reasoning_text=exc.trace_snapshot.reasoning_text,
+                    tool_calls_json=list(exc.trace_snapshot.tool_calls_json) or None,
+                    provider_finish_reason=exc.trace_snapshot.provider_finish_reason,
+                    provider_usage_json=exc.trace_snapshot.provider_usage_json,
+                    request_id=exc.trace_snapshot.request_id,
+                    request_payload=exc.trace_snapshot.request_payload,
+                    response_payload=exc.trace_snapshot.response_payload,
+                    created_at=now,
+                )
+                session.commit()
+            logger.error("outline invalid output after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
+            await self._fail_task(
+                task_id=task_id,
+                error_code="upstream_service_error",
+                message="outline 调用失败且重试耗尽。",
+            )
+            return None
         except RetryableOperationError:
             logger.error("outline upstream error after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
             await self._fail_task(
@@ -297,6 +330,29 @@ class DeliveryOrchestrator:
                 tool_calls_json=None,
                 created_at=now,
                 updated_at=now,
+            )
+            self._persist_llm_trace(
+                session=session,
+                task_id=task_id,
+                revision_id=revision_id,
+                stage="outline",
+                invocation=LLMInvocation(
+                    profile=invocation.profile,
+                    prompt_bundle=prompt_bundle,
+                    tool_schemas=invocation.tool_schemas,
+                ),
+                parsed_text=json.dumps(
+                    _outline_to_payload(decision.outline),
+                    ensure_ascii=False,
+                ),
+                reasoning_text="",
+                tool_calls_json=None,
+                provider_finish_reason=decision.provider_finish_reason,
+                provider_usage_json=decision.provider_usage,
+                request_id=decision.request_id,
+                request_payload=decision.request_payload,
+                response_payload=decision.response_payload,
+                created_at=now,
             )
             session.commit()
 
@@ -521,6 +577,34 @@ class DeliveryOrchestrator:
                 },
                 created_at=now,
                 updated_at=now,
+            )
+            self._persist_llm_trace(
+                session=session,
+                task_id=task_id,
+                revision_id=revision_id,
+                stage="writer",
+                invocation=LLMInvocation(
+                    profile=invocation.profile,
+                    prompt_bundle=prompt_bundle,
+                    tool_schemas=invocation.tool_schemas,
+                ),
+                parsed_text=decision.text,
+                reasoning_text=decision.reasoning_text,
+                tool_calls_json=[
+                    {
+                        "tool_call_id": tool_call.tool_call_id,
+                        "tool_name": tool_call.tool_name,
+                        "code": tool_call.code,
+                    }
+                    for tool_call in decision.tool_calls
+                ]
+                or None,
+                provider_finish_reason=decision.provider_finish_reason,
+                provider_usage_json=decision.provider_usage,
+                request_id=decision.request_id,
+                request_payload=decision.request_payload,
+                response_payload=decision.response_payload,
+                created_at=now,
             )
             session.commit()
         return decision
@@ -883,6 +967,52 @@ class DeliveryOrchestrator:
                 target_phase=target_phase,
             )
             session.commit()
+
+    def _persist_llm_trace(
+        self,
+        *,
+        session: Session,
+        task_id: str,
+        revision_id: str,
+        stage: str,
+        invocation: LLMInvocation,
+        parsed_text: str,
+        reasoning_text: str,
+        tool_calls_json: list[object] | None,
+        provider_finish_reason: str | None,
+        provider_usage_json: dict[str, object] | None,
+        request_id: str | None,
+        request_payload: dict[str, object] | None,
+        response_payload: dict[str, object] | None,
+        created_at: datetime,
+    ) -> None:
+        self._task_service.repository.append_llm_call_trace(
+            session=session,
+            task_id=task_id,
+            revision_id=revision_id,
+            stage=stage,
+            model=invocation.profile.model,
+            request_json=build_trace_request_payload(
+                invocation=invocation,
+                explicit_payload=request_payload,
+            ),
+            response_json=build_trace_response_payload(
+                explicit_payload=response_payload,
+                parsed_text=parsed_text,
+                reasoning_text=reasoning_text,
+                tool_calls=tuple(tool_calls_json or ()),
+                provider_finish_reason=provider_finish_reason,
+                provider_usage=provider_usage_json,
+                request_id=request_id,
+            ),
+            parsed_text=parsed_text,
+            reasoning_text=reasoning_text or None,
+            tool_calls_json=tool_calls_json,
+            provider_finish_reason=provider_finish_reason,
+            provider_usage_json=provider_usage_json,
+            request_id=request_id,
+            created_at=created_at,
+        )
 
     async def _fail_task(self, *, task_id: str, error_code: str, message: str) -> None:
         logger.error(

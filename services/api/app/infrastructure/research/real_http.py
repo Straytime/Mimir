@@ -22,8 +22,10 @@ from app.application.dto.research import (
     SummaryInvocation,
 )
 from app.application.services.invocation import (
+    OperationTraceSnapshot,
     RetryableOperationError,
     RiskControlTriggered,
+    TraceableOperationError,
 )
 from app.application.services.llm import RetryableLLMError
 from app.core.json_utils import (
@@ -91,8 +93,11 @@ class ZhipuPlannerAgent:
             reasoning_deltas=(),
             plans=(),
             stop=True,
+            request_id=result.request_id,
             provider_finish_reason=result.provider_finish_reason,
             provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
         )
 
     def _parse_tool_calls(
@@ -131,8 +136,12 @@ class ZhipuPlannerAgent:
             reasoning_deltas=reasoning_deltas,
             plans=tuple(plans),
             stop=False,
+            request_id=result.request_id,
             provider_finish_reason=result.provider_finish_reason,
             provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
+            tool_calls_json=result.tool_calls,
         )
 
     @staticmethod
@@ -151,8 +160,11 @@ class ZhipuPlannerAgent:
                 reasoning_deltas=(),
                 plans=(),
                 stop=True,
+                request_id=result.request_id,
                 provider_finish_reason=result.provider_finish_reason,
                 provider_usage=result.provider_usage,
+                request_payload=result.request_payload,
+                response_payload=result.response_payload,
             )
 
         if not isinstance(parsed, dict):
@@ -160,8 +172,11 @@ class ZhipuPlannerAgent:
                 reasoning_deltas=(),
                 plans=(),
                 stop=True,
+                request_id=result.request_id,
                 provider_finish_reason=result.provider_finish_reason,
                 provider_usage=result.provider_usage,
+                request_payload=result.request_payload,
+                response_payload=result.response_payload,
             )
 
         reasoning_deltas = _coerce_string_tuple(parsed.get("reasoning_deltas"))
@@ -195,8 +210,11 @@ class ZhipuPlannerAgent:
             reasoning_deltas=reasoning_deltas,
             plans=tuple(plans),
             stop=stop,
+            request_id=result.request_id,
             provider_finish_reason=result.provider_finish_reason,
             provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
         )
 
 
@@ -269,8 +287,11 @@ class ZhipuCollectorAgent:
             tool_calls=tuple(tool_calls),
             stop=False,
             items=(),
+            request_id=result.request_id,
             provider_finish_reason=result.provider_finish_reason,
             provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
         )
 
     @staticmethod
@@ -278,15 +299,24 @@ class ZhipuCollectorAgent:
         extracted = extract_first_top_level_json_block(result.text)
         if extracted is None:
             logger.error("collector returned invalid JSON response")
-            raise RetryableOperationError("zhipu returned invalid JSON")
+            raise TraceableOperationError(
+                "zhipu returned invalid JSON",
+                trace_snapshot=_build_trace_snapshot(result),
+            )
         try:
             parsed = json.loads(extracted)
         except json.JSONDecodeError as exc:
             logger.error("collector returned invalid JSON response", exc_info=True)
-            raise RetryableOperationError("zhipu returned invalid JSON") from exc
+            raise TraceableOperationError(
+                "zhipu returned invalid JSON",
+                trace_snapshot=_build_trace_snapshot(result),
+            ) from exc
 
         if not isinstance(parsed, list):
-            raise RetryableOperationError("zhipu returned invalid JSON")
+            raise TraceableOperationError(
+                "zhipu returned invalid JSON",
+                trace_snapshot=_build_trace_snapshot(result),
+            )
 
         items: list[CollectedSourceItem] = []
         for item in parsed:
@@ -311,8 +341,11 @@ class ZhipuCollectorAgent:
             tool_calls=(),
             stop=True,
             items=tuple(items),
+            request_id=result.request_id,
             provider_finish_reason=result.provider_finish_reason,
             provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
         )
 
 
@@ -332,8 +365,11 @@ class ZhipuSummaryAgent:
                 payload.get("key_findings_markdown")
             ),
             message=_coerce_optional_string(payload.get("message")),
+            request_id=result.request_id,
             provider_finish_reason=result.provider_finish_reason,
             provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
         )
 
 
@@ -499,14 +535,23 @@ async def _complete_json(
         extracted = extract_first_top_level_json_block(result.text)
         if extracted is None:
             logger.error("research _complete_json: invalid JSON response")
-            raise RetryableOperationError("zhipu returned invalid JSON")
+            raise TraceableOperationError(
+                "zhipu returned invalid JSON",
+                trace_snapshot=_build_trace_snapshot(result),
+            )
         parsed = json.loads(extracted)
     except json.JSONDecodeError as exc:
         logger.error("research _complete_json: invalid JSON response", exc_info=True)
-        raise RetryableOperationError("zhipu returned invalid JSON") from exc
+        raise TraceableOperationError(
+            "zhipu returned invalid JSON",
+            trace_snapshot=_build_trace_snapshot(result),
+        ) from exc
 
     if not isinstance(parsed, dict):
-        raise RetryableOperationError("zhipu returned invalid JSON")
+        raise TraceableOperationError(
+            "zhipu returned invalid JSON",
+            trace_snapshot=_build_trace_snapshot(result),
+        )
     return parsed, result
 
 
@@ -540,6 +585,21 @@ def _coerce_optional_string(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _build_trace_snapshot(result: "ZhipuCompletionResult") -> OperationTraceSnapshot:
+    return OperationTraceSnapshot(
+        parsed_text=result.text,
+        reasoning_text=result.reasoning_text.strip(),
+        tool_calls_json=tuple(
+            dict(tool_call) for tool_call in (result.tool_calls or ())
+        ),
+        provider_finish_reason=result.provider_finish_reason,
+        provider_usage_json=result.provider_usage,
+        request_id=result.request_id,
+        request_payload=result.request_payload,
+        response_payload=result.response_payload,
+    )
 
 
 def _read_json(response: httpx.Response) -> dict[str, Any]:

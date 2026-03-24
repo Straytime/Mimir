@@ -1533,6 +1533,43 @@ writer 特别约束：
 - `provider_finish_reason` 单独保存 provider 返回的真实结束原因，例如 `stop`、`length`、`tool_calls`；stream 场景若收到多个非空值，按“最后一个非空 finish reason”归一。
 - `provider_usage_json` 以结构化 JSON 保存 provider usage；后续凡是判断“截断”“length stop”“tool_calls stop”“空返回”，必须以这两个 provider 观测字段为依据，不能靠应用层 `finish_reason` 猜测。
 
+### `llm_call_traces`
+
+- 独立于 `agent_runs` 的统一 LLM 诊断表
+- 保存所有主要 LLM 调用的 normalized raw / near-raw 输入输出证据
+- 覆盖阶段：
+  - `clarification_natural`
+  - `clarification_options`
+  - `requirement_analysis`
+  - `planner`
+  - `collector`
+  - `summary`
+  - `outline`
+  - `writer`
+  - `feedback_analysis`
+- 推荐字段：
+  - `task_id`
+  - `revision_id`
+  - `stage`
+  - `model`
+  - `request_json`
+  - `response_json`
+  - `parsed_text`
+  - `reasoning_text`
+  - `tool_calls_json`
+  - `provider_finish_reason`
+  - `provider_usage_json`
+  - `request_id`
+  - `created_at`
+
+约束：
+
+- `agent_runs` 继续承担业务 round 级结构化观测，但不等同于 provider raw trace。
+- `llm_call_traces` 只用于调试/诊断，不参与前端契约，也不作为业务 source of truth。
+- `request_json` / `response_json` 保存 provider payload 的稳定归一化结构，不保存 Python SDK 对象 repr。
+- 即使 adapter 在 JSON 解析阶段判定输出无效，最后一次调用尝试的 normalized request / response 也必须写入 `llm_call_traces`，不能因为解析失败丢失原始证据。
+- `llm_call_traces` 不得通过级联删除绑定到 `research_tasks`；其 retention 独立于任务 cleanup。
+
 ### `task_tool_calls`
 
 - 保存外部工具调用记录
@@ -1563,6 +1600,7 @@ writer 特别约束：
 2. 被终止或失败的任务，立即清理数据与制品。
 3. 已交付且未开启新任务的任务，保留 30 分钟后清理。
 4. E2B 沙箱在 revision 结束或任务终止时必须显式销毁。
+5. `llm_call_traces` 独立保留 72 小时后清理，不跟随 task cleanup 立即删除。
 5. Artifact Store 中的图片、zip、pdf 必须与数据库删除保持事务一致性或补偿一致性。
 
 建议实现：
@@ -1741,6 +1779,7 @@ writer 特别约束：
 1. 每个 HTTP 请求生成 `request_id`，返回给客户端。
 2. 每个 Task 生成一个贯穿生命周期的 `trace_id`，用于串联内部编排日志。
 3. 所有上游请求都记录对方返回的 `request_id`，并与本地 `trace_id` 关联。
+4. 所有主要 LLM 调用都必须持久化统一 `llm_call_traces`，保存 request / response / parsed text / reasoning / tool calls / provider finish reason / usage。
 
 ## 12. 前后端交互约束
 

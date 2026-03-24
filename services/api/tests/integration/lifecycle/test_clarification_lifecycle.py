@@ -5,11 +5,14 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.application.dto.invocation import LLMInvocation
 from app.application.ports.llm import ClarificationGenerator, RequirementAnalyzer
 from app.application.services.llm import TextGeneration
 from app.core.config import Settings
+from app.infrastructure.db.models import LLMCallTraceRecord
 from app.main import create_app
 from tests.contract.rest.test_task_events import assert_stream_closed, read_until_event
 from tests.contract.rest.test_tasks import build_create_task_payload
@@ -144,6 +147,92 @@ async def test_natural_clarification_flow_emits_ready_then_analysis_events(
         "freshness_requirement": "high",
         "language": "zh-CN",
     }
+
+
+@pytest.mark.asyncio
+async def test_clarification_and_requirement_analysis_persist_unified_llm_traces(
+    stage4_client: AsyncClient,
+    db_session: Session,
+) -> None:
+    create_response = await stage4_client.post(
+        "/api/v1/tasks",
+        json=build_create_task_payload(clarification_mode="natural"),
+    )
+    create_body = create_response.json()
+
+    async with stage4_client.stream(
+        "GET",
+        f"/api/v1/tasks/{create_body['task_id']}/events",
+        headers={"Authorization": f"Bearer {create_body['task_token']}"},
+    ) as response:
+        lines = response.aiter_lines()
+        await read_until_event(lines, {"task.created"})
+        await read_until_event(lines, {"clarification.natural.ready"})
+        submit_response = await stage4_client.post(
+            f"/api/v1/tasks/{create_body['task_id']}/clarification",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+            json={
+                "mode": "natural",
+                "answer_text": "重点看中国市场，偏商业分析，覆盖近两年变化。",
+            },
+        )
+        await read_until_event(lines, {"analysis.completed"})
+
+    assert submit_response.status_code == 202
+
+    traces = list(
+        db_session.scalars(
+            select(LLMCallTraceRecord)
+            .where(LLMCallTraceRecord.task_id == create_body["task_id"])
+            .where(
+                LLMCallTraceRecord.stage.in_(
+                    ("clarification_natural", "requirement_analysis")
+                )
+            )
+            .order_by(LLMCallTraceRecord.id.asc())
+        )
+    )
+
+    assert [trace.stage for trace in traces] == [
+        "clarification_natural",
+        "requirement_analysis",
+    ]
+    assert traces[0].request_json["model"] == "glm-5"
+    assert "为了更好开展研究" in traces[0].parsed_text
+    assert traces[1].parsed_text.strip().startswith("{")
+    assert traces[1].provider_finish_reason is None
+    assert traces[1].request_id is None
+
+
+@pytest.mark.asyncio
+async def test_options_clarification_persists_unified_llm_trace(
+    stage4_client: AsyncClient,
+    db_session: Session,
+) -> None:
+    create_response = await stage4_client.post(
+        "/api/v1/tasks",
+        json=build_create_task_payload(clarification_mode="options"),
+    )
+    create_body = create_response.json()
+
+    async with stage4_client.stream(
+        "GET",
+        f"/api/v1/tasks/{create_body['task_id']}/events",
+        headers={"Authorization": f"Bearer {create_body['task_token']}"},
+    ) as response:
+        lines = response.aiter_lines()
+        await read_until_event(lines, {"task.created"})
+        await read_until_event(lines, {"clarification.options.ready"})
+
+    trace = db_session.scalar(
+        select(LLMCallTraceRecord)
+        .where(LLMCallTraceRecord.task_id == create_body["task_id"])
+        .where(LLMCallTraceRecord.stage == "clarification_options")
+    )
+
+    assert trace is not None
+    assert trace.request_json["model"] == "glm-5"
+    assert "行业现状" in trace.parsed_text
 
 
 @pytest.mark.asyncio

@@ -61,6 +61,7 @@ class Settings:
     collect_risk_block_threshold: int = 2
     fetched_content_limit: int = 5000
     writer_max_rounds: int = 5
+    llm_trace_retention_hours: int = 72
     cleanup_scan_interval_seconds: float = 60.0
 
     @classmethod
@@ -224,6 +225,9 @@ class Settings:
             ),
             writer_max_rounds=int(
                 os.getenv("MIMIR_WRITER_MAX_ROUNDS", "5")
+            ),
+            llm_trace_retention_hours=int(
+                os.getenv("MIMIR_LLM_TRACE_RETENTION_HOURS", "72")
             ),
             cleanup_scan_interval_seconds=float(
                 os.getenv("MIMIR_CLEANUP_SCAN_INTERVAL_SECONDS", "60.0")

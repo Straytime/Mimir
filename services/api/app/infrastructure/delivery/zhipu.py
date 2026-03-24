@@ -14,6 +14,7 @@ from app.application.dto.delivery import (
     WriterToolCall,
 )
 from app.application.services.invocation import RetryableOperationError
+from app.application.services.invocation import OperationTraceSnapshot, TraceableOperationError
 from app.application.services.llm import RetryableLLMError
 from app.core.json_utils import extract_first_top_level_json_block
 from app.infrastructure.research.real_http import _coerce_optional_string
@@ -44,18 +45,30 @@ class ZhipuOutlineAgent:
         extracted = extract_first_top_level_json_block(result.text)
         if extracted is None:
             logger.error("outline: invalid JSON response")
-            raise RetryableOperationError("zhipu returned invalid JSON")
+            raise TraceableOperationError(
+                "zhipu returned invalid JSON",
+                trace_snapshot=_build_trace_snapshot(result),
+            )
         try:
             payload = json.loads(extracted)
         except json.JSONDecodeError as exc:
             logger.error("outline: invalid JSON response", exc_info=True)
-            raise RetryableOperationError("zhipu returned invalid JSON") from exc
+            raise TraceableOperationError(
+                "zhipu returned invalid JSON",
+                trace_snapshot=_build_trace_snapshot(result),
+            ) from exc
         if not isinstance(payload, dict):
-            raise RetryableOperationError("zhipu returned invalid outline JSON")
+            raise TraceableOperationError(
+                "zhipu returned invalid outline JSON",
+                trace_snapshot=_build_trace_snapshot(result),
+            )
 
         outline_payload = payload.get("research_outline")
         if not isinstance(outline_payload, dict):
-            raise RetryableOperationError("zhipu returned invalid outline JSON")
+            raise TraceableOperationError(
+                "zhipu returned invalid outline JSON",
+                trace_snapshot=_build_trace_snapshot(result),
+            )
 
         title = "研究报告"
         sections: list[OutlineSection] = []
@@ -80,7 +93,10 @@ class ZhipuOutlineAgent:
                 )
             )
         if not sections:
-            raise RetryableOperationError("zhipu returned invalid outline JSON")
+            raise TraceableOperationError(
+                "zhipu returned invalid outline JSON",
+                trace_snapshot=_build_trace_snapshot(result),
+            )
 
         entities = payload.get("entities")
         if isinstance(entities, (list, tuple)):
@@ -96,8 +112,11 @@ class ZhipuOutlineAgent:
                 sections=tuple(sections),
                 entities=entity_values,
             ),
+            request_id=result.request_id,
             provider_finish_reason=result.provider_finish_reason,
             provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
         )
 
 
@@ -144,8 +163,11 @@ class ZhipuWriterAgent:
             text=result.text.strip(),
             tool_calls=tuple(tool_calls),
             reasoning_text=result.reasoning_text.strip(),
+            request_id=result.request_id,
             provider_finish_reason=result.provider_finish_reason,
             provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
         )
 
 
@@ -155,3 +177,16 @@ def _coerce_chat_client(
     if isinstance(client, ZhipuChatClient):
         return client
     return ZhipuChatClient(client=client)
+
+
+def _build_trace_snapshot(result) -> OperationTraceSnapshot:
+    return OperationTraceSnapshot(
+        parsed_text=result.text,
+        reasoning_text=result.reasoning_text.strip(),
+        tool_calls_json=tuple(dict(tool_call) for tool_call in (result.tool_calls or ())),
+        provider_finish_reason=result.provider_finish_reason,
+        provider_usage_json=result.provider_usage,
+        request_id=result.request_id,
+        request_payload=result.request_payload,
+        response_payload=result.response_payload,
+    )

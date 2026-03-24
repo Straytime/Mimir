@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.application.ports.delivery import ArtifactStore
 from app.core.config import Settings
-from app.infrastructure.db.models import ArtifactRecord, ResearchTaskRecord
+from app.infrastructure.db.models import ArtifactRecord, LLMCallTraceRecord, ResearchTaskRecord
 from app.infrastructure.delivery.local import LocalArtifactStore
 from app.main import create_app
 from tests.contract.rest.test_task_events import assert_stream_closed, read_sse_event, read_until_event
@@ -217,3 +218,86 @@ async def test_cleanup_expired_tasks_worker_retries_cleanup_pending_residual_tas
 
         await _wait_for_missing_task(db_session, task_id=seeded.task_id, timeout=1.0)
         assert not (temp_artifact_dir / seeded.artifact_storage_key).exists()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_worker_retains_recent_llm_traces_until_trace_retention_expires(
+    make_cleanup_client,
+    db_session: Session,
+    fake_clock: FakeClock,
+    temp_artifact_dir: Path,
+) -> None:
+    app, client = await make_cleanup_client(
+        artifact_store=LocalArtifactStore(root_dir=temp_artifact_dir),
+    )
+
+    async with client:
+        seeded = await seed_delivered_task(
+            session=db_session,
+            task_service=app.state.task_service,
+            artifact_store=app.state.artifact_store,
+            now=fake_clock.now(),
+            suffix="trace_cleanup",
+        )
+        db_session.add_all(
+            [
+                LLMCallTraceRecord(
+                    task_id=seeded.task_id,
+                    revision_id=seeded.revision_id,
+                    stage="writer",
+                    model="glm-5",
+                    request_json={"messages": [{"role": "user", "content": "test"}]},
+                    response_json={"choices": [{"message": {"content": "ok"}}]},
+                    parsed_text="ok",
+                    reasoning_text="",
+                    tool_calls_json=None,
+                    provider_finish_reason="stop",
+                    provider_usage_json={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    request_id="req_recent",
+                    created_at=fake_clock.now(),
+                ),
+                LLMCallTraceRecord(
+                    task_id=seeded.task_id,
+                    revision_id=seeded.revision_id,
+                    stage="writer",
+                    model="glm-5",
+                    request_json={"messages": [{"role": "user", "content": "old"}]},
+                    response_json={"choices": [{"message": {"content": "old"}}]},
+                    parsed_text="old",
+                    reasoning_text="",
+                    tool_calls_json=None,
+                    provider_finish_reason="stop",
+                    provider_usage_json={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    request_id="req_old",
+                    created_at=fake_clock.now() - timedelta(hours=73),
+                ),
+            ]
+        )
+        db_session.commit()
+
+        await client.post(
+            f"/api/v1/tasks/{seeded.task_id}/disconnect",
+            headers={"Authorization": f"Bearer {seeded.task_token}"},
+            json={"reason": "pagehide"},
+        )
+        await _wait_for_missing_task(db_session, task_id=seeded.task_id, timeout=1.0)
+
+        db_session.expire_all()
+        retained_traces = list(
+            db_session.scalars(
+                select(LLMCallTraceRecord)
+                .order_by(LLMCallTraceRecord.created_at.asc())
+            )
+        )
+        assert [trace.request_id for trace in retained_traces] == ["req_old", "req_recent"]
+
+        await app.state.task_lifecycle.run_cleanup_compensation()
+
+        db_session.expire_all()
+        remaining_traces = list(
+            db_session.scalars(
+                select(LLMCallTraceRecord)
+                .order_by(LLMCallTraceRecord.created_at.asc())
+            )
+        )
+        assert [trace.request_id for trace in remaining_traces] == ["req_recent"]

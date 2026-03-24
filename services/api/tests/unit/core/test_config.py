@@ -74,6 +74,22 @@ def test_settings_from_env_reads_e2b_template(monkeypatch) -> None:
     assert settings.e2b_template == "mimir-cjk-template"
 
 
+def test_settings_from_env_uses_default_llm_trace_retention_hours(monkeypatch) -> None:
+    monkeypatch.delenv("MIMIR_LLM_TRACE_RETENTION_HOURS", raising=False)
+
+    settings = Settings.from_env()
+
+    assert settings.llm_trace_retention_hours == 72
+
+
+def test_settings_from_env_reads_llm_trace_retention_hours(monkeypatch) -> None:
+    monkeypatch.setenv("MIMIR_LLM_TRACE_RETENTION_HOURS", "96")
+
+    settings = Settings.from_env()
+
+    assert settings.llm_trace_retention_hours == 96
+
+
 def test_resolve_database_url_from_env_prefers_mimir_database_url(monkeypatch) -> None:
     monkeypatch.setenv(
         "MIMIR_DATABASE_URL",

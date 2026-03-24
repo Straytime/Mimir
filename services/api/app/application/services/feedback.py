@@ -23,7 +23,12 @@ from app.application.parsers.requirement import (
 from app.application.ports.llm import FeedbackAnalyzer
 from app.application.prompts.feedback import build_feedback_analysis_prompt
 from app.application.services.invocation import RiskControlTriggered
-from app.application.services.llm import RetryingLLMInvoker, RetryableLLMError
+from app.application.services.llm import (
+    RetryingLLMInvoker,
+    RetryableLLMError,
+    build_trace_request_payload,
+    build_trace_response_payload,
+)
 from app.application.services.tasks import TaskService
 from app.domain.enums import TaskPhase, TaskStatus
 from app.domain.schemas import RequirementDetail
@@ -160,6 +165,20 @@ class FeedbackOrchestrator:
             return
         logger.info("feedback analysis completed", extra={"task_id": task_id, "revision_id": revision_id})
         await self._emit_deltas(task_id=task_id, revision_id=revision_id, deltas=generation.deltas)
+        self._persist_llm_trace(
+            task_id=task_id,
+            revision_id=revision_id,
+            stage="feedback_analysis",
+            invocation=invocation,
+            parsed_text=generation.full_text,
+            reasoning_text=generation.reasoning_text,
+            tool_calls_json=list(generation.tool_calls) or None,
+            provider_finish_reason=generation.provider_finish_reason,
+            provider_usage_json=generation.provider_usage,
+            request_id=generation.request_id,
+            request_payload=generation.request_payload,
+            response_payload=generation.response_payload,
+        )
 
         parser = RequirementDetailParser()
         try:
@@ -241,6 +260,53 @@ class FeedbackOrchestrator:
                     created_at=self._clock(),
                 )
                 session.commit()
+
+    def _persist_llm_trace(
+        self,
+        *,
+        task_id: str,
+        revision_id: str,
+        stage: str,
+        invocation: LLMInvocation,
+        parsed_text: str,
+        reasoning_text: str,
+        tool_calls_json: list[object] | None,
+        provider_finish_reason: str | None,
+        provider_usage_json: dict[str, object] | None,
+        request_id: str | None,
+        request_payload: dict[str, object] | None,
+        response_payload: dict[str, object] | None,
+    ) -> None:
+        now = self._clock()
+        with self._session_factory() as session:
+            self._task_service.repository.append_llm_call_trace(
+                session=session,
+                task_id=task_id,
+                revision_id=revision_id,
+                stage=stage,
+                model=invocation.profile.model,
+                request_json=build_trace_request_payload(
+                    invocation=invocation,
+                    explicit_payload=request_payload,
+                ),
+                response_json=build_trace_response_payload(
+                    explicit_payload=response_payload,
+                    parsed_text=parsed_text,
+                    reasoning_text=reasoning_text,
+                    tool_calls=tuple(tool_calls_json or ()),
+                    provider_finish_reason=provider_finish_reason,
+                    provider_usage=provider_usage_json,
+                    request_id=request_id,
+                ),
+                parsed_text=parsed_text,
+                reasoning_text=reasoning_text or None,
+                tool_calls_json=tool_calls_json,
+                provider_finish_reason=provider_finish_reason,
+                provider_usage_json=provider_usage_json,
+                request_id=request_id,
+                created_at=now,
+            )
+            session.commit()
 
     async def _fail_task(
         self,
