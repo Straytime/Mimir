@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from pathlib import Path
 
 from app.application.dto.delivery import (
     OutlineInvocation,
@@ -16,6 +17,9 @@ from app.domain.schemas import RequirementDetail
 
 
 NOW = datetime(2026, 3, 16, 16, 30, tzinfo=UTC)
+DELIVERY_PROMPT_SOURCE = (
+    Path(__file__).resolve().parents[3] / "app/application/prompts/delivery.py"
+).read_text(encoding="utf-8")
 
 
 def build_requirement_detail() -> RequirementDetail:
@@ -80,8 +84,8 @@ def test_outline_prompt_semantic_lock_keeps_role_and_output_constraints() -> Non
     assert "你是一个深度研究架构师" in prompt.system_prompt
     assert "你**绝对不能**撰写具体内容" in prompt.system_prompt
     assert "章节描述内容**必须**满足以下要求" in prompt.system_prompt
-    assert "\uff08\u5982 \u201c92%\u201d\uff09" in prompt.system_prompt
-    assert '应使用\u201c选取代表性XX\u201d、\u201c对比主流XX\u201d等抽象化表述。' in prompt.system_prompt
+    assert "（如 “92%”）" in prompt.system_prompt
+    assert '应使用“选取代表性XX”、“对比主流XX”等抽象化表述。' in prompt.system_prompt
     assert "**实体约束与大纲必须严格考量信息获取结果，保证已有信息可支撑**" in prompt.system_prompt
     assert '"标题"' in prompt.system_prompt
     assert '"section_1"' in prompt.system_prompt
@@ -104,10 +108,10 @@ def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() ->
         )
     )
 
-    assert "\u4f60\u662f\u4e00\u4e2a\u8d44\u6df1\u7814\u7a76\u5458" in prompt.system_prompt
-    assert "**\u4fdd\u8bc1\u7814\u7a76\u5185\u5bb9\u524d\u540e\u903b\u8f91\u8fde\u8d2f\u3001\u5408\u7406\u4e14\u6e05\u6670\u3001\u4e0a\u4e0b\u6587\u5b9e\u4f53\u4e00\u81f4\u65e0\u51b2\u7a81\u3002**" in prompt.system_prompt
-    assert "**\uff01\u91cd\u8981\uff01\u7edd\u5bf9\u4e0d\u8981\u8d85\u8fc7\u4e00\u4e07\u5b57\uff01**" in prompt.system_prompt
-    assert "\u6839\u636e\u5b9e\u9645\u4f7f\u7528\u7684\u53c2\u8003\u4fe1\u606f\u521b\u5efa\u811a\u6ce8\u53c2\u8003" in prompt.system_prompt
+    assert "你是一个资深研究员" in prompt.system_prompt
+    assert "**保证研究内容前后逻辑连贯、合理且清晰、上下文实体一致无冲突。**" in prompt.system_prompt
+    assert "**！重要！绝对不要超过一万字！**" in prompt.system_prompt
+    assert "根据实际使用的参考信息创建脚注参考" in prompt.system_prompt
     assert "python_interpreter" in prompt.system_prompt
     assert "canonical_path" in prompt.system_prompt
     assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
@@ -115,3 +119,12 @@ def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() ->
     assert "ref_1" in prompt.user_prompt
     assert "中国 AI 搜索产品竞争格局研究" in prompt.user_prompt
     assert "竞争格局与主要玩家" in prompt.user_prompt
+
+
+def test_delivery_prompt_source_uses_human_readable_utf8_text() -> None:
+    assert "\\u" not in DELIVERY_PROMPT_SOURCE
+    assert "_LDQ" not in DELIVERY_PROMPT_SOURCE
+    assert "_RDQ" not in DELIVERY_PROMPT_SOURCE
+    assert "_LSQ" not in DELIVERY_PROMPT_SOURCE
+    assert "_RSQ" not in DELIVERY_PROMPT_SOURCE
+    assert "_ELLIPSIS" not in DELIVERY_PROMPT_SOURCE
