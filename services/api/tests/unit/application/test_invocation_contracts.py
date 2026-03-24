@@ -112,3 +112,5 @@ def test_tool_schemas_match_current_architecture_contract() -> None:
     python_interpreter = build_python_interpreter_tool_schema()
     assert python_interpreter.name == "python_interpreter"
     assert set(python_interpreter.parameters) == {"code"}
+    assert "Noto Sans CJK SC" in python_interpreter.description
+    assert "中文图表" in python_interpreter.description

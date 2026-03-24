@@ -66,6 +66,14 @@ def test_settings_from_env_reads_fetched_content_limit(monkeypatch) -> None:
     assert settings.fetched_content_limit == 4321
 
 
+def test_settings_from_env_reads_e2b_template(monkeypatch) -> None:
+    monkeypatch.setenv("MIMIR_E2B_TEMPLATE", "mimir-cjk-template")
+
+    settings = Settings.from_env()
+
+    assert settings.e2b_template == "mimir-cjk-template"
+
+
 def test_resolve_database_url_from_env_prefers_mimir_database_url(monkeypatch) -> None:
     monkeypatch.setenv(
         "MIMIR_DATABASE_URL",

@@ -403,6 +403,7 @@ snapshot 规则：
    - 失败时必须包含 `stderr` 或等价错误摘要，以及 `error_type`、`error_message`、`traceback_excerpt`
    - tool result 可选携带 `artifacts[]`
    - `artifacts[]` 中必须锁定 `artifact_id`、`filename`、`mime_type`、`canonical_path=mimir://artifact/{artifact_id}`
+   - tool description 必须锁定“中文图表优先使用 `Noto Sans CJK SC`”
 4. `collect_agent`：
    - 模型可见参数只允许 `collect_target`、`additional_info`、`freshness_requirement`
    - `freshness_requirement` 继续锁定为枚举语义 `low | high`
@@ -415,6 +416,14 @@ snapshot 规则：
 3. `python_interpreter` 只返回文本摘要与 artifact 元数据，不把二进制内容写入 transcript
 4. provider 风控、超时、空内容、4xx、5xx 都会被映射到统一异常或统一 tool result envelope
 5. E2B `execute` 成功返回但 `execution.error != null` 时，必须映射成 writer 可消费的结构化失败 tool result，而不是 `RetryableOperationError`
+6. 自定义 E2B template 的结构测试必须锁定：模板定义文件存在、字体资产存在、模板 build 步骤会安装 `Noto Sans CJK SC` 并刷新字体缓存
+
+E2B template / 字体能力相关测试还必须覆盖：
+
+1. `Settings` 能读取 `MIMIR_E2B_TEMPLATE`
+2. provider runtime 在 real E2B mode 下会把 template 传给 `E2BRealSandboxClient`
+3. `E2BRealSandboxClient.create()` 会调用 `AsyncSandbox.create(template=...)`
+4. template 未配置时，real E2B adapter 保持兼容，不隐式传递其他 template 值
 
 阶段映射：
 
@@ -859,6 +868,7 @@ DoD：
 - `writer.tool_call.requested/completed` 事件顺序具备回归测试
 - writer 首次调用 `python_interpreter` 时才创建 sandbox
 - Revision 结束时 sandbox 会被销毁
+- 自定义 E2B template 能通过显式配置接线到 real sandbox create 路径
 - 下载链接与 artifact URL 都符合契约
 - 正文 markdown 只保存 canonical artifact path，在线渲染与 zip 导出各自完成映射
 - writer reasoning content 仅进入 `agent_runs.reasoning_text` / 调试持久化，不进入最终 `report.md`

@@ -101,17 +101,19 @@ class FakeSandboxFactory:
     async def create(
         self,
         *,
+        template: str | None = None,
         timeout: int | None = None,
         request_timeout: float | None = None,
         api_key: str | None = None,
     ) -> FakeSandbox:
-        self.create_calls.append(
-            {
-                "timeout": timeout,
-                "request_timeout": request_timeout,
-                "api_key": api_key,
-            }
-        )
+        call: dict[str, object] = {
+            "timeout": timeout,
+            "request_timeout": request_timeout,
+            "api_key": api_key,
+        }
+        if template is not None:
+            call["template"] = template
+        self.create_calls.append(call)
         if self.create_error is not None:
             raise self.create_error
         assert self.sandbox is not None
@@ -174,6 +176,56 @@ async def test_e2b_adapter_maps_generated_png_files_into_artifacts() -> None:
     assert filesystem.read_calls == [("./chart.png", "bytes")]
     assert sandbox.kill_calls == [
         {"api_key": "e2b-secret-key", "request_timeout": 12.0}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_e2b_adapter_passes_template_when_configured() -> None:
+    sandbox = FakeSandbox(files=FakeFilesystem(list_results=[[]]))
+    factory = FakeSandboxFactory(sandbox=sandbox)
+    adapter = E2BRealSandboxClient(
+        api_key="e2b-secret-key",
+        request_timeout_seconds=12.0,
+        execution_timeout_seconds=34.0,
+        sandbox_timeout_seconds=600,
+        template="mimir-cjk-template",
+        sandbox_factory=factory,
+    )
+
+    sandbox_id = await adapter.create()
+
+    assert sandbox_id == "sbox_1"
+    assert factory.create_calls == [
+        {
+            "template": "mimir-cjk-template",
+            "timeout": 600,
+            "request_timeout": 12.0,
+            "api_key": "e2b-secret-key",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_e2b_adapter_keeps_default_template_behavior_when_unset() -> None:
+    sandbox = FakeSandbox(files=FakeFilesystem(list_results=[[]]))
+    factory = FakeSandboxFactory(sandbox=sandbox)
+    adapter = E2BRealSandboxClient(
+        api_key="e2b-secret-key",
+        request_timeout_seconds=12.0,
+        execution_timeout_seconds=34.0,
+        sandbox_timeout_seconds=600,
+        sandbox_factory=factory,
+    )
+
+    sandbox_id = await adapter.create()
+
+    assert sandbox_id == "sbox_1"
+    assert factory.create_calls == [
+        {
+            "timeout": 600,
+            "request_timeout": 12.0,
+            "api_key": "e2b-secret-key",
+        }
     ]
 
 

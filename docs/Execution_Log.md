@@ -2941,3 +2941,54 @@ Copy the template below for each completed session:
   - 当前策略只取“第一个可独立通过 `json.loads()` 的完整 top-level JSON block”；若模型一次输出多个 JSON block，后续仍只消费第一个，不会尝试合并或猜测其余块的语义
 - 下一步建议:
   - 若后续继续排查 `planner_invalid_output` 或类似问题，应优先看 provider 原始 `content_text` 是否属于“前后夹带说明文字但中间 JSON 合法”这一类；现在这类噪音输出已不应再直接触发 parser 失败
+
+## R1-045 E2B CJK Font Template
+
+- 日期时间: 2026-03-24 12:02:45 CST (+0800)
+- 任务包编号: R1-045
+- session 标识: `codex/r1-045-e2b-cjk-font-template`
+- 目标摘要:
+  - 为真实 E2B sandbox 接入自定义 template 选择能力，并以 template 预装 `Noto Sans CJK SC` 解决 matplotlib 中文图表方块字风险
+  - 把字体资产、template 定义、后端配置接线以及 `python_interpreter` tool 描述一并收敛到仓库
+  - 不修改 writer system/user prompt，不引入运行时字体安装或 plotting bootstrap 注入
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Deploy_Contract.md`
+  - `docs/Execution_Log.md`
+  - `services/api/.env.example`
+  - `services/api/README.md`
+  - `services/api/app/application/invocation_contracts.py`
+  - `services/api/app/core/config.py`
+  - `services/api/app/infrastructure/delivery/e2b.py`
+  - `services/api/app/infrastructure/providers.py`
+  - `services/api/assets/fonts/NotoSansCJKsc-Regular.otf`
+  - `services/api/e2b_template/e2b.Dockerfile`
+  - `services/api/e2b_template/README.md`
+  - `services/api/tests/unit/application/test_invocation_contracts.py`
+  - `services/api/tests/unit/core/test_config.py`
+  - `services/api/tests/unit/infrastructure/test_e2b_adapter.py`
+  - `services/api/tests/unit/infrastructure/test_provider_factory.py`
+  - `services/api/tests/unit/infrastructure/test_e2b_template_assets.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/infrastructure/test_provider_factory.py tests/unit/infrastructure/test_e2b_adapter.py tests/unit/application/test_invocation_contracts.py tests/unit/infrastructure/test_e2b_template_assets.py -k 'e2b_template or Noto or template or cjk'`
+    - 初次结果: `3 failed, 1 passed`
+    - 失败点:
+      - `Settings` 尚未读取 `MIMIR_E2B_TEMPLATE`
+      - `E2BRealSandboxClient.__init__` 尚未支持 `template`
+      - 仓库内尚无字体资产与 template 定义文件
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/infrastructure/test_provider_factory.py tests/unit/infrastructure/test_e2b_adapter.py tests/unit/application/test_invocation_contracts.py tests/unit/infrastructure/test_e2b_template_assets.py`
+    - 结果: `25 passed`
+- 验收结论:
+  - `Settings` 已新增 `MIMIR_E2B_TEMPLATE` 配置，provider runtime 在 real E2B mode 下会把 template 显式传给 `E2BRealSandboxClient`
+  - `E2BRealSandboxClient.create()` 现在在 template 配置存在时调用 `AsyncSandbox.create(template=...)`；template 未配置时保持兼容，不隐式传递额外值
+  - 仓库已新增受控字体资产 `services/api/assets/fonts/NotoSansCJKsc-Regular.otf` 与 E2B template 定义 `services/api/e2b_template/e2b.Dockerfile`；模板在 build 时安装 `fontconfig`、复制字体并执行 `fc-cache -f -v`
+  - `python_interpreter` 的模型可见 tool description 已明确要求“中文图表优先使用 `Noto Sans CJK SC`”，但未修改 writer 的 system/user prompt
+  - `Architecture`、`Backend_TDD_Plan`、`Deploy_Contract`、`.env.example`、`services/api/README.md` 已同步说明当前采用“环境预装 + tool 描述约束”的方案，而非运行时字体安装
+- blocker / 风险:
+  - 无当前 blocker
+  - 本任务只完成了 template 代码与仓库资产接线，未实际执行 E2B template build/publish，也未在真实 sandbox 中跑中文图表 smoke；后续若要上线，需要先发布 template 并将其名称配置到 `MIMIR_E2B_TEMPLATE`
+- 下一步建议:
+  - 单开一个 real-E2B smoke 任务包，验证已发布 template 在真实 sandbox 中能稳定渲染中文 matplotlib/seaborn 图表且不再出现 `Glyph ... missing from font(s) DejaVu Sans`

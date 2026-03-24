@@ -953,6 +953,7 @@ E2B 生命周期约束：
 11. `writer` 属于 `thinking.type = enabled` 的多轮调用；从第 2 轮开始，下一轮 prompt 必须回灌上一轮及更早轮次的 `reasoning_content`、`content`、`tool_calls` 与 `tool_results`，并保持原始时序。
 12. `collector` 对应 PRD `func_8`，必须作为真正的多轮 sub-agent loop 直接面向 `web_search` / `web_fetch` tool-calling；从第 2 轮开始，下一轮 prompt 必须回灌上一轮及更早轮次的 `reasoning_content`、`content`、`tool_calls` 与 `tool_results`，并保持原始时序。
 13. `outline` 虽然同样启用 thinking，但当前实现仍是单轮调用；在未引入真正的多轮 transcript 之前，不额外发明 reasoning replay 机制。
+14. 中文图表字体能力属于 sandbox 环境能力问题；v1 采用自定义 E2B template 预装 `Noto Sans CJK SC` 解决 matplotlib 中文方块字问题，不在每次 `python_interpreter` 调用时动态安装字体。
 
 ## 8.5 外部调用契约与 PRD 收敛
 
@@ -1117,8 +1118,17 @@ PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": 
 5. `artifacts[]` 中必须包含真实 `artifact_id` 与 `canonical_path=mimir://artifact/{artifact_id}`，供 writer 在正文中插入稳定引用。
 6. 只有 infra / transport / sandbox create-destroy / artifact post-processing 失败，才按后端通用重试策略映射为 `RetryableOperationError`。
 7. 当 E2B `execute` 请求本身成功返回，但 sandbox 内部 Python 代码执行失败时，adapter 必须返回 `success=false` 的结构化 tool result，而不是抛可重试异常。
+8. 自定义 E2B template 若已提供 `Noto Sans CJK SC`，`python_interpreter` 的模型可见 tool description 必须明确要求中文图表优先使用该字体；不得假定 sandbox 会自动替换 matplotlib 默认字体。
 
-### 8.5.5 Port / adapter 责任边界
+### 8.5.5 E2B template 与 CJK 字体约束
+
+1. 中文图表字体问题优先在 sandbox 环境层解决；当前方案是为 `python_interpreter` 使用自定义 E2B template，在 build 时预装 `Noto Sans CJK SC` 并刷新字体缓存。
+2. `Noto Sans CJK SC` 字体资产必须作为受控仓库资产随模板定义一起维护，禁止依赖 sandbox 启动时的外网下载或运行时 `apt install`。
+3. template 选择必须走显式配置；未配置时保持默认 E2B template 兼容行为，避免隐式污染其他 sandbox 场景。
+4. `python_interpreter` 的 tool description 可以约束模型“中文图表优先使用 `Noto Sans CJK SC`”，但不依赖 system prompt / user prompt 猜测当前系统字体。
+5. 当前方案不引入运行时 matplotlib bootstrap 注入；环境能力通过 template 预装完成，具体字体选择由模型提交的代码显式声明。
+
+### 8.5.6 Port / adapter 责任边界
 
 必须通过端口层显式传递的内容：
 
