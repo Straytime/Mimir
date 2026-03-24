@@ -307,6 +307,41 @@ class FlakyArtifactStore(ArtifactStore):
         await self.inner.delete(storage_key)
 
 
+class FlakyReportExportService(ReportExportService):
+    def __init__(
+        self,
+        *,
+        inner: ReportExportService | None = None,
+        markdown_zip_failures_remaining: int = 0,
+        pdf_failures_remaining: int = 0,
+    ) -> None:
+        self.inner = inner or LocalReportExportService()
+        self.markdown_zip_failures_remaining = markdown_zip_failures_remaining
+        self.pdf_failures_remaining = pdf_failures_remaining
+
+    async def build_markdown_zip(
+        self,
+        *,
+        markdown: str,
+        artifacts: tuple[GeneratedArtifact, ...],
+    ) -> bytes:
+        if self.markdown_zip_failures_remaining > 0:
+            self.markdown_zip_failures_remaining -= 1
+            raise RetryableOperationError("temporary markdown zip export failure")
+        return await self.inner.build_markdown_zip(markdown=markdown, artifacts=artifacts)
+
+    async def build_pdf(
+        self,
+        *,
+        markdown: str,
+        artifacts: tuple[GeneratedArtifact, ...],
+    ) -> bytes:
+        if self.pdf_failures_remaining > 0:
+            self.pdf_failures_remaining -= 1
+            raise RetryableOperationError("temporary pdf export failure")
+        return await self.inner.build_pdf(markdown=markdown, artifacts=artifacts)
+
+
 @pytest_asyncio.fixture
 async def make_stage6_client(
     settings: Settings,
@@ -1094,6 +1129,129 @@ async def test_artifact_upload_retry_exhaustion_fails_revision_without_silent_de
     assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
     assert len(scenario.created_ids) == 1
     assert len(scenario.destroyed_ids) == 1
+
+
+@pytest.mark.asyncio
+async def test_markdown_zip_export_retry_exhaustion_logs_export_kind_and_fails_task(
+    make_stage6_client,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=ScriptedWriterAgent(
+            WriterDecision(
+                text="# 中国 AI 搜索产品竞争格局研究\n\n正文。\n",
+                tool_calls=(),
+            )
+        ),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+        report_export_service=FlakyReportExportService(
+            markdown_zip_failures_remaining=4,
+        ),
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        _, failed_name, failed_payload = await read_until_event(
+            lines,
+            {"task.failed"},
+            timeout=2.0,
+        )
+        await _close_stream(stream_context, response)
+
+    stdout = capsys.readouterr().out
+
+    assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
+    assert '"message": "delivery export step failed after retries"' in stdout
+    assert '"export_kind": "markdown_zip"' in stdout
+    assert '"exception_type": "RetryableOperationError"' in stdout
+
+
+@pytest.mark.asyncio
+async def test_pdf_export_retry_exhaustion_logs_export_kind_and_fails_task(
+    make_stage6_client,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=ScriptedWriterAgent(
+            WriterDecision(
+                text="# 中国 AI 搜索产品竞争格局研究\n\n正文。\n",
+                tool_calls=(),
+            )
+        ),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+        report_export_service=FlakyReportExportService(
+            pdf_failures_remaining=4,
+        ),
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        _, failed_name, failed_payload = await read_until_event(
+            lines,
+            {"task.failed"},
+            timeout=2.0,
+        )
+        await _close_stream(stream_context, response)
+
+    stdout = capsys.readouterr().out
+
+    assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
+    assert '"message": "delivery export step failed after retries"' in stdout
+    assert '"export_kind": "pdf"' in stdout
+    assert '"exception_type": "RetryableOperationError"' in stdout
+
+
+@pytest.mark.asyncio
+async def test_export_upload_retry_exhaustion_logs_export_kind_and_fails_task(
+    make_stage6_client,
+    temp_artifact_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=ScriptedWriterAgent(
+            WriterDecision(
+                text="# 中国 AI 搜索产品竞争格局研究\n\n正文。\n",
+                tool_calls=(),
+            )
+        ),
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+        artifact_store=FlakyArtifactStore(
+            inner=LocalArtifactStore(root_dir=temp_artifact_dir),
+            put_failures_remaining=4,
+        ),
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_delivery_flow(client)
+        _, failed_name, failed_payload = await read_until_event(
+            lines,
+            {"task.failed"},
+            timeout=2.0,
+        )
+        await _close_stream(stream_context, response)
+
+    stdout = capsys.readouterr().out
+
+    assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
+    assert '"message": "delivery export step failed after retries"' in stdout
+    assert '"export_kind": "upload"' in stdout
+    assert '"export_target": "mimir-report.zip"' in stdout
+    assert '"exception_type": "RetryableOperationError"' in stdout
 
 
 @pytest.mark.asyncio

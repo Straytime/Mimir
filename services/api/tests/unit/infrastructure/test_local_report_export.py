@@ -5,6 +5,8 @@ import pytest
 from pypdf import PdfReader
 
 from app.application.dto.delivery import GeneratedArtifact
+from app.application.services.invocation import RetryableOperationError
+import app.infrastructure.delivery.local as local_delivery
 from app.infrastructure.delivery.local import LocalReportExportService
 
 _ONE_PIXEL_PNG = b64decode(
@@ -70,3 +72,27 @@ async def test_build_pdf_consumes_canonical_artifact_refs_without_renderer_error
 
     assert "Visual Report" in _extract_pdf_text(pdf_bytes)
     assert _count_pdf_images(pdf_bytes) >= 1
+
+
+@pytest.mark.asyncio
+async def test_build_pdf_logs_real_exception_before_wrapping(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def broken_story(*, html: str):
+        raise ValueError("bad pdf story")
+
+    monkeypatch.setattr(local_delivery, "_build_pdf_story", broken_story)
+
+    with pytest.raises(RetryableOperationError, match="pdf render failed"):
+        await LocalReportExportService().build_pdf(
+            markdown="# Broken Report\n\nBody.\n",
+            artifacts=(),
+        )
+
+    matching_logs = [
+        record for record in caplog.records if record.message == "pdf export render failed"
+    ]
+    assert matching_logs
+    assert matching_logs[-1].exception_type == "ValueError"
+    assert matching_logs[-1].exception_message == "bad pdf story"

@@ -16,7 +16,25 @@ class JSONFormatter(logging.Formatter):
         }
         if record.exc_info and record.exc_info[1] is not None:
             log_entry["exception"] = self.formatException(record.exc_info)
-        for key in ("task_id", "revision_id", "subtask_id", "error_code", "phase"):
+        for key in (
+            "task_id",
+            "revision_id",
+            "subtask_id",
+            "error_code",
+            "phase",
+            "export_kind",
+            "export_target",
+            "artifact_count",
+            "artifact_filenames",
+            "markdown_chars",
+            "exception_type",
+            "exception_message",
+            "request_id",
+            "provider_finish_reason",
+            "provider_usage",
+            "response_length",
+            "tool_calls_count",
+        ):
             value = getattr(record, key, None)
             if value is not None:
                 log_entry[key] = value

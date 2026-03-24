@@ -850,6 +850,7 @@ DoD：
 - `Settings` 必须能正确读取 `MIMIR_WRITER_MAX_ROUNDS`，默认值保持 `5`
 - E2B 基础设施失败 / destroy 失败 / artifact upload-store 失败仍走后端重试与失败收口
 - sandbox 内部 Python 执行失败会产出 `writer.tool_call.completed(success=false)`，并把结构化失败结果写入 writer transcript，允许下一轮继续决策
+- delivery export observability 必须区分 `markdown_zip`、`pdf`、`upload` 三个失败子阶段；重试耗尽后仍走既有 `task.failed` 收口，但日志里必须带 `export_kind`、原始异常类型与基础上下文字段
 
 实现内容：
 
@@ -870,6 +871,7 @@ DoD：
 - Revision 结束时 sandbox 会被销毁
 - 自定义 E2B template 能通过显式配置接线到 real sandbox create 路径
 - 下载链接与 artifact URL 都符合契约
+- `build_markdown_zip`、`build_pdf`、最终 download artifact upload 三段失败都能被独立观察，不再混成单一模糊导出失败
 - 正文 markdown 只保存 canonical artifact path，在线渲染与 zip 导出各自完成映射
 - writer reasoning content 仅进入 `agent_runs.reasoning_text` / 调试持久化，不进入最终 `report.md`
 - writer 成功交付时，最终 markdown 必须包含所有 round 的正文片段，顺序与 round 顺序一致

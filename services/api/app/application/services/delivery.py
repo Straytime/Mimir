@@ -685,13 +685,38 @@ class DeliveryOrchestrator:
                     artifacts=generated_artifacts,
                 )
             )
+        except RetryableOperationError as exc:
+            self._log_export_failure(
+                task_id=task_id,
+                revision_id=revision_id,
+                export_kind="markdown_zip",
+                markdown_chars=len(zip_markdown),
+                generated_artifacts=generated_artifacts,
+                exc=exc,
+            )
+            await self._fail_task(
+                task_id=task_id,
+                error_code="upstream_service_error",
+                message="报告导出失败且重试耗尽。",
+            )
+            await self._destroy_sandbox(runtime=runtime)
+            return False
+        try:
             pdf_bytes = await self._invoke_operation(
                 lambda: self._report_export_service.build_pdf(
                     markdown=final_markdown,
                     artifacts=generated_artifacts,
                 )
             )
-        except RetryableOperationError:
+        except RetryableOperationError as exc:
+            self._log_export_failure(
+                task_id=task_id,
+                revision_id=revision_id,
+                export_kind="pdf",
+                markdown_chars=len(final_markdown),
+                generated_artifacts=generated_artifacts,
+                exc=exc,
+            )
             await self._fail_task(
                 task_id=task_id,
                 error_code="upstream_service_error",
@@ -725,7 +750,16 @@ class DeliveryOrchestrator:
                         mime_type,
                     )
                 )
-            except RetryableOperationError:
+            except RetryableOperationError as exc:
+                self._log_export_failure(
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    export_kind="upload",
+                    markdown_chars=len(final_markdown),
+                    generated_artifacts=generated_artifacts,
+                    exc=exc,
+                    export_target=filename,
+                )
                 await self._fail_task(
                     task_id=task_id,
                     error_code="upstream_service_error",
@@ -879,6 +913,35 @@ class DeliveryOrchestrator:
 
     async def _invoke_operation(self, operation: Callable[[], Awaitable[object]]) -> object:
         return await self._operation_invoker.invoke(operation)
+
+    def _log_export_failure(
+        self,
+        *,
+        task_id: str,
+        revision_id: str,
+        export_kind: str,
+        markdown_chars: int,
+        generated_artifacts: tuple[GeneratedArtifact, ...],
+        exc: Exception,
+        export_target: str | None = None,
+    ) -> None:
+        extra = {
+            "task_id": task_id,
+            "revision_id": revision_id,
+            "export_kind": export_kind,
+            "artifact_count": len(generated_artifacts),
+            "artifact_filenames": [artifact.filename for artifact in generated_artifacts],
+            "markdown_chars": markdown_chars,
+            "exception_type": type(exc).__name__,
+            "exception_message": str(exc),
+        }
+        if export_target is not None:
+            extra["export_target"] = export_target
+        logger.error(
+            "delivery export step failed after retries",
+            extra=extra,
+            exc_info=True,
+        )
 
 
 def _outline_to_payload(outline: ResearchOutline) -> dict[str, object]:

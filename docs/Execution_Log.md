@@ -3019,3 +3019,38 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 无当前 blocker
   - 该收敛只优化排查效率，不改变任何运行时行为或契约
+
+## R1-046 Delivery Export Observability
+
+- 日期时间: 2026-03-24 14:24:00 CST (+0800)
+- 任务包编号: R1-046
+- session 标识: `codex/r1-046-delivery-export-observability`
+- 目标摘要:
+  - 将 delivery 导出阶段拆分为 `markdown_zip`、`pdf`、`upload` 三个独立观察点
+  - 在不改变既有下载端点与失败收口语义的前提下，为生产事故排查补齐结构化日志字段
+  - 让 `build_pdf()` 在包装成 `RetryableOperationError` 前先记录真实异常类型与消息
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/application/services/delivery.py`
+  - `services/api/app/core/logging.py`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `services/api/tests/unit/infrastructure/test_local_report_export.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/integration/delivery/test_report_delivery.py tests/unit/infrastructure/test_local_report_export.py -k 'markdown_zip_export_retry_exhaustion_logs_export_kind_and_fails_task or pdf_export_retry_exhaustion_logs_export_kind_and_fails_task or export_upload_retry_exhaustion_logs_export_kind_and_fails_task or build_pdf_logs_real_exception_before_wrapping'`
+    - 结果: `4 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_local_report_export.py tests/integration/delivery/test_report_delivery.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py`
+    - 结果: `25 passed`
+- 验收结论:
+  - `_finalize_delivery()` 现在对 `build_markdown_zip`、`build_pdf`、最终 download artifact `upload` 分别记录 `delivery export step failed after retries`
+  - 结构化日志新增 `export_kind`、`export_target`、`artifact_count`、`artifact_filenames`、`markdown_chars`、`exception_type`、`exception_message`
+  - `JSONFormatter` 已放行上述字段，Railway stdout 现在能直接区分失败子阶段，不再停留在统一的“报告导出失败且重试耗尽”
+  - `LocalReportExportService.build_pdf()` 在将底层异常包装为 `RetryableOperationError("pdf render failed")` 前，会先记录真实异常类型和消息
+  - 既有 `task.failed` 收口、下载端点与 access_token 契约未变
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次只增强 observability，没有改变 PDF/zip/upload 的重试策略和错误码；后续若生产再次失败，应优先从新增结构化日志判断失败子阶段
