@@ -169,8 +169,8 @@ def build_python_interpreter_tool_schema() -> ToolSchema:
         name="python_interpreter",
         description=(
             "执行 Python 代码进行数学计算、数据分析或图表绘制。代码应在隔离环境中运行，"
-            "绘图请使用 matplotlib/seaborn 并将图表以 png 保存到当前目录；中文图表请优先使用 "
-            "Noto Sans CJK SC 作为字体"
+            "绘图请使用 matplotlib/seaborn，并将图表以 .png 保存到当前工作目录或 /tmp；"
+            "中文图表请优先使用 Noto Sans CJK SC 作为字体"
         ),
         parameters={
             "code": {

@@ -66,7 +66,7 @@ class E2BRealSandboxClient:
         execution_timeout_seconds: float,
         sandbox_timeout_seconds: int,
         sandbox_factory: E2BSandboxFactory | None = None,
-        artifact_scan_root: str = ".",
+        artifact_scan_roots: tuple[str, ...] = (".", "/tmp"),
     ) -> None:
         self._api_key = api_key
         self._template = template
@@ -74,7 +74,7 @@ class E2BRealSandboxClient:
         self._execution_timeout_seconds = execution_timeout_seconds
         self._sandbox_timeout_seconds = sandbox_timeout_seconds
         self._sandbox_factory = sandbox_factory or create_default_e2b_sandbox_factory()
-        self._artifact_scan_root = artifact_scan_root
+        self._artifact_scan_roots = artifact_scan_roots
         self._sandboxes: dict[str, E2BSandbox] = {}
 
     async def create(self) -> str:
@@ -153,16 +153,17 @@ class E2BRealSandboxClient:
                 continue
 
     async def _list_png_paths(self, sandbox: E2BSandbox) -> set[str]:
-        entries = await sandbox.files.list(
-            self._artifact_scan_root,
-            depth=4,
-            request_timeout=self._request_timeout_seconds,
-        )
         paths: set[str] = set()
-        for entry in entries:
-            path = str(getattr(entry, "path", "") or "")
-            if path.lower().endswith(".png"):
-                paths.add(path)
+        for root in self._artifact_scan_roots:
+            entries = await sandbox.files.list(
+                root,
+                depth=4,
+                request_timeout=self._request_timeout_seconds,
+            )
+            for entry in entries:
+                path = str(getattr(entry, "path", "") or "")
+                if path.lower().endswith(".png"):
+                    paths.add(path)
         return paths
 
     async def _load_new_artifacts(

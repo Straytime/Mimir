@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, replace
 from io import BytesIO
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -41,6 +42,7 @@ from app.infrastructure.db.models import (
     TaskRevisionRecord,
     TaskToolCallRecord,
 )
+from app.infrastructure.delivery.e2b import E2BRealSandboxClient
 from app.infrastructure.delivery.local import LocalArtifactStore, LocalReportExportService
 from app.main import create_app
 from tests.contract.rest.test_task_events import assert_stream_closed, read_sse_event, read_until_event
@@ -342,6 +344,100 @@ class FlakyReportExportService(ReportExportService):
         return await self.inner.build_pdf(markdown=markdown, artifacts=artifacts)
 
 
+class FakeE2BFilesystem:
+    def __init__(
+        self,
+        *,
+        list_results_by_path: dict[str, list[list[object]]],
+        read_results: dict[str, bytes],
+    ) -> None:
+        self.list_results_by_path = {
+            path: list(results) for path, results in list_results_by_path.items()
+        }
+        self.read_results = read_results
+        self.list_calls: list[str] = []
+        self.read_calls: list[tuple[str, str]] = []
+
+    async def list(
+        self,
+        path: str,
+        depth: int | None = 1,
+        user: str | None = None,
+        request_timeout: float | None = None,
+    ) -> list[object]:
+        self.list_calls.append(path)
+        results = self.list_results_by_path.get(path, [])
+        if results:
+            return results.pop(0)
+        return []
+
+    async def read(
+        self,
+        path: str,
+        format: str = "text",
+        user: str | None = None,
+        request_timeout: float | None = None,
+    ):
+        self.read_calls.append((path, format))
+        return bytearray(self.read_results[path])
+
+
+class FakeE2BSandbox:
+    def __init__(
+        self,
+        *,
+        files: FakeE2BFilesystem,
+        execution: object | None = None,
+    ) -> None:
+        self.sandbox_id = "sbox_real_1"
+        self.files = files
+        self.execution = execution or SimpleNamespace(
+            logs=SimpleNamespace(stdout=["ok"], stderr=[]),
+            error=None,
+            text="ok",
+        )
+        self.run_calls: list[tuple[str, str | None, float | None, float | None]] = []
+        self.kill_calls: list[dict[str, object]] = []
+
+    async def run_code(
+        self,
+        code: str,
+        language: str | None = None,
+        timeout: float | None = None,
+        request_timeout: float | None = None,
+    ):
+        self.run_calls.append((code, language, timeout, request_timeout))
+        return self.execution
+
+    async def kill(self, **opts):
+        self.kill_calls.append(opts)
+        return True
+
+
+class FakeE2BSandboxFactory:
+    def __init__(self, *, sandbox: FakeE2BSandbox) -> None:
+        self.sandbox = sandbox
+        self.create_calls: list[dict[str, object]] = []
+
+    async def create(
+        self,
+        *,
+        template: str | None = None,
+        timeout: int | None = None,
+        request_timeout: float | None = None,
+        api_key: str | None = None,
+    ) -> FakeE2BSandbox:
+        call: dict[str, object] = {
+            "timeout": timeout,
+            "request_timeout": request_timeout,
+            "api_key": api_key,
+        }
+        if template is not None:
+            call["template"] = template
+        self.create_calls.append(call)
+        return self.sandbox
+
+
 @pytest_asyncio.fixture
 async def make_stage6_client(
     settings: Settings,
@@ -604,6 +700,78 @@ async def test_writer_creates_sandbox_lazily_reuses_it_and_destroys_it_on_delive
             ]
 
         await _close_stream(stream_context, response)
+
+
+@pytest.mark.asyncio
+async def test_writer_collects_tmp_png_artifacts_into_delivery(
+    make_stage6_client,
+    db_session: Session,
+) -> None:
+    filesystem = FakeE2BFilesystem(
+        list_results_by_path={
+            ".": [
+                [],
+                [],
+            ],
+            "/tmp": [
+                [],
+                [SimpleNamespace(path="/tmp/trust_risk.png")],
+            ],
+        },
+        read_results={"/tmp/trust_risk.png": _ONE_PIXEL_PNG},
+    )
+    sandbox = FakeE2BSandbox(files=filesystem)
+    sandbox_client = E2BRealSandboxClient(
+        api_key="e2b-secret-key",
+        request_timeout_seconds=12.0,
+        execution_timeout_seconds=34.0,
+        sandbox_timeout_seconds=600,
+        sandbox_factory=FakeE2BSandboxFactory(sandbox=sandbox),
+    )
+    writer_agent = TranscriptAwareWriterAgent(
+        tool_call=WriterToolCall(
+            tool_call_id="call_writer_tmp_1",
+            tool_name="python_interpreter",
+            code="plot_tmp_chart()",
+        ),
+        image_alt="风险图",
+    )
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=sandbox_client,
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        _, report_completed_name, report_completed_payload = await read_until_event(
+            lines,
+            {"report.completed"},
+            timeout=2.0,
+        )
+        _, awaiting_feedback_name, _ = await read_until_event(
+            lines,
+            {"task.awaiting_feedback"},
+            timeout=2.0,
+        )
+        await _close_stream(stream_context, response)
+
+    artifacts = list(
+        db_session.scalars(
+            select(ArtifactRecord)
+            .where(ArtifactRecord.task_id == create_body["task_id"])
+            .where(ArtifactRecord.resource_type == AccessTokenResourceType.ARTIFACT.value)
+            .order_by(ArtifactRecord.created_at.asc())
+        )
+    )
+
+    assert report_completed_name == "report.completed"
+    assert report_completed_payload["payload"]["delivery"]["artifact_count"] == 1
+    assert awaiting_feedback_name == "task.awaiting_feedback"
+    assert [artifact.filename for artifact in artifacts] == ["trust_risk.png"]
+    assert filesystem.list_calls == [".", "/tmp", ".", "/tmp"]
+    assert filesystem.read_calls == [("/tmp/trust_risk.png", "bytes")]
+    assert json.loads(writer_agent.invocations[-1].prompt_bundle.transcript[-1].content)["artifacts"]
 
 
 @pytest.mark.asyncio
