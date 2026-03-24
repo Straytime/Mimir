@@ -71,7 +71,7 @@ class CollectPlan(DomainModel):
     tool_call_id: str = Field(min_length=1)
     revision_id: str = Field(min_length=1)
     collect_target: str = Field(min_length=1)
-    additional_info: str = Field(min_length=1)
+    additional_info: str = ""
     freshness_requirement: FreshnessRequirement
 
 

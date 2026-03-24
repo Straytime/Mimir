@@ -124,6 +124,18 @@ def test_collect_plan_schema_matches_master_to_subtask_contract() -> None:
     }
 
 
+def test_collect_plan_allows_empty_additional_info_for_optional_tool_field() -> None:
+    plan = CollectPlan(
+        tool_call_id="call_01JABC",
+        revision_id="rev_01JABC",
+        collect_target="收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展",
+        additional_info="",
+        freshness_requirement=FreshnessRequirement.HIGH,
+    )
+
+    assert plan.additional_info == ""
+
+
 def test_collect_summary_supports_completed_and_risk_blocked_shapes() -> None:
     summary = CollectSummary(
         tool_call_id="call_01JABC",

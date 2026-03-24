@@ -1523,6 +1523,61 @@ async def test_planner_parses_tool_calls_response() -> None:
 
 
 @pytest.mark.asyncio
+async def test_planner_parses_tool_calls_without_additional_info() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            id="req_plan_optional_info",
+            choices=[
+                SimpleNamespace(
+                    finish_reason="tool_calls",
+                    message=SimpleNamespace(
+                        content="",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_tc_1",
+                                function=SimpleNamespace(
+                                    name="collect_agent",
+                                    arguments=json.dumps(
+                                        {
+                                            "collect_target": "中国 AI 市场",
+                                        },
+                                        ensure_ascii=False,
+                                    ),
+                                ),
+                            ),
+                            SimpleNamespace(
+                                id="call_tc_2",
+                                function=SimpleNamespace(
+                                    name="collect_agent",
+                                    arguments=json.dumps(
+                                        {
+                                            "collect_target": "竞品分析",
+                                            "freshness_requirement": "low",
+                                        },
+                                        ensure_ascii=False,
+                                    ),
+                                ),
+                            ),
+                        ],
+                    ),
+                )
+            ],
+        )
+    )
+    adapter = ZhipuPlannerAgent(client=raw_client, model="glm-test")
+
+    decision = await adapter.plan(_build_planner_invocation())
+
+    assert len(decision.plans) == 2
+    assert decision.plans[0].collect_target == "中国 AI 市场"
+    assert decision.plans[0].additional_info == ""
+    assert decision.plans[0].freshness_requirement == FreshnessRequirement.HIGH
+    assert decision.plans[1].collect_target == "竞品分析"
+    assert decision.plans[1].additional_info == ""
+    assert decision.plans[1].freshness_requirement == FreshnessRequirement.NORMAL
+
+
+@pytest.mark.asyncio
 async def test_planner_parses_content_json_response() -> None:
     raw_client = FakeZhipuClient(
         response=SimpleNamespace(

@@ -64,6 +64,15 @@ def map_recency_filter_to_provider(value: str) -> str:
     return normalize_model_recency_filter(value)
 
 
+def normalize_planner_freshness_requirement(value: str) -> FreshnessRequirement:
+    normalized = value.strip().lower()
+    if not normalized or normalized == "high":
+        return FreshnessRequirement.HIGH
+    if normalized in {"low", "normal"}:
+        return FreshnessRequirement.NORMAL
+    return FreshnessRequirement(normalized)
+
+
 class ZhipuPlannerAgent:
     def __init__(self, *, client: ZhipuChatClient | ZhipuClientProtocol, model: str) -> None:
         self._client = _coerce_chat_client(client)
@@ -106,9 +115,11 @@ class ZhipuPlannerAgent:
         invocation: PlannerInvocation,
     ) -> PlannerDecision:
         plans: list[CollectPlan] = []
+        collect_agent_tool_calls = 0
         for index, tc in enumerate(result.tool_calls, start=1):
             if tc["name"] != "collect_agent":
                 continue
+            collect_agent_tool_calls += 1
             try:
                 args = json.loads(tc["arguments"])
             except (json.JSONDecodeError, TypeError):
@@ -116,20 +127,28 @@ class ZhipuPlannerAgent:
             if not isinstance(args, dict):
                 continue
             try:
-                freshness_value = str(
-                    args.get("freshness_requirement", "high")
-                ).lower()
+                freshness_requirement = normalize_planner_freshness_requirement(
+                    str(args.get("freshness_requirement", "high"))
+                )
                 plans.append(
                     CollectPlan(
                         tool_call_id=tc.get("id") or f"call_plan_{invocation.call_index}_{index}",
                         revision_id="rev_pending",
                         collect_target=str(args["collect_target"]).strip(),
-                        additional_info=str(args["additional_info"]).strip(),
-                        freshness_requirement=FreshnessRequirement(freshness_value),
+                        additional_info=str(args.get("additional_info") or "").strip(),
+                        freshness_requirement=freshness_requirement,
                     )
                 )
             except (KeyError, ValueError):
                 continue
+        if collect_agent_tool_calls > 0 and not plans:
+            logger.warning(
+                "planner parser dropped all collect_agent tool calls",
+                extra={
+                    "request_id": result.request_id,
+                    "tool_calls_count": collect_agent_tool_calls,
+                },
+            )
         reasoning_text = (result.reasoning_text or result.text).strip()
         reasoning_deltas = (reasoning_text,) if reasoning_text else ()
         return PlannerDecision(
@@ -189,9 +208,9 @@ class ZhipuPlannerAgent:
             if not isinstance(item, dict):
                 continue
             try:
-                freshness_value = str(
-                    item.get("freshness_requirement", "high")
-                ).lower()
+                freshness_requirement = normalize_planner_freshness_requirement(
+                    str(item.get("freshness_requirement", "high"))
+                )
                 plans.append(
                     CollectPlan(
                         tool_call_id=str(
@@ -200,8 +219,8 @@ class ZhipuPlannerAgent:
                         ),
                         revision_id=str(item.get("revision_id") or "rev_pending"),
                         collect_target=str(item["collect_target"]).strip(),
-                        additional_info=str(item["additional_info"]).strip(),
-                        freshness_requirement=FreshnessRequirement(freshness_value),
+                        additional_info=str(item.get("additional_info") or "").strip(),
+                        freshness_requirement=freshness_requirement,
                     )
                 )
             except (KeyError, ValueError):

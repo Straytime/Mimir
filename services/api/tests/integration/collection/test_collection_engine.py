@@ -2,6 +2,7 @@ import asyncio
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -55,8 +56,9 @@ from app.infrastructure.db.models import (
     TaskRevisionRecord,
     TaskToolCallRecord,
 )
+from app.infrastructure.research.real_http import ZhipuPlannerAgent
 from app.main import create_app
-from tests.contract.rest.test_task_events import assert_stream_closed, read_until_event
+from tests.contract.rest.test_task_events import assert_stream_closed, read_sse_event, read_until_event
 from tests.contract.rest.test_tasks import build_create_task_payload
 from tests.fixtures.app import StreamingASGITransport
 from tests.fixtures.runtime import FakeClock
@@ -83,6 +85,25 @@ class ScriptedPlannerAgent(PlannerAgent):
         if not self._rounds:
             raise AssertionError("planner called more times than expected")
         return self._rounds.pop(0)
+
+
+class QueuedChatCompletionsAPI:
+    def __init__(self, responses: Sequence[object]) -> None:
+        self._responses = list(responses)
+        self.calls: list[dict[str, object]] = []
+
+    def create(self, **kwargs: object) -> object:
+        self.calls.append(kwargs)
+        if not self._responses:
+            raise AssertionError("planner raw client called more times than expected")
+        return self._responses.pop(0)
+
+
+class QueuedZhipuClient:
+    def __init__(self, responses: Sequence[object]) -> None:
+        self.chat = SimpleNamespace(
+            completions=QueuedChatCompletionsAPI(responses)
+        )
 
 
 class ScriptedCollectorAgent(CollectorAgent):
@@ -1732,6 +1753,239 @@ async def test_planner_empty_plans_with_existing_data_triggers_merge(
     )
     assert task is not None
     assert task.status != "failed"
+
+
+@pytest.mark.asyncio
+async def test_planner_second_round_tool_calls_without_additional_info_are_executed(
+    make_stage5_client,
+) -> None:
+    planner = ZhipuPlannerAgent(
+        client=QueuedZhipuClient(
+            [
+                SimpleNamespace(
+                    id="req_r1",
+                    choices=[
+                        SimpleNamespace(
+                            finish_reason="tool_calls",
+                            message=SimpleNamespace(
+                                content="",
+                                reasoning_content="先补玩家信息。",
+                                tool_calls=[
+                                    SimpleNamespace(
+                                        id="call_tc_r1",
+                                        function=SimpleNamespace(
+                                            name="collect_agent",
+                                            arguments=json.dumps(
+                                                {
+                                                    "collect_target": "目标 1",
+                                                    "additional_info": "说明 1",
+                                                    "freshness_requirement": "high",
+                                                },
+                                                ensure_ascii=False,
+                                            ),
+                                        ),
+                                    )
+                                ],
+                            ),
+                        )
+                    ],
+                ),
+                SimpleNamespace(
+                    id="req_r2",
+                    choices=[
+                        SimpleNamespace(
+                            finish_reason="tool_calls",
+                            message=SimpleNamespace(
+                                content="",
+                                reasoning_content="继续并行补市场与机会信息。",
+                                tool_calls=[
+                                    SimpleNamespace(
+                                        id="call_tc_r2_a",
+                                        function=SimpleNamespace(
+                                            name="collect_agent",
+                                            arguments=json.dumps(
+                                                {
+                                                    "collect_target": "目标 2",
+                                                },
+                                                ensure_ascii=False,
+                                            ),
+                                        ),
+                                    ),
+                                    SimpleNamespace(
+                                        id="call_tc_r2_b",
+                                        function=SimpleNamespace(
+                                            name="collect_agent",
+                                            arguments=json.dumps(
+                                                {
+                                                    "collect_target": "目标 3",
+                                                    "freshness_requirement": "low",
+                                                },
+                                                ensure_ascii=False,
+                                            ),
+                                        ),
+                                    ),
+                                ],
+                            ),
+                        )
+                    ],
+                ),
+                SimpleNamespace(
+                    id="req_r3",
+                    choices=[
+                        SimpleNamespace(
+                            finish_reason="stop",
+                            message=SimpleNamespace(
+                                content=json.dumps(
+                                    {
+                                        "reasoning_deltas": ["进入 merge。"],
+                                        "stop": True,
+                                        "plans": [],
+                                    },
+                                    ensure_ascii=False,
+                                ),
+                            ),
+                        )
+                    ],
+                ),
+            ]
+        ),
+        model="glm-test",
+    )
+    collector = ScriptedCollectorAgent(
+        rounds_by_tool_call={
+            "call_tc_r1": (
+                _collector_search_round(
+                    tool_call_id="call_search_1",
+                    query="q1",
+                    reasoning="搜索目标 1。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_1",
+                    url="https://example.com/1",
+                    reasoning="读取目标 1。",
+                ),
+                _collector_stop_round(
+                    reasoning="目标 1 信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 1",
+                            link="https://example.com/1",
+                            info="内容 1",
+                        ),
+                    ),
+                ),
+            ),
+            "call_tc_r2_a": (
+                _collector_search_round(
+                    tool_call_id="call_search_2",
+                    query="q2",
+                    reasoning="搜索目标 2。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_2",
+                    url="https://example.com/2",
+                    reasoning="读取目标 2。",
+                ),
+                _collector_stop_round(
+                    reasoning="目标 2 信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 2",
+                            link="https://example.com/2",
+                            info="内容 2",
+                        ),
+                    ),
+                ),
+            ),
+            "call_tc_r2_b": (
+                _collector_search_round(
+                    tool_call_id="call_search_3",
+                    query="q3",
+                    reasoning="搜索目标 3。",
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_3",
+                    url="https://example.com/3",
+                    reasoning="读取目标 3。",
+                ),
+                _collector_stop_round(
+                    reasoning="目标 3 信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 3",
+                            link="https://example.com/3",
+                            info="内容 3",
+                        ),
+                    ),
+                ),
+            ),
+        }
+    )
+    summarizer = ScriptedSummaryAgent()
+    search = ScriptedWebSearchClient(
+        SearchScenario(
+            results_by_query={
+                "q1": (SearchHit(title="来源 1", link="https://example.com/1", snippet="1"),),
+                "q2": (SearchHit(title="来源 2", link="https://example.com/2", snippet="2"),),
+                "q3": (SearchHit(title="来源 3", link="https://example.com/3", snippet="3"),),
+            }
+        )
+    )
+    fetch = ScriptedWebFetchClient(
+        content_by_url={
+            "https://example.com/1": FetchResponse(
+                url="https://example.com/1",
+                success=True,
+                title="来源 1",
+                content="内容 1",
+            ),
+            "https://example.com/2": FetchResponse(
+                url="https://example.com/2",
+                success=True,
+                title="来源 2",
+                content="内容 2",
+            ),
+            "https://example.com/3": FetchResponse(
+                url="https://example.com/3",
+                success=True,
+                title="来源 3",
+                content="内容 3",
+            ),
+        }
+    )
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=collector,
+        summary_agent=summarizer,
+        web_search_client=search,
+        web_fetch_client=fetch,
+    )
+
+    async with client:
+        _, (stream_context, response, lines) = await _start_collection_flow(client)
+        events: list[tuple[str | None, str | None, dict[str, object]]] = []
+        while True:
+            event = await read_sse_event(lines, timeout=2.0)
+            events.append(event)
+            if event[1] == "sources.merged":
+                break
+        await _close_stream(stream_context, response)
+
+    planner_events = [
+        payload
+        for _, event_name, payload in events
+        if event_name == "planner.tool_call.requested"
+    ]
+
+    assert len(planner_events) == 3
+    assert planner_events[1]["payload"]["tool_call_id"] == "call_tc_r2_a"
+    assert planner_events[1]["payload"]["collect_target"] == "目标 2"
+    assert planner_events[1]["payload"]["additional_info"] == ""
+    assert planner_events[2]["payload"]["tool_call_id"] == "call_tc_r2_b"
+    assert planner_events[2]["payload"]["collect_target"] == "目标 3"
+    assert planner_events[2]["payload"]["additional_info"] == ""
+    assert len(collector.invocations_by_tool_call["call_tc_r2_a"]) == 3
+    assert len(collector.invocations_by_tool_call["call_tc_r2_b"]) == 3
 
 
 @pytest.mark.asyncio

@@ -3189,3 +3189,47 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 无当前 blocker
   - 本次 retention 目标是短期诊断窗口，不是长期审计归档；72 小时后 trace 会被 cleanup worker 独立清理
+
+## R1-050 Planner Tool Call Optional additional_info Fix
+
+- 日期时间: 2026-03-24 19:00:00 CST (+0800)
+- 任务包编号: R1-050
+- session 标识: `codex/r1-050-planner-tool-call-optional-additional-info-fix`
+- 目标摘要:
+  - 修复 planner 返回合法 `collect_agent` tool calls 但因缺少 `additional_info` 被 parser 丢弃的问题
+  - 保证 planner parser 与当前 tool schema 契约一致：`collect_target` 必填，`additional_info` 可选，`freshness_requirement` 缺失默认 `high`
+  - 防止 timeline 中已出现的 planner 收集目标在后端被误吞，导致第二轮实际未执行 collector subtask
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/domain/schemas.py`
+  - `services/api/app/infrastructure/research/real_http.py`
+  - `services/api/tests/unit/domain/test_schemas.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/domain/test_schemas.py tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/collection/test_collection_engine.py -k 'empty_additional_info or without_additional_info or second_round_tool_calls_without_additional_info_are_executed'`
+    - 初次结果: `3 failed`
+    - 失败点:
+      - `CollectPlan.additional_info` 仍被 domain schema 视为 `min_length=1`
+      - planner tool-call parser 仍把缺失 `additional_info` 的 `collect_agent` 全部或部分丢弃
+      - 第二轮 planner 只发出部分 `planner.tool_call.requested`，随后走到“已有 summaries + plans=[] -> merge”
+  - 修补后:
+    - 同一命令重跑
+    - 结果: `3 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/domain/test_schemas.py tests/unit/application/test_invocation_contracts.py tests/unit/infrastructure/test_zhipu_adapters.py tests/contract/rest/test_collection_events.py tests/integration/collection/test_collection_engine.py`
+    - 结果: `70 passed`
+- 验收结论:
+  - `collect_agent` tool schema 继续保持现状：`collect_target` 必填，`additional_info` 可选，`freshness_requirement` 可选
+  - planner `_parse_tool_calls()` 不再要求 `additional_info` 必填，缺失时收敛为空字符串
+  - planner `_parse_content_json()` 也同步允许缺失 `additional_info`，避免 fallback 路径继续出现同类吞 plan 行为
+  - 内部 `CollectPlan.additional_info` 已允许空字符串，和当前 tool schema 对齐；未改对外 REST / SSE 契约
+  - 为兼容既有内部 domain enum，planner parser 现在会把模型侧 `freshness_requirement=low` 归一到内部 `normal`，`high` 保持不变；缺失时默认 `high`
+  - 当 provider 实际返回了 `collect_agent` tool calls 但 parser 最终 `plans=[]` 时，后端会补一条内部 warning，便于后续区分“provider 没有 tool calls”和“parser 全丢弃”
+  - 新集成测试已验证：第二轮 planner 返回两个缺失 `additional_info` 的 tool calls 时，会实际发出两条 `planner.tool_call.requested`，并启动两个 collector subtasks，而不是直接 merge
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次没有改 planner prompt、collector loop、timeline 前端展示或并发策略；只修 parser/schema 偏差导致的执行遗漏
