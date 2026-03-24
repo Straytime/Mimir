@@ -433,6 +433,7 @@ stateDiagram-v2
 - 调智谱官方 SDK
 - 统一封装流式 token、reasoning token、finish reason、tool calls
 - 解析 PRD 要求的 JSON 输出
+- JSON 解析允许先安全提取首个完整 top-level JSON object / array，以兼容模型在 JSON 前后的说明性文本；该策略只做提取，不做 auto-repair，不发明模型未给出的字段或结构
 
 #### Tool Adapters
 
