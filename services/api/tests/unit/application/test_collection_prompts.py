@@ -72,12 +72,13 @@ def test_planner_prompt_semantic_lock_keeps_role_limits_and_transcript_order() -
     assert "2.1 若无法支撑：" in prompt.system_prompt
     assert "2.2 若能够支撑" in prompt.system_prompt
     assert "你并不需要一次性理清所有目标，而是根据已有信息进行动态规划。" in prompt.system_prompt
+    assert "发起 `collect_agent` 调用时保证目标与约束自包含" in prompt.system_prompt
     assert "若串行执行能有效提升质量，优先进行串行执行，记住质量比效率更重要。" in prompt.system_prompt
+    assert "避免多个目标之间存在交叉和重叠" in prompt.system_prompt
     assert "最多只能同时发起 3 个`collect_agent`工具调用。" in prompt.system_prompt
     assert "collect_agent" in prompt.system_prompt
-    assert "2026-03-16T15:00:00+00:00" in prompt.user_prompt
+    assert "2026-03-16T15:00:00+00:00" in prompt.system_prompt
     assert "分析中国 AI 搜索产品的竞争格局与机会" in prompt.user_prompt
-    assert "当前 collect_agent 已使用次数: 3" in prompt.user_prompt
     assert [message.role for message in prompt.transcript] == ["assistant", "tool", "tool"]
     assistant_msg = prompt.transcript[0]
     assert assistant_msg.tool_calls is not None
@@ -154,6 +155,7 @@ def test_summary_prompt_semantic_lock_keeps_schema_and_runtime_inputs() -> None:
 
     assert "关键信息总结助手" in prompt.system_prompt
     assert "提取5-10条关键发现" in prompt.system_prompt
+    assert "严禁给出高度抽象的一句话总结" in prompt.system_prompt
     assert "markdown 格式直接输出" in prompt.system_prompt
     assert "<信息获取目标>" in prompt.user_prompt
     assert "收集目标 1" in prompt.user_prompt
