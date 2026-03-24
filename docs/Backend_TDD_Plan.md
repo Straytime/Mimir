@@ -838,6 +838,8 @@ DoD：
 - writer transcript tool result 不再退化为固定成功文案
 - `markdown zip` 会把正文中的 `mimir://artifact/{artifact_id}` 重写为 `artifacts/{filename}`
 - 无图片的 `python_interpreter` 结果仍返回 `summary`，且 zip 不误改写非图片正文
+- E2B artifact discovery 必须覆盖受控目录白名单；当前至少验证 `.` 与 `/tmp` 下新增 `.png` 会被采集
+- 执行前已存在的 `.png` 与非 `.png` 文件不得误采集为本次 `python_interpreter` artifacts
 - provider 返回独立 writer reasoning 字段时，`agent_runs.reasoning_text` 会落库，且不混入最终 markdown
 - writer 多轮 `content`（round1/2/3）会按顺序组装成交付 markdown，不能只取 terminal round
 - Zhipu non-stream / stream 调用都会提取并传递 provider `finish_reason` 与 `usage`
@@ -871,6 +873,7 @@ DoD：
 - Revision 结束时 sandbox 会被销毁
 - 自定义 E2B template 能通过显式配置接线到 real sandbox create 路径
 - 下载链接与 artifact URL 都符合契约
+- 生成在 `/tmp/*.png` 的图表文件会进入 `python_interpreter` tool result 与最终 `delivery.artifacts`
 - `build_markdown_zip`、`build_pdf`、最终 download artifact upload 三段失败都能被独立观察，不再混成单一模糊导出失败
 - 正文 markdown 只保存 canonical artifact path，在线渲染与 zip 导出各自完成映射
 - writer reasoning content 仅进入 `agent_runs.reasoning_text` / 调试持久化，不进入最终 `report.md`

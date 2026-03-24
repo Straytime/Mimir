@@ -14,12 +14,18 @@ class FakeFilesystem:
         self,
         *,
         list_results: list[list[object]],
+        list_results_by_path: dict[str, list[list[object]]] | None = None,
         read_results: dict[str, bytes] | None = None,
         read_error: Exception | None = None,
     ) -> None:
         self.list_results = list_results
+        self.list_results_by_path = {
+            path: list(results)
+            for path, results in (list_results_by_path or {}).items()
+        }
         self.read_results = read_results or {}
         self.read_error = read_error
+        self.list_calls: list[str] = []
         self.read_calls: list[tuple[str, str]] = []
 
     async def list(
@@ -29,6 +35,9 @@ class FakeFilesystem:
         user: str | None = None,
         request_timeout: float | None = None,
     ) -> list[object]:
+        self.list_calls.append(path)
+        if path in self.list_results_by_path and self.list_results_by_path[path]:
+            return self.list_results_by_path[path].pop(0)
         if self.list_results:
             return self.list_results.pop(0)
         return []
@@ -136,10 +145,17 @@ def test_build_provider_runtime_uses_real_e2b_adapter_when_e2b_mode_is_real() ->
 @pytest.mark.asyncio
 async def test_e2b_adapter_maps_generated_png_files_into_artifacts() -> None:
     filesystem = FakeFilesystem(
-        list_results=[
-            [],
-            [SimpleNamespace(path="./chart.png")],
-        ],
+        list_results=[],
+        list_results_by_path={
+            ".": [
+                [],
+                [SimpleNamespace(path="./chart.png")],
+            ],
+            "/tmp": [
+                [],
+                [],
+            ],
+        },
         read_results={"./chart.png": b"png-bytes"},
     )
     sandbox = FakeSandbox(files=filesystem)
@@ -173,9 +189,100 @@ async def test_e2b_adapter_maps_generated_png_files_into_artifacts() -> None:
     assert result.artifacts[0].filename == "chart.png"
     assert result.artifacts[0].mime_type == "image/png"
     assert result.artifacts[0].content == b"png-bytes"
+    assert filesystem.list_calls == [".", "/tmp", ".", "/tmp"]
     assert filesystem.read_calls == [("./chart.png", "bytes")]
     assert sandbox.kill_calls == [
         {"api_key": "e2b-secret-key", "request_timeout": 12.0}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_e2b_adapter_discovers_tmp_png_artifacts() -> None:
+    filesystem = FakeFilesystem(
+        list_results=[],
+        list_results_by_path={
+            ".": [
+                [],
+                [],
+            ],
+            "/tmp": [
+                [],
+                [SimpleNamespace(path="/tmp/trust_risk.png")],
+            ],
+        },
+        read_results={"/tmp/trust_risk.png": b"tmp-png-bytes"},
+    )
+    sandbox = FakeSandbox(files=filesystem)
+    adapter = E2BRealSandboxClient(
+        api_key="e2b-key",
+        request_timeout_seconds=12.0,
+        execution_timeout_seconds=34.0,
+        sandbox_timeout_seconds=600,
+        sandbox_factory=FakeSandboxFactory(sandbox=sandbox),
+    )
+
+    sandbox_id = await adapter.create()
+    result = await adapter.execute_python(sandbox_id, "plot_tmp()")
+
+    assert [artifact.filename for artifact in result.artifacts] == ["trust_risk.png"]
+    assert result.artifacts[0].content == b"tmp-png-bytes"
+    assert filesystem.list_calls == [".", "/tmp", ".", "/tmp"]
+    assert filesystem.read_calls == [("/tmp/trust_risk.png", "bytes")]
+
+
+@pytest.mark.asyncio
+async def test_e2b_adapter_ignores_existing_pngs_and_non_png_files() -> None:
+    filesystem = FakeFilesystem(
+        list_results=[],
+        list_results_by_path={
+            ".": [
+                [
+                    SimpleNamespace(path="./existing.png"),
+                    SimpleNamespace(path="./notes.txt"),
+                ],
+                [
+                    SimpleNamespace(path="./existing.png"),
+                    SimpleNamespace(path="./new_chart.png"),
+                    SimpleNamespace(path="./notes.txt"),
+                    SimpleNamespace(path="./report.csv"),
+                ],
+            ],
+            "/tmp": [
+                [
+                    SimpleNamespace(path="/tmp/existing_tmp.png"),
+                    SimpleNamespace(path="/tmp/log.txt"),
+                ],
+                [
+                    SimpleNamespace(path="/tmp/existing_tmp.png"),
+                    SimpleNamespace(path="/tmp/new_tmp_chart.png"),
+                    SimpleNamespace(path="/tmp/log.txt"),
+                ],
+            ],
+        },
+        read_results={
+            "./new_chart.png": b"new-chart",
+            "/tmp/new_tmp_chart.png": b"new-tmp-chart",
+        },
+    )
+    sandbox = FakeSandbox(files=filesystem)
+    adapter = E2BRealSandboxClient(
+        api_key="e2b-key",
+        request_timeout_seconds=12.0,
+        execution_timeout_seconds=34.0,
+        sandbox_timeout_seconds=600,
+        sandbox_factory=FakeSandboxFactory(sandbox=sandbox),
+    )
+
+    sandbox_id = await adapter.create()
+    result = await adapter.execute_python(sandbox_id, "plot_multiple()")
+
+    assert [artifact.filename for artifact in result.artifacts] == [
+        "new_chart.png",
+        "new_tmp_chart.png",
+    ]
+    assert filesystem.read_calls == [
+        ("./new_chart.png", "bytes"),
+        ("/tmp/new_tmp_chart.png", "bytes"),
     ]
 
 

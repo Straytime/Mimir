@@ -3020,6 +3020,45 @@ Copy the template below for each completed session:
   - 无当前 blocker
   - 该收敛只优化排查效率，不改变任何运行时行为或契约
 
+## R1-047 E2B Artifact Discovery For /tmp PNG Outputs
+
+- 日期时间: 2026-03-24 14:58:00 CST (+0800)
+- 任务包编号: R1-047
+- session 标识: `codex/r1-047-e2b-artifact-discovery`
+- 目标摘要:
+  - 修复 E2B sandbox 中已生成的 `/tmp/*.png` 图表未被后端采集成 artifact 的缺口
+  - 将 artifact discovery 从单一当前目录扫描收敛为受控白名单目录扫描，当前至少覆盖 `.` 与 `/tmp`
+  - 保持既有 upload、writer transcript、delivery.artifacts 与下载契约不变
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/application/invocation_contracts.py`
+  - `services/api/app/infrastructure/delivery/e2b.py`
+  - `services/api/tests/unit/application/test_invocation_contracts.py`
+  - `services/api/tests/unit/infrastructure/test_e2b_adapter.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_invocation_contracts.py tests/unit/infrastructure/test_e2b_adapter.py tests/integration/delivery/test_report_delivery.py -k 'python_interpreter or e2b_adapter_maps_generated_png_files_into_artifacts or e2b_adapter_discovers_tmp_png_artifacts or e2b_adapter_ignores_existing_pngs_and_non_png_files or writer_collects_tmp_png_artifacts_into_delivery'`
+    - 初次结果: `4 failed`
+    - 失败点:
+      - E2B adapter 只扫描当前目录 `.`，完全没有访问 `/tmp`
+      - `/tmp/*.png` 无法进入 before/after 差集，因此 tool result `artifacts[]` 为空，最终 `report.completed.artifact_count = 0`
+      - `python_interpreter` 的模型可见 description 未明确要求 `.png` 与受控输出目录
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_invocation_contracts.py tests/unit/infrastructure/test_e2b_adapter.py tests/integration/delivery/test_report_delivery.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py`
+    - 结果: `35 passed`
+- 验收结论:
+  - `E2BRealSandboxClient` 的 artifact discovery 已从单根目录扫描改为受控白名单目录扫描，默认白名单为 `(".", "/tmp")`
+  - before/after 差集仍是唯一 artifact 判定依据，因此执行前已存在的 `.png` 不会被误采集
+  - discovery 仍只读取差集中的 `.png` 文件，非 `.png` 不会进入 artifacts
+  - 新增集成测试已验证：当 `python_interpreter` 把图表保存到 `/tmp/trust_risk.png` 时，tool result `artifacts[]` 非空，且最终 `report.completed.delivery.artifact_count = 1`
+  - `python_interpreter` 的模型可见 tool description 已补充：图表应保存为 `.png`，推荐保存到当前工作目录或 `/tmp`；未改 writer system/user prompt
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次仍只覆盖受控白名单目录，不做任意全盘扫描；若后续需要支持其他输出目录，必须显式扩充白名单并补测试
+
 ## R1-046 Delivery Export Observability
 
 - 日期时间: 2026-03-24 14:24:00 CST (+0800)

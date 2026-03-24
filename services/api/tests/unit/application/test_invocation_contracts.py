@@ -114,3 +114,5 @@ def test_tool_schemas_match_current_architecture_contract() -> None:
     assert set(python_interpreter.parameters) == {"code"}
     assert "Noto Sans CJK SC" in python_interpreter.description
     assert "中文图表" in python_interpreter.description
+    assert ".png" in python_interpreter.description
+    assert "/tmp" in python_interpreter.description

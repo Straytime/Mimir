@@ -954,6 +954,8 @@ E2B 生命周期约束：
 12. `collector` 对应 PRD `func_8`，必须作为真正的多轮 sub-agent loop 直接面向 `web_search` / `web_fetch` tool-calling；从第 2 轮开始，下一轮 prompt 必须回灌上一轮及更早轮次的 `reasoning_content`、`content`、`tool_calls` 与 `tool_results`，并保持原始时序。
 13. `outline` 虽然同样启用 thinking，但当前实现仍是单轮调用；在未引入真正的多轮 transcript 之前，不额外发明 reasoning replay 机制。
 14. 中文图表字体能力属于 sandbox 环境能力问题；v1 采用自定义 E2B template 预装 `Noto Sans CJK SC` 解决 matplotlib 中文方块字问题，不在每次 `python_interpreter` 调用时动态安装字体。
+15. E2B 图表 artifact discovery 采用受控目录白名单，而不是假设模型总会把图片写到当前工作目录；当前白名单至少包含当前工作目录 `.` 与标准临时目录 `/tmp`。
+16. artifact discovery 只采集本次代码执行后新增的 `.png` 文件；执行前已存在的文件、非 `.png` 文件以及白名单之外的路径都不得回收成 artifact。
 
 ## 8.5 外部调用契约与 PRD 收敛
 
@@ -1119,6 +1121,7 @@ PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": 
 6. 只有 infra / transport / sandbox create-destroy / artifact post-processing 失败，才按后端通用重试策略映射为 `RetryableOperationError`。
 7. 当 E2B `execute` 请求本身成功返回，但 sandbox 内部 Python 代码执行失败时，adapter 必须返回 `success=false` 的结构化 tool result，而不是抛可重试异常。
 8. 自定义 E2B template 若已提供 `Noto Sans CJK SC`，`python_interpreter` 的模型可见 tool description 必须明确要求中文图表优先使用该字体；不得假定 sandbox 会自动替换 matplotlib 默认字体。
+9. `python_interpreter` 的模型可见 tool description 还必须明确：图表文件应保存为 `.png`，推荐保存到当前工作目录或 `/tmp` 这类系统可采集的受控路径。
 
 ### 8.5.5 E2B template 与 CJK 字体约束
 
@@ -1714,6 +1717,8 @@ writer 特别约束：
 
 - sandbox 内代码执行、文件读取、artifact 上传都应设置独立超时
 - 所有失败都通过统一 tool error envelope 返回给 writer loop
+- artifact discovery 仅扫描受控白名单目录；当前至少包含 `.` 与 `/tmp`
+- 只回收本次执行后新增的 `.png` 文件，不做任意文件类型或全盘扫描
 
 ## 11.6 可观测性与追踪
 
