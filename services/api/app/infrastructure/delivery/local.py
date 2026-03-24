@@ -1,6 +1,7 @@
 from base64 import b64decode
 from html import escape
 from io import BytesIO
+import logging
 from pathlib import Path
 import tempfile
 from tempfile import TemporaryDirectory
@@ -34,6 +35,7 @@ from app.application.services.invocation import RetryableOperationError
 
 _PDF_FONT_NAME = "STSong-Light"
 _BLOCK_SPACER = Spacer(1, 0.16 * inch)
+logger = logging.getLogger(__name__)
 _ONE_PIXEL_PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
 )
@@ -192,6 +194,17 @@ class LocalReportExportService:
         except RetryableOperationError:
             raise
         except Exception as exc:  # pragma: no cover - defensive wrapper
+            logger.error(
+                "pdf export render failed",
+                extra={
+                    "markdown_chars": len(markdown),
+                    "artifact_count": len(artifacts),
+                    "artifact_filenames": [artifact.filename for artifact in artifacts],
+                    "exception_type": type(exc).__name__,
+                    "exception_message": str(exc),
+                },
+                exc_info=True,
+            )
             raise RetryableOperationError("pdf render failed") from exc
 
 
