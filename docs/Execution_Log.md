@@ -3093,3 +3093,37 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 无当前 blocker
   - 本次只增强 observability，没有改变 PDF/zip/upload 的重试策略和错误码；后续若生产再次失败，应优先从新增结构化日志判断失败子阶段
+
+## R1-048 PDF Spacer Flowable Reuse Fix
+
+- 日期时间: 2026-03-24 15:09:00 CST (+0800)
+- 任务包编号: R1-048
+- session 标识: `codex/r1-048-pdf-spacer-reuse-fix`
+- 目标摘要:
+  - 修复 PDF renderer 中重复复用同一个 `Spacer` flowable 导致的确定性 `LayoutError`
+  - 保持 `report.pdf` 下载契约、markdown zip、artifact 与导出可观测性不变
+  - 以最小改动消除多段正文、多列表、多图场景下的稳定性风险
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/tests/unit/infrastructure/test_local_report_export.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_local_report_export.py tests/integration/delivery/test_report_delivery.py -k 'build_pdf_story_uses_distinct_spacer_instances_per_block or build_pdf_handles_multi_page_markdown_with_lists_and_images or pdf_export_handles_multi_page_markdown_with_multiple_images'`
+    - 初次结果: `1 failed, 2 passed`
+    - 失败点:
+      - `test_build_pdf_story_uses_distinct_spacer_instances_per_block` 显示 story 中 `36` 个 block spacer 实际只有 `1` 个对象实例，被重复引用
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_local_report_export.py tests/integration/delivery/test_report_delivery.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py`
+    - 结果: `29 passed`
+- 验收结论:
+  - `LocalReportExportService` 已移除全局复用 `_BLOCK_SPACER` 的实现，改为按使用点生成新的 `Spacer` 实例
+  - `_build_pdf_story()`、`_render_html_block()`、`_render_paragraph_like()`、`_render_list()` 中的块级间距都已改为新实例，不再共享同一个 flowable 对象
+  - 新增单测锁定：story 中 block spacer 的对象标识必须全部不同
+  - 新增单测与 delivery 集成测验证：多页正文 + 多列表 + 多图场景下 `report.pdf` 仍可成功导出并被 PDF 解析器读取
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次没有发现第二个独立布局 bug；现有多图 PDF 回归已通过，但这仍是对当前 renderer 的最小修补，不包含新的版式美化或大规模重构

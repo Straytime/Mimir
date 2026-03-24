@@ -136,6 +136,42 @@ class TranscriptAwareWriterAgent(WriterAgent):
         )
 
 
+class MultiImageTranscriptWriterAgent(WriterAgent):
+    def __init__(self, *, tool_call: WriterToolCall) -> None:
+        self.tool_call = tool_call
+        self.invocations: list[WriterInvocation] = []
+
+    async def write(self, invocation: WriterInvocation) -> WriterDecision:
+        self.invocations.append(invocation)
+        has_transcript = (
+            invocation.prompt_bundle is not None
+            and len(invocation.prompt_bundle.transcript) > 0
+        )
+        if not has_transcript:
+            return WriterDecision(text="", tool_calls=(self.tool_call,))
+
+        tool_payload = json.loads(invocation.prompt_bundle.transcript[-1].content)
+        artifacts = tool_payload.get("artifacts", [])
+        image_blocks = "\n\n".join(
+            f"![图表 {index}]({artifact['canonical_path']})"
+            for index, artifact in enumerate(artifacts, start=1)
+        )
+        sections: list[str] = ["# 中国 AI 搜索产品竞争格局研究"]
+        for index in range(1, 13):
+            sections.append(f"## 分析章节 {index}")
+            sections.append(
+                "这是一段较长的正文，用于覆盖多页 PDF 布局，验证在段落、列表和图片混排时不会因为 spacer flowable 复用而触发布局错误。"
+            )
+            sections.append("- 关键观察一：趋势清晰。")
+            sections.append("- 关键观察二：风险需要单列说明。")
+            if index == 4 and image_blocks:
+                sections.append(image_blocks)
+            if index == 9 and image_blocks:
+                sections.append(image_blocks)
+
+        return WriterDecision(text="\n\n".join(sections) + "\n", tool_calls=())
+
+
 class ExecutionFailureAwareWriterAgent(WriterAgent):
     def __init__(self, *, tool_call: WriterToolCall) -> None:
         self.tool_call = tool_call
@@ -1177,6 +1213,58 @@ async def test_pdf_export_renders_canonical_artifact_refs(
     assert pdf_response.status_code == 200
     assert "中国 AI 搜索产品竞争格局研究" in _extract_pdf_text(pdf_response.content)
     assert _count_pdf_images(pdf_response.content) >= 1
+
+
+@pytest.mark.asyncio
+async def test_pdf_export_handles_multi_page_markdown_with_multiple_images(
+    make_stage6_client,
+) -> None:
+    writer_agent = MultiImageTranscriptWriterAgent(
+        tool_call=WriterToolCall(
+            tool_call_id="call_writer_chart_pdf_multi",
+            tool_name="python_interpreter",
+            code="plot_chart_pdf_multi",
+        )
+    )
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={
+                "plot_chart_pdf_multi": (
+                    GeneratedArtifact(
+                        filename="chart_market_share.png",
+                        mime_type="image/png",
+                        content=_ONE_PIXEL_PNG,
+                    ),
+                    GeneratedArtifact(
+                        filename="chart_growth.png",
+                        mime_type="image/png",
+                        content=_ONE_PIXEL_PNG,
+                    ),
+                ),
+            },
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        task_detail_response = await client.get(
+            f"/api/v1/tasks/{create_body['task_id']}",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+        )
+        assert task_detail_response.status_code == 200
+        pdf_url = task_detail_response.json()["delivery"]["pdf_url"]
+        pdf_response = await client.get(pdf_url)
+        await _close_stream(stream_context, response)
+
+    assert pdf_response.status_code == 200
+    reader = PdfReader(BytesIO(pdf_response.content))
+    assert len(reader.pages) >= 2
+    assert "分析章节 12" in _extract_pdf_text(pdf_response.content)
+    assert _count_pdf_images(pdf_response.content) >= 2
 
 
 @pytest.mark.asyncio

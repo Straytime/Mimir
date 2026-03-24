@@ -831,6 +831,7 @@ DoD：
 - `build_pdf()` 产物必须可被真实 PDF 解析器打开并抽取基本正文
 - `report.pdf` 下载接口返回的二进制必须是可解析 PDF，而不是伪造 header
 - 含 `mimir://artifact/{artifact_id}` 图片引用时，PDF 导出必须能消费图片资源并完成渲染，不得因导出器本身报错
+- PDF renderer 的 block spacer 不能复用同一个 `Spacer` flowable；多段正文、多列表、多图片场景下不得触发 `LayoutError`
 - 研究输出准备 prompt invariant tests
 - 研究输出撰写 prompt invariant tests
 - outline / writer 调用 profile contract tests
@@ -875,6 +876,7 @@ DoD：
 - 下载链接与 artifact URL 都符合契约
 - 生成在 `/tmp/*.png` 的图表文件会进入 `python_interpreter` tool result 与最终 `delivery.artifacts`
 - `build_markdown_zip`、`build_pdf`、最终 download artifact upload 三段失败都能被独立观察，不再混成单一模糊导出失败
+- 多段正文 + 多图的 PDF 仍能成功导出，且 story 中 block spacer 不会复用同一对象
 - 正文 markdown 只保存 canonical artifact path，在线渲染与 zip 导出各自完成映射
 - writer reasoning content 仅进入 `agent_runs.reasoning_text` / 调试持久化，不进入最终 `report.md`
 - writer 成功交付时，最终 markdown 必须包含所有 round 的正文片段，顺序与 round 顺序一致
