@@ -15,7 +15,7 @@ from app.application.dto.delivery import (
 )
 from app.application.services.invocation import RetryableOperationError
 from app.application.services.llm import RetryableLLMError
-from app.core.json_utils import strip_markdown_code_fence
+from app.core.json_utils import extract_first_top_level_json_block
 from app.infrastructure.research.real_http import _coerce_optional_string
 from app.infrastructure.llm.zhipu import (
     ZhipuChatClient,
@@ -41,8 +41,12 @@ class ZhipuOutlineAgent:
             )
         except RetryableLLMError as exc:
             raise RetryableOperationError("zhipu upstream request failed") from exc
+        extracted = extract_first_top_level_json_block(result.text)
+        if extracted is None:
+            logger.error("outline: invalid JSON response")
+            raise RetryableOperationError("zhipu returned invalid JSON")
         try:
-            payload = json.loads(strip_markdown_code_fence(result.text))
+            payload = json.loads(extracted)
         except json.JSONDecodeError as exc:
             logger.error("outline: invalid JSON response", exc_info=True)
             raise RetryableOperationError("zhipu returned invalid JSON") from exc

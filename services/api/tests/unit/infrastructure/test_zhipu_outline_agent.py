@@ -228,3 +228,28 @@ async def test_parse_prd_format_with_markdown_fence() -> None:
     decision = await agent.prepare(_invocation())
     assert decision.outline.title == "标题"
     assert decision.outline.entities == ("实体",)
+
+
+@pytest.mark.asyncio
+async def test_parse_prd_format_with_explanatory_text_around_json() -> None:
+    prd_response = (
+        "下面是整理后的大纲：\n"
+        + json.dumps(
+            {
+                "research_outline": {
+                    "标题": {"title": "标题"},
+                    "section_1": {"title": "节", "description": "描述"},
+                },
+                "entities": ["实体"],
+            },
+            ensure_ascii=False,
+        )
+        + "\n请进入下一步。"
+    )
+    client = FakeZhipuChatClient(prd_response)
+    agent = ZhipuOutlineAgent(client=client, model="glm-5")
+
+    decision = await agent.prepare(_invocation())
+
+    assert decision.outline.title == "标题"
+    assert decision.outline.entities == ("实体",)

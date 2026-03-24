@@ -2900,3 +2900,44 @@ Copy the template below for each completed session:
   - 同步在 `test_collection_prompts.py` 中补充精确断言，锁定这两处文案
 - 验证:
   - 待运行 `tests/unit/application/test_collection_prompts.py` 定向回归
+
+## R1-044 Safe JSON Extraction Hardening
+
+- 日期时间: 2026-03-24 10:51:31 CST (+0800)
+- 任务包编号: R1-044
+- session 标识: `codex/r1-044-safe-json-extraction-hardening`
+- 目标摘要:
+  - 为 collector stop output、summary `_complete_json()`、outline JSON 输出补齐同一套“安全 JSON 提取”策略
+  - 兼容模型输出中“说明文字 + 合法 JSON + 尾部说明”的常见形态
+  - 保持解析策略保守：只提取首个完整 top-level JSON block，不做 auto-repair
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/core/json_utils.py`
+  - `services/api/app/infrastructure/research/real_http.py`
+  - `services/api/app/infrastructure/delivery/zhipu.py`
+  - `services/api/tests/unit/core/test_json_utils.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_outline_agent.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_json_utils.py tests/unit/infrastructure/test_zhipu_adapters.py tests/unit/infrastructure/test_zhipu_outline_agent.py -k 'extract_first_top_level_json_block or collector_adapter_extracts_first_json_array_from_explanatory_text or summary_adapter_extracts_first_json_object_from_explanatory_text or explanatory_text_around_json'`
+    - 结果: `8 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_json_utils.py tests/unit/infrastructure/test_zhipu_adapters.py tests/unit/infrastructure/test_zhipu_outline_agent.py tests/contract/rest/test_collection_events.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `82 passed`
+- 验收结论:
+  - `extract_first_top_level_json_block()` 已新增到 `app/core/json_utils.py`，支持：
+    - 直接合法 JSON object
+    - 直接合法 JSON array
+    - markdown fenced JSON
+    - 前后夹带说明文字时提取首个完整 top-level JSON block
+  - 该提取器仍然依赖严格 `json.loads()` 验证，不补逗号、不补括号、不改单引号、不猜字段
+  - collector stop output、summary `_complete_json()`、outline parser 已统一接入这条安全提取逻辑
+  - 现有严格 JSON 成功路径、collector sub-agent loop、delivery 集成测试、provider 观测路径均未回退
+- blocker / 风险:
+  - 无当前 blocker
+  - 当前策略只取“第一个可独立通过 `json.loads()` 的完整 top-level JSON block”；若模型一次输出多个 JSON block，后续仍只消费第一个，不会尝试合并或猜测其余块的语义
+- 下一步建议:
+  - 若后续继续排查 `planner_invalid_output` 或类似问题，应优先看 provider 原始 `content_text` 是否属于“前后夹带说明文字但中间 JSON 合法”这一类；现在这类噪音输出已不应再直接触发 parser 失败

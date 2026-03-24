@@ -26,7 +26,10 @@ from app.application.services.invocation import (
     RiskControlTriggered,
 )
 from app.application.services.llm import RetryableLLMError
-from app.core.json_utils import strip_markdown_code_fence
+from app.core.json_utils import (
+    extract_first_top_level_json_block,
+    strip_markdown_code_fence,
+)
 from app.domain.enums import CollectSummaryStatus, FreshnessRequirement
 from app.domain.schemas import CollectPlan
 from app.infrastructure.llm.zhipu import (
@@ -272,8 +275,12 @@ class ZhipuCollectorAgent:
 
     @staticmethod
     def _parse_stop_content(result: "ZhipuCompletionResult") -> CollectorDecision:
+        extracted = extract_first_top_level_json_block(result.text)
+        if extracted is None:
+            logger.error("collector returned invalid JSON response")
+            raise RetryableOperationError("zhipu returned invalid JSON")
         try:
-            parsed = json.loads(strip_markdown_code_fence(result.text))
+            parsed = json.loads(extracted)
         except json.JSONDecodeError as exc:
             logger.error("collector returned invalid JSON response", exc_info=True)
             raise RetryableOperationError("zhipu returned invalid JSON") from exc
@@ -489,7 +496,11 @@ async def _complete_json(
         raise RetryableOperationError("zhipu upstream request failed") from exc
 
     try:
-        parsed = json.loads(strip_markdown_code_fence(result.text))
+        extracted = extract_first_top_level_json_block(result.text)
+        if extracted is None:
+            logger.error("research _complete_json: invalid JSON response")
+            raise RetryableOperationError("zhipu returned invalid JSON")
+        parsed = json.loads(extracted)
     except json.JSONDecodeError as exc:
         logger.error("research _complete_json: invalid JSON response", exc_info=True)
         raise RetryableOperationError("zhipu returned invalid JSON") from exc

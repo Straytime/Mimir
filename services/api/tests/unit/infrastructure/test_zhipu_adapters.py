@@ -15,6 +15,7 @@ from app.application.dto.delivery import (
     WriterInvocation,
 )
 from app.application.dto.research import CollectorInvocation, PlannerInvocation, SearchResponse
+from app.application.dto.research import SummaryInvocation
 from app.application.invocation_contracts import (
     build_collect_agent_tool_schema,
     build_python_interpreter_tool_schema,
@@ -42,6 +43,7 @@ from app.infrastructure.research.jina import JinaWebFetchClient
 from app.infrastructure.research.real_http import (
     ZhipuCollectorAgent,
     ZhipuPlannerAgent,
+    ZhipuSummaryAgent,
     ZhipuWebSearchClient,
 )
 from app.infrastructure.delivery.zhipu import ZhipuWriterAgent
@@ -363,6 +365,126 @@ async def test_zhipu_collector_adapter_parses_stop_json_into_collect_result_item
     assert decision.content_text.startswith("[")
     assert decision.tool_calls == ()
     assert [item.title for item in decision.items] == ["企业搜索能力发布"]
+
+
+@pytest.mark.asyncio
+async def test_zhipu_collector_adapter_extracts_first_json_array_from_explanatory_text() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(
+                        content=(
+                            "以下是整理后的搜集结果：\n"
+                            + json.dumps(
+                                [
+                                    {
+                                        "info": "某产品在 2026 年扩展企业搜索能力。",
+                                        "title": "企业搜索能力发布",
+                                        "link": "https://example.com/a",
+                                    }
+                                ],
+                                ensure_ascii=False,
+                            )
+                            + "\n请继续后续流程。"
+                        ),
+                        reasoning_content="已有信息足够，停止搜集。",
+                    ),
+                )
+            ]
+        )
+    )
+    adapter = ZhipuCollectorAgent(client=raw_client, model="glm-test")
+
+    decision = await adapter.plan(
+        CollectorInvocation(
+            prompt_name="collector_round",
+            subtask_id="sub_1",
+            plan=CollectPlan(
+                tool_call_id="call_collect_1",
+                revision_id="rev_1",
+                collect_target="收集主要玩家",
+                additional_info="优先官方与高可信媒体。",
+                freshness_requirement=FreshnessRequirement.HIGH,
+            ),
+            call_index=3,
+            tool_call_limit=10,
+            now=SimpleNamespace(isoformat=lambda: "2026-03-16T15:00:00+00:00"),
+            profile=build_stage_profile(Settings(), stage="collector"),
+            prompt_bundle=PromptBundle(
+                system_prompt="collector-system",
+                user_prompt="collector-user",
+            ),
+            tool_schemas=(
+                build_web_search_tool_schema(),
+                build_web_fetch_tool_schema(),
+            ),
+        )
+    )
+
+    assert decision.stop is True
+    assert [item.title for item in decision.items] == ["企业搜索能力发布"]
+
+
+@pytest.mark.asyncio
+async def test_zhipu_summary_adapter_extracts_first_json_object_from_explanatory_text() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(
+                        content=(
+                            "下面是总结结果：\n"
+                            + json.dumps(
+                                {
+                                    "status": "completed",
+                                    "key_findings_markdown": "- 发现 1",
+                                    "message": None,
+                                },
+                                ensure_ascii=False,
+                            )
+                            + "\n以上。"
+                        ),
+                    ),
+                )
+            ]
+        )
+    )
+    adapter = ZhipuSummaryAgent(client=raw_client, model="glm-test")
+
+    decision = await adapter.summarize(
+        SummaryInvocation(
+            prompt_name="summary_round",
+            subtask_id="sub_1",
+            plan=CollectPlan(
+                tool_call_id="call_collect_1",
+                revision_id="rev_1",
+                collect_target="收集主要玩家",
+                additional_info="优先官方与高可信媒体。",
+                freshness_requirement=FreshnessRequirement.HIGH,
+            ),
+            result_status="completed",
+            search_queries=("中国 AI 搜索",),
+            item_payloads=(
+                {
+                    "title": "来源 A",
+                    "link": "https://example.com/a",
+                    "info": "A 内容",
+                },
+            ),
+            now=SimpleNamespace(isoformat=lambda: "2026-03-16T15:00:00+00:00"),
+            profile=build_stage_profile(Settings(), stage="summary"),
+            prompt_bundle=PromptBundle(
+                system_prompt="summary-system",
+                user_prompt="summary-user",
+            ),
+        )
+    )
+
+    assert decision.status.value == "completed"
+    assert decision.key_findings_markdown == "- 发现 1"
 
 
 @pytest.mark.asyncio

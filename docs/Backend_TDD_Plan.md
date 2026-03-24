@@ -777,6 +777,7 @@ DoD：
 - 所有 `thinking=True` stage 的 `clear_thinking` 必须显式为 `false`
 - planner 第 2 轮及以后必须回灌历史 reasoning content + tool_calls + tool_results，且顺序稳定
 - `collect_agent` / `web_search` / `web_fetch` request construction contract tests
+- 安全 JSON 提取 tests：仅允许提取首个完整 top-level JSON block；collector stop output、summary `_complete_json()`、outline parser 对“说明文字 + 合法 JSON”兼容，但对非法 JSON 仍明确失败
 
 实现内容：
 
