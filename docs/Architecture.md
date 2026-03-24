@@ -1059,6 +1059,7 @@ tool result 归一化规则：
 1. `collect_agent` 返回给 planner 的是后端综合后的 subtask 摘要，不是原始 `web_search` / `web_fetch` provider payload。
 2. `web_search` 与 `web_fetch` 的 tool result 都必须在 adapter 层标准化为“成功但内容为空”或“失败但可继续”的统一 envelope，避免 collector loop 因 provider 响应形态差异挂起。
 3. `python_interpreter` tool result 只允许返回文本摘要与 artifact 元数据，不能把二进制文件内容直接放进 transcript 或 SSE payload。
+4. planner 对 `collect_agent` tool call 的 parser 必须严格服从 tool schema：`collect_target` 必填，`additional_info` 可选且缺失时收敛为空字符串，`freshness_requirement` 可选且默认 `high`；不得因为缺少可选字段丢弃整个 `CollectPlan`。
 
 ### 8.5.4 Tool request construction 与结果清洗
 

@@ -408,6 +408,7 @@ snapshot 规则：
    - 模型可见参数只允许 `collect_target`、`additional_info`、`freshness_requirement`
    - `freshness_requirement` 继续锁定为枚举语义 `low | high`
    - `tool_call_id`、`revision_id`、`subtask_id` 只能在后端内部补齐
+   - planner parser 必须与该 schema 一致：`collect_target` 必填，`additional_info` 可选且缺失时收敛为空字符串，`freshness_requirement` 缺失时默认 `high`
 
 结果清洗 contract tests 还必须锁定：
 
