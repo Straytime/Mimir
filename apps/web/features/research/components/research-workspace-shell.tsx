@@ -8,7 +8,6 @@ import {
 } from "./clarification-panels";
 import { ArtifactGallery } from "./artifact-gallery";
 import { DeliveryActions } from "./delivery-actions";
-import { FeedbackComposer } from "./feedback-composer";
 import { RequirementSummaryCard } from "./requirement-summary-card";
 import { ReportCanvas } from "./report-canvas";
 import { useClarificationCountdown } from "../hooks/use-clarification-countdown";
@@ -16,10 +15,7 @@ import { useDisconnectGuard } from "../hooks/use-disconnect-guard";
 import { useHeartbeatLoop } from "../hooks/use-heartbeat-loop";
 import { useTaskStream } from "../hooks/use-task-stream";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
-import {
-  selectCanDisconnectTask,
-  selectIsAwaitingFeedback,
-} from "../store/selectors";
+import { selectCanDisconnectTask } from "../store/selectors";
 import { SessionStatusBar } from "./session-status-bar";
 import { TerminalBanner } from "./terminal-banner";
 import { TimelinePanel } from "./timeline-panel";
@@ -82,14 +78,14 @@ function getStageStatusCopy(phase: string) {
         eyebrow: "Feedback Processing",
         title: "正在处理反馈",
         description:
-          "系统正在根据本轮反馈重写需求范围。下一轮 revision 的首个 SSE 事件会接管工作台，并清空旧的正文与交付缓存。",
+          "该阶段代表后端正在处理反馈相关状态；v1 前端不开放反馈交互，仅按只读工作台展示当前任务进展。",
       };
     case "delivered":
       return {
         eyebrow: "Delivery",
         title: "报告已完成并进入交付阶段",
         description:
-          "下载区会先被 report.completed 更新；真正开放下载与 feedback 仍要等 task.awaiting_feedback。",
+          "下载区会先被 report.completed 更新；是否开放下载仍以后端 available_actions 为准。",
       };
     default:
       return {
@@ -151,10 +147,6 @@ export function ResearchWorkspaceShell() {
     (state) => state.remote.snapshot?.available_actions ?? [],
   );
   const canDisconnectTask = useResearchSessionStore(selectCanDisconnectTask);
-  const isAwaitingFeedback = useResearchSessionStore(selectIsAwaitingFeedback);
-  const revisionTransition = useResearchSessionStore(
-    (state) => state.ui.revisionTransition,
-  );
   const disconnectTask = useDisconnectGuard();
   const isMobileLayout = useIsMobileLayout();
   const [mobileSegment, setMobileSegment] = useState<MobileSegment>("control");
@@ -168,7 +160,6 @@ export function ResearchWorkspaceShell() {
     snapshot.phase === "clarifying" ? "澄清详情" : "报告";
   const analysisPrefix =
     snapshot.phase === "processing_feedback" ? "正在处理反馈：" : "正在分析需求：";
-  const isRevisionTransitioning = revisionTransition.status !== "idle";
 
   const controlRail = (
     <article
@@ -184,7 +175,7 @@ export function ResearchWorkspaceShell() {
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {snapshot.phase === "clarifying"
               ? "当前处于澄清阶段，提交成功后将立即切到需求分析。"
-              : "当前工作台已接入透明度时间线、报告正文、图片制品、交付下载与 feedback revision 切换。"}
+              : "当前工作台已接入透明度时间线、报告正文、图片制品与交付下载。"}
           </p>
         </div>
         <button
@@ -275,29 +266,6 @@ export function ResearchWorkspaceShell() {
             <ReportCanvas />
             <ArtifactGallery />
             <DeliveryActions />
-            {isAwaitingFeedback ? <FeedbackComposer /> : null}
-
-            {isRevisionTransitioning ? (
-              <div
-                aria-live="polite"
-                className="absolute inset-0 flex items-center justify-center rounded-[2rem] bg-white/72 p-6 text-center backdrop-blur-sm"
-                role="status"
-              >
-                <div className="max-w-md rounded-3xl border border-slate-200 bg-white/92 px-6 py-5 shadow-sm">
-                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Revision Transition
-                  </p>
-                  <p className="mt-3 text-lg font-semibold text-slate-950">
-                    正在处理反馈并准备新一轮研究...
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">
-                    {revisionTransition.status === "waiting_next_revision"
-                      ? `旧报告会继续可见，直到第 ${revisionTransition.pendingRevisionNumber ?? "?"} 轮的首个 SSE 事件到达。`
-                      : `第 ${revisionTransition.pendingRevisionNumber ?? "?"} 轮已接管工作台，旧正文与交付缓存已被清空。`}
-                  </p>
-                </div>
-              </div>
-            ) : null}
           </div>
         )}
       </div>

@@ -149,9 +149,9 @@ Frontend required：
 
 ### 3.11 Feedback Revision
 
-- [ ] 已确认 `POST /feedback` 仅在 `awaiting_feedback + delivered` 可用
-- [ ] 已确认 feedback 提交后会创建新 revision，而不是覆盖旧 revision
-- [ ] 已确认旧搜集结果会复用，新 revision 的 `collect_agent_calls_used` 会归零
+- [ ] 已确认后端仍保留 `POST /feedback` 与 revision 状态机契约，未被前端裁剪误伤
+- [ ] 已确认 v1 前端不展示 feedback 入口、composer 或 revision overlay
+- [ ] 已确认 `awaiting_feedback + delivered` 时前端仍可下载 markdown/pdf，但不开放 feedback 交互
 
 ### 3.12 Real Provider Smoke 证据
 

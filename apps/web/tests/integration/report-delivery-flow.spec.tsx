@@ -286,7 +286,7 @@ describe("Stage 6 report canvas and delivery flow", () => {
     ).toBeInTheDocument();
     expect(within(timelinePanel).getByText("正在生成配图")).toBeInTheDocument();
     expect(within(timelinePanel).getAllByText("已完成").length).toBeGreaterThan(0);
-    expect(within(deliveryPanel).getByText("6800 字")).toBeInTheDocument();
+    expect(within(deliveryPanel).queryByText("6800 字")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "下载 Markdown Zip" }),
     ).toBeDisabled();
@@ -318,7 +318,11 @@ describe("Stage 6 report canvas and delivery flow", () => {
       screen.getByRole("button", { name: "下载 Markdown Zip" }),
     ).toBeEnabled();
     expect(screen.getByRole("button", { name: "下载 PDF" })).toBeEnabled();
-    expect(screen.getByRole("textbox", { name: "反馈意见" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "提交反馈" })).toBeDisabled();
+    expect(
+      screen.queryByRole("textbox", { name: "反馈意见" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "提交反馈" }),
+    ).not.toBeInTheDocument();
   });
 });

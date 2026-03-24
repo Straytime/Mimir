@@ -1,25 +1,17 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { ResearchPageClient } from "@/features/research/components/research-page-client";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
 import type { ResearchSessionState } from "@/features/research/store/research-session-store.types";
-import {
-  TaskApiClientError,
-  type TaskApiClient,
-} from "@/lib/api/task-api-client";
+import type { TaskApiClient } from "@/lib/api/task-api-client";
 import type { EventEnvelope } from "@/lib/contracts";
 import type {
   TaskEventSource,
   TaskEventSourceConnectArgs,
 } from "@/lib/sse/task-event-source";
 import {
-  makeAnalysisCompletedEvent,
-  makeAnalysisDeltaEvent,
   makeDeliverySummary,
-  makeFeedbackAcceptedResponse,
-  makePhaseChangedEvent,
   makeResearchOutline,
   makeResearchSessionState,
   makeRevisionSummary,
@@ -149,30 +141,18 @@ async function flushAsyncWork() {
   await Promise.resolve();
 }
 
-describe("Stage 7 feedback and revision transition flow", () => {
+describe("Stage 7 feedback UI is disabled on the frontend", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  test("submits feedback, keeps the old report during waiting, then switches to the next revision on the first new SSE event", async () => {
-    const user = userEvent.setup();
+  test("keeps feedback UI hidden even when the snapshot is awaiting_feedback", async () => {
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
-    let resolveFeedbackRequest: (
-      value: ReturnType<typeof makeFeedbackAcceptedResponse>,
-    ) => void;
-    const feedbackRequestPromise = new Promise<
-      ReturnType<typeof makeFeedbackAcceptedResponse>
-    >((resolve) => {
-      resolveFeedbackRequest = resolve;
-    });
-    const submitFeedback = vi.fn().mockImplementation(() => feedbackRequestPromise);
     const store = createAwaitingFeedbackStore();
 
     render(
       <ResearchPageClient
-        runtime={createMockRuntime(taskEventSource, {
-          submitFeedback,
-        })}
+        runtime={createMockRuntime(taskEventSource, {})}
         store={store}
       />,
     );
@@ -183,193 +163,41 @@ describe("Stage 7 feedback and revision transition flow", () => {
     });
 
     expect(screen.getByText("旧报告正文。")).toBeInTheDocument();
-    expect(screen.queryByText("正在处理反馈并准备新一轮研究...")).not.toBeInTheDocument();
-
-    await user.type(
-      screen.getByRole("textbox", { name: "反馈意见" }),
-      "请加强竞品对比，并补充商业化路径分析。",
-    );
-    await user.click(screen.getByRole("button", { name: "提交反馈" }));
-
-    expect(store.getState().ui.pendingAction).toBe("submitting_feedback");
-    expect(submitFeedback).toHaveBeenCalledWith({
-      taskId: "tsk_stage0",
-      token: "secret_stage0",
-      request: {
-        feedback_text: "请加强竞品对比，并补充商业化路径分析。",
-      },
-    });
-
-    await act(async () => {
-      resolveFeedbackRequest!(
-        makeFeedbackAcceptedResponse({
-          revision_id: "rev_stage1",
-          revision_number: 2,
-        }),
-      );
-      await flushAsyncWork();
-    });
-
-    await waitFor(() => {
-      expect(store.getState().ui.pendingAction).toBeNull();
-    });
-
-    expect(store.getState().ui.revisionTransition).toEqual({
-      status: "waiting_next_revision",
-      pendingRevisionId: "rev_stage1",
-      pendingRevisionNumber: 2,
-    });
-    expect(screen.getByText("正在处理反馈并准备新一轮研究...")).toBeInTheDocument();
-    expect(screen.getByText("旧报告正文。")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "下载 Markdown Zip" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "下载 PDF" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "提交反馈" })).toBeDisabled();
-
-    await act(async () => {
-      taskEventSource.emit(
-        makePhaseChangedEvent({
-          seq: 90,
-          revision_id: "rev_stage1",
-          phase: "processing_feedback",
-          timestamp: "2026-03-16T00:01:10+08:00",
-          payload: {
-            from_phase: "delivered",
-            to_phase: "processing_feedback",
-            status: "running",
-          },
-        }),
-      );
-      await flushAsyncWork();
-    });
-
-    expect(store.getState().ui.revisionTransition.status).toBe("switching");
-    expect(store.getState().stream.analysisText).toBe("");
-    expect(store.getState().stream.reportMarkdown).toBe("");
-    expect(store.getState().stream.outline).toBeNull();
-    expect(store.getState().stream.artifacts).toEqual([]);
-    expect(store.getState().remote.delivery).toBeNull();
-    expect(screen.queryByText("旧报告正文。")).not.toBeInTheDocument();
-    expect(screen.getByText("第 2 轮研究开始")).toBeInTheDocument();
     expect(
-      within(screen.getByRole("region", { name: "会话状态" })).getByText(
-        "正在处理反馈",
-      ),
-    ).toBeInTheDocument();
+      screen.queryByRole("textbox", { name: "反馈意见" }),
+    ).not.toBeInTheDocument();
     expect(
-      within(screen.getByRole("region", { name: "时间线" })).getByText(
-        "正在处理反馈",
-      ),
-    ).toBeInTheDocument();
-
-    await act(async () => {
-      taskEventSource.emit(
-        makeAnalysisDeltaEvent({
-          seq: 91,
-          revision_id: "rev_stage1",
-          phase: "processing_feedback",
-          timestamp: "2026-03-16T00:01:12+08:00",
-          payload: {
-            delta: "正在根据反馈重写研究范围与竞品比较重点。",
-          },
-        }),
-      );
-      await flushAsyncWork();
-    });
-
-    expect(
-      screen.getByText(/正在根据反馈重写研究范围与竞品比较重点。/),
-    ).toBeInTheDocument();
-
-    await act(async () => {
-      taskEventSource.emit(
-        makeAnalysisCompletedEvent({
-          seq: 92,
-          revision_id: "rev_stage1",
-          phase: "processing_feedback",
-          timestamp: "2026-03-16T00:01:18+08:00",
-          payload: {
-            requirement_detail: {
-              research_goal: "补强竞品对比与商业化路径",
-              domain: "互联网 / AI 产品",
-              requirement_details: "重点分析竞品差异、用户价值与商业化机会。",
-              output_format: "business_report",
-              freshness_requirement: "high",
-              language: "zh-CN",
-            },
-          },
-        }),
-      );
-      await flushAsyncWork();
-    });
-
-    expect(store.getState().remote.currentRevision).toMatchObject({
-      revision_id: "rev_stage1",
-      revision_number: 2,
-      requirement_detail: {
-        research_goal: "补强竞品对比与商业化路径",
-      },
-    });
-
-    await act(async () => {
-      taskEventSource.emit(
-        makePhaseChangedEvent({
-          seq: 93,
-          revision_id: "rev_stage1",
-          phase: "planning_collection",
-          timestamp: "2026-03-16T00:01:20+08:00",
-          payload: {
-            from_phase: "processing_feedback",
-            to_phase: "planning_collection",
-            status: "running",
-          },
-        }),
-      );
-      await flushAsyncWork();
-    });
-
-    await waitFor(() => {
-      expect(store.getState().ui.revisionTransition.status).toBe("idle");
-    });
-
+      screen.queryByRole("button", { name: "提交反馈" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("正在处理反馈并准备新一轮研究..."),
     ).not.toBeInTheDocument();
-    expect(
-      within(screen.getByRole("region", { name: "时间线" })).getByText(
-        "新一轮研究已进入规划阶段",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下载 Markdown Zip" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "下载 PDF" })).toBeEnabled();
   });
 
-  test("shows validation errors in place and keeps the feedback draft on 422 validation_error", async () => {
-    const user = userEvent.setup();
+  test("safely degrades when feedback-related state already exists in the store", async () => {
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
-    const submitFeedback = vi.fn().mockRejectedValue(
-      new TaskApiClientError({
-        status: 422,
-        code: "validation_error",
-        message: "请求参数不合法。",
-        detail: {
-          errors: [
-            {
-              loc: ["body", "feedback_text"],
-              msg: "反馈内容不能为空。",
-              type: "value_error",
-            },
-          ],
-        },
-        requestId: "req_feedback_validation",
-        traceId: null,
-        retryAfterSeconds: null,
-      }),
-    );
     const store = createAwaitingFeedbackStore();
+
+    store.setState((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        feedbackDraft: "保留但不显示的反馈草稿",
+        feedbackFieldError: "不会显示",
+        feedbackSubmitError: "不会显示",
+        revisionTransition: {
+          status: "waiting_next_revision",
+          pendingRevisionId: "rev_stage1",
+          pendingRevisionNumber: 2,
+        },
+      },
+    }));
 
     render(
       <ResearchPageClient
-        runtime={createMockRuntime(taskEventSource, {
-          submitFeedback,
-        })}
+        runtime={createMockRuntime(taskEventSource, {})}
         store={store}
       />,
     );
@@ -379,18 +207,15 @@ describe("Stage 7 feedback and revision transition flow", () => {
       await flushAsyncWork();
     });
 
-    const textarea = screen.getByRole("textbox", { name: "反馈意见" });
-
-    await user.type(textarea, "请补充更清晰的竞品商业化比较。");
-    await user.click(screen.getByRole("button", { name: "提交反馈" }));
-
-    await waitFor(() => {
-      expect(store.getState().ui.pendingAction).toBeNull();
-    });
-
-    expect(screen.getByRole("alert")).toHaveTextContent("反馈内容不能为空。");
-    expect(textarea).toHaveValue("请补充更清晰的竞品商业化比较。");
-    expect(store.getState().ui.revisionTransition.status).toBe("idle");
+    expect(screen.getByText("旧报告正文。")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "反馈意见" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "提交反馈" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Revision")).not.toBeInTheDocument();
+    expect(screen.queryByText(/等待第 2 轮/)).not.toBeInTheDocument();
     expect(
       screen.queryByText("正在处理反馈并准备新一轮研究..."),
     ).not.toBeInTheDocument();
@@ -414,7 +239,7 @@ describe("Stage 7 feedback and revision transition flow", () => {
       bannerText: "任务已过期，旧任务操作已禁用。",
     },
   ])(
-    "disables feedback and delivery actions after $name",
+    "keeps feedback UI hidden and disables downloads after $name",
     async ({ event, bannerText }) => {
       const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
       const store = createAwaitingFeedbackStore();
@@ -435,6 +260,9 @@ describe("Stage 7 feedback and revision transition flow", () => {
       expect(screen.getByText(bannerText)).toBeInTheDocument();
       expect(
         screen.queryByRole("button", { name: "提交反馈" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("textbox", { name: "反馈意见" }),
       ).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "下载 Markdown Zip" })).toBeDisabled();
       expect(screen.getByRole("button", { name: "下载 PDF" })).toBeDisabled();

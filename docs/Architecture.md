@@ -798,6 +798,7 @@ Writer 阶段最终交付结构。
 
 规则：
 
+- `word_count` 继续保留在后端交付结构中，供诊断与潜在后续能力使用；v1 前端不展示该字段。
 - writer 的 reasoning content 与 content 是两个不同维度：
   - reasoning 用于 debug、诊断与 prompt / provider 优化依据
   - content 用于最终报告交付

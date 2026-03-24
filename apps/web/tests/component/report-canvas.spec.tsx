@@ -223,3 +223,27 @@ test("renders markdown images from canonical artifact paths using the latest art
   expect(screen.queryByAltText("未知")).not.toBeInTheDocument();
   expect(screen.queryByAltText("非法")).not.toBeInTheDocument();
 });
+
+test("does not render delivery word count chips even when delivery metadata contains word_count", () => {
+  const store = createStage6Store();
+
+  store.setState((state) => ({
+    ...state,
+    remote: {
+      ...state.remote,
+      delivery: makeDeliverySummary({
+        word_count: 6800,
+        artifact_count: 2,
+      }),
+    },
+    stream: {
+      ...state.stream,
+      reportMarkdown: "# 标题\n\n正文。",
+    },
+  }));
+
+  renderWithStore(<ReportCanvas />, { store });
+
+  expect(screen.queryByText("6800 字")).not.toBeInTheDocument();
+  expect(screen.getByText("2 张配图")).toBeInTheDocument();
+});
