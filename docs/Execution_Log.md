@@ -3283,3 +3283,36 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 无当前 blocker
   - 本次未改后端能力，仅关闭前端入口；后端 feedback/revision 契约继续存在但处于前端未启用状态
+
+## R1-052 Human-Readable Delivery Prompts
+
+- 日期时间: 2026-03-24 22:38:00 CST (+0800)
+- 任务包编号: R1-052
+- session 标识: `codex/r1-052-human-readable-delivery-prompts`
+- 目标摘要:
+  - 将 `services/api/app/application/prompts/delivery.py` 中当前以 `\uXXXX` 形式书写的提示词源码改为直接可读的 UTF-8 中文/标点文本
+  - 去掉仅为 escape 服务的 unicode helper 常量，保留 `build_outline_prompt()` / `build_writer_prompt()` 的运行时语义
+  - 提升源码可审阅性与后续人工迭代效率，不改 prompt 策略、不改后端行为
+- 修改文件:
+  - `docs/Execution_Log.md`
+  - `services/api/app/application/prompts/delivery.py`
+  - `services/api/tests/unit/application/test_delivery_prompts.py`
+- 测试 / 验证:
+  - 红测 / 语义锁:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_delivery_prompts.py`
+    - 结果: `3 passed`
+    - 覆盖点:
+      - `delivery.py` 源码不再包含 `\u` unicode escape 形式的人类编写 prompt 内容
+      - 不再保留 `_LDQ / _RDQ / _LSQ / _RSQ / _ELLIPSIS`
+      - `build_outline_prompt()` / `build_writer_prompt()` 仍保留关键约束句与 `canonical_path` 插图要求
+  - 相关回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `26 passed`
+- 验收结论:
+  - `delivery.py` 中 human-authored prompt 文本已统一改为直接可读的 UTF-8 中文与中文标点
+  - 仅为 escape 服务的 helper 常量已删除，源码不再保留半中文半 escape 的混合维护形态
+  - `json.dumps(..., ensure_ascii=False)` 保持不变，outline / writer prompt 的结构和关键约束语义未改
+  - delivery / report 相关契约与运行时行为未回退，本次属于可读性重构
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次没有改 prompt 内容策略，只改源码书写形态；若后续要改 prompt 语义，应另开任务包
