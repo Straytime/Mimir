@@ -35,6 +35,7 @@ class Settings:
     jina_base_url: str = "https://r.jina.ai/"
     zhipu_api_key: str | None = None
     e2b_api_key: str | None = None
+    e2b_template: str | None = None
     e2b_request_timeout_seconds: float = 30.0
     e2b_execution_timeout_seconds: float = 120.0
     e2b_sandbox_timeout_seconds: int = 600
@@ -135,6 +136,7 @@ class Settings:
             ),
             zhipu_api_key=os.getenv("MIMIR_ZHIPU_API_KEY") or os.getenv("ZHIPU_API_KEY"),
             e2b_api_key=os.getenv("MIMIR_E2B_API_KEY") or os.getenv("E2B_API_KEY"),
+            e2b_template=os.getenv("MIMIR_E2B_TEMPLATE"),
             e2b_request_timeout_seconds=float(
                 os.getenv("MIMIR_E2B_REQUEST_TIMEOUT_SECONDS", "30")
             ),

@@ -65,6 +65,7 @@ Browser
 - 挂载 Railway Volume，并使用 `RAILWAY_VOLUME_MOUNT_PATH`
   - 当前实现会自动把 artifact root 收敛到 `${RAILWAY_VOLUME_MOUNT_PATH}/mimir-artifacts`
   - 如果不想使用默认路径，可显式设置 `MIMIR_ARTIFACT_ROOT_DIR`
+- 当 `python_interpreter` 需要稳定的中文图表输出时，使用自定义 E2B template，并通过 `MIMIR_E2B_TEMPLATE` 显式指向已发布的 template 名称
 
 ### 2.4 Production Optional Env
 
@@ -74,6 +75,7 @@ Browser
 - `MIMIR_WEB_SEARCH_PROVIDER_MODE`
 - `MIMIR_WEB_FETCH_PROVIDER_MODE`
 - `MIMIR_E2B_PROVIDER_MODE`
+- `MIMIR_E2B_TEMPLATE`
 - `MIMIR_ZHIPU_BASE_URL`
 - `MIMIR_JINA_BASE_URL`
 - `MIMIR_ZHIPU_TIMEOUT_SECONDS`

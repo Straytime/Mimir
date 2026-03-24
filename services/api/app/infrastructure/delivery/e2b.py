@@ -43,6 +43,7 @@ class E2BSandboxFactory(Protocol):
     async def create(
         self,
         *,
+        template: str | None = None,
         timeout: int | None = None,
         request_timeout: float | None = None,
         api_key: str | None = None,
@@ -60,6 +61,7 @@ class E2BRealSandboxClient:
         self,
         *,
         api_key: str,
+        template: str | None = None,
         request_timeout_seconds: float,
         execution_timeout_seconds: float,
         sandbox_timeout_seconds: int,
@@ -67,6 +69,7 @@ class E2BRealSandboxClient:
         artifact_scan_root: str = ".",
     ) -> None:
         self._api_key = api_key
+        self._template = template
         self._request_timeout_seconds = request_timeout_seconds
         self._execution_timeout_seconds = execution_timeout_seconds
         self._sandbox_timeout_seconds = sandbox_timeout_seconds
@@ -76,10 +79,15 @@ class E2BRealSandboxClient:
 
     async def create(self) -> str:
         try:
+            create_kwargs: dict[str, object] = {
+                "timeout": self._sandbox_timeout_seconds,
+                "request_timeout": self._request_timeout_seconds,
+                "api_key": self._api_key,
+            }
+            if self._template:
+                create_kwargs["template"] = self._template
             sandbox = await self._sandbox_factory.create(
-                timeout=self._sandbox_timeout_seconds,
-                request_timeout=self._request_timeout_seconds,
-                api_key=self._api_key,
+                **create_kwargs,
             )
         except Exception as exc:
             raise RetryableOperationError("e2b sandbox create failed") from exc

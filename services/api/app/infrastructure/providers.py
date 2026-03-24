@@ -162,6 +162,7 @@ def build_provider_runtime(settings: Settings) -> ProviderRuntime:
     if e2b_mode == "real":
         sandbox_client = E2BRealSandboxClient(
             api_key=settings.e2b_api_key or "",
+            template=settings.e2b_template,
             request_timeout_seconds=settings.e2b_request_timeout_seconds,
             execution_timeout_seconds=settings.e2b_execution_timeout_seconds,
             sandbox_timeout_seconds=settings.e2b_sandbox_timeout_seconds,

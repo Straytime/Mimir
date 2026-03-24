@@ -61,6 +61,7 @@ def test_build_provider_runtime_uses_real_adapters_when_provider_mode_is_real() 
             zhipu_api_key="secret-key",
             jina_api_key="jina-key",
             e2b_api_key="e2b-key",
+            e2b_template="mimir-cjk-template",
         )
     )
 
@@ -75,6 +76,7 @@ def test_build_provider_runtime_uses_real_adapters_when_provider_mode_is_real() 
     assert isinstance(runtime.outline_agent, ZhipuOutlineAgent)
     assert isinstance(runtime.writer_agent, ZhipuWriterAgent)
     assert isinstance(runtime.sandbox_client, E2BRealSandboxClient)
+    assert runtime.sandbox_client._template == "mimir-cjk-template"
 
 
 def test_settings_from_env_fails_fast_when_real_provider_mode_lacks_api_key(
