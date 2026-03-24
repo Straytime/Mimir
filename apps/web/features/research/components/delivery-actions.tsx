@@ -129,9 +129,6 @@ export function DeliveryActions() {
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-700">
         <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-900">
-          {delivery?.word_count ?? 0} 字
-        </span>
-        <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-900">
           {delivery?.artifact_count ?? 0} 张配图
         </span>
       </div>

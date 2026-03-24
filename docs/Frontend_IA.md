@@ -286,6 +286,7 @@ apps/web/
 
 - 提供 `markdown zip` 和 `pdf` 下载
 - 展示 access token 过期后的刷新反馈
+- 不展示报告字数
 
 显示时机：
 
@@ -302,22 +303,13 @@ apps/web/
 
 ### 5.7 `FeedbackComposer`
 
-职责：
+v1 前端不开放 `FeedbackComposer`。
 
-- 输入反馈文本
-- 提交新 revision
+规则：
 
-显示时机：
-
-- `awaiting_feedback + delivered`
-
-交互规则：
-
-- 最长 `1000` 字/单词
-- 提交后立即清空当前输入框并锁定操作区，等待新 revision 事件流
-- 反馈提交成功后，先保留旧报告；当检测到新的 `revision_id` 成为活动 revision 时，再重置报告 buffer 并开始接收新正文
-- 从 `POST /feedback` 返回到新 revision 首个事件到达之间，旧报告上方显示半透明 overlay，文案为“正在处理反馈并准备新一轮研究...”
-- 时间线不清空；当新 revision 成为活动 revision 时，插入“第 N 轮研究开始”的分隔项
+- 即使后端进入 `awaiting_feedback + delivered`，前端也只保留下载与报告阅读视图，不渲染反馈输入区。
+- `POST /feedback`、revision 切换 overlay 与相关入口在前端全部隐藏；相关后端契约仅保留为未启用能力。
+- 若 store 中带有 `feedbackDraft`、`feedbackSubmitError`、`revisionTransition` 等状态，前端必须安全降级，不暴露对应 UI。
 
 ### 5.8 `Skeleton` 与占位态
 
@@ -549,13 +541,13 @@ type TimelineItem = {
 
 ### 7.7 Feedback 后的 Revision 切换
 
-前端处理规则：
+v1 前端不开放 feedback/revision 交互，因此主流程不进入前端 revision 切换 UI。
 
-1. `POST /feedback` 返回 `202` 后，立即写入 `revisionTransition.status = waiting_next_revision`，并记录 `pendingRevisionId` / `pendingRevisionNumber`。
-2. 在等待阶段继续展示旧报告，但禁用反馈输入与下载动作。
-3. 当收到新 `revision_id` 的首个 SSE 事件时，切换到 `revisionTransition.status = switching`，插入“第 N 轮研究开始”时间线分隔项。
-4. 进入 `switching` 时，清空上一轮的流式 buffer、artifact 列表与旧 `delivery`。
-5. 当新 revision 进入稳定活跃阶段后，回到 `revisionTransition.status = idle`。
+约束：
+
+1. 后端仍可保留 `POST /feedback` 与 revision 状态机，但前端不提供提交入口。
+2. 若 store 因异常状态带有 `revisionTransition` 数据，前端只做安全降级，不渲染 feedback composer 或 revision overlay。
+3. 时间线、报告正文、交付下载继续按现有只读视图工作。
 
 ## 8. 事件到 UI 的映射
 
@@ -588,7 +580,7 @@ type TimelineItem = {
 | `writer.delta` | 追加 `reportMarkdown` | 实时渲染正文 |
 | `artifact.ready` | 追加 artifact | 在报告与图库中可见 |
 | `report.completed` | 更新 `delivery` | 下载区准备就绪 |
-| `task.awaiting_feedback` | 更新 `snapshot` 与 `expires_at` | 展示反馈输入与下载按钮 |
+| `task.awaiting_feedback` | 更新 `snapshot` 与 `expires_at` | 保持下载按钮可用，但不展示反馈输入 |
 | `task.failed` | 设置 `terminalReason = failed` | 切换失败态 |
 | `task.terminated` | 设置 `terminalReason = terminated` | 切换终止态 |
 | `task.expired` | 设置 `terminalReason = expired` | 切换过期态 |
@@ -596,7 +588,7 @@ type TimelineItem = {
 额外约束：
 
 1. `task.failed` / `task.terminated` / `task.expired` 一旦到达，必须禁用所有旧任务按钮。
-2. `report.completed` 到达不等于一定可反馈；是否显示反馈区仍以后续 `task.awaiting_feedback` 与 `available_actions` 为准。
+2. `report.completed` 到达不等于一定可反馈；v1 前端不渲染反馈区，即使后端后续进入 `task.awaiting_feedback`。
 
 ## 9. 组件边界与目录建议
 

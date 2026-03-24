@@ -20,7 +20,7 @@ test("renders the idle workspace shell before a task is created", () => {
   ).toBeInTheDocument();
 });
 
-test("only renders the feedback composer after task.awaiting_feedback", () => {
+test("does not render the feedback composer even during task.awaiting_feedback", () => {
   const runningStore = createResearchSessionStore(
     makeResearchSessionState({
       session: {
@@ -85,11 +85,56 @@ test("only renders the feedback composer after task.awaiting_feedback", () => {
   unmount();
   render(<ResearchPageClient store={awaitingFeedbackStore} />);
 
-  expect(screen.getByRole("textbox", { name: "反馈意见" })).toHaveAttribute(
-    "maxlength",
-    "1000",
+  expect(
+    screen.queryByRole("textbox", { name: "反馈意见" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "提交反馈" }),
+  ).not.toBeInTheDocument();
+});
+
+test("does not render revision transition overlay when revision state exists", () => {
+  const store = createResearchSessionStore(
+    makeResearchSessionState({
+      session: {
+        taskId: "tsk_stage0",
+        taskToken: "secret_stage0",
+        eventsUrl: "/api/v1/tasks/tsk_stage0/events",
+        heartbeatUrl: "/api/v1/tasks/tsk_stage0/heartbeat",
+        disconnectUrl: "/api/v1/tasks/tsk_stage0/disconnect",
+        sseState: "idle",
+      },
+      remote: {
+        snapshot: makeTaskSnapshot({
+          phase: "delivered",
+          status: "awaiting_feedback",
+          available_actions: [
+            "submit_feedback",
+            "download_markdown",
+            "download_pdf",
+          ],
+        }),
+        delivery: makeDeliverySummary({
+          artifact_count: 0,
+          artifacts: [],
+        }),
+      },
+      ui: {
+        revisionTransition: {
+          status: "waiting_next_revision",
+          pendingRevisionId: "rev_stage1",
+          pendingRevisionNumber: 2,
+        },
+      },
+    }),
   );
-  expect(screen.getByRole("button", { name: "提交反馈" })).toBeDisabled();
+
+  render(<ResearchPageClient store={store} />);
+
+  expect(
+    screen.queryByText("正在处理反馈并准备新一轮研究..."),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText(/等待第 2 轮/)).not.toBeInTheDocument();
 });
 
 test("replaces the mobile report segment with clarification detail during clarifying phase", () => {
@@ -216,7 +261,9 @@ test("supports mobile 操作 / 报告 / 进度 switching with accessible pressed
     expect(reportButton).toHaveAttribute("aria-pressed", "true");
     expect(controlButton).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("region", { name: "报告画布" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "反馈意见" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "反馈意见" }),
+    ).not.toBeInTheDocument();
 
     await user.click(progressButton);
 

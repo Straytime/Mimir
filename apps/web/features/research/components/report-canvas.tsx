@@ -142,9 +142,6 @@ export function ReportCanvas() {
         {delivery ? (
           <div className="flex flex-wrap gap-2">
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-800">
-              {delivery.word_count} 字
-            </span>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-800">
               {delivery.artifact_count} 张配图
             </span>
           </div>

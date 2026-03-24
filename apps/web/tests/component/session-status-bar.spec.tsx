@@ -46,3 +46,31 @@ test("shows recent server activity instead of recent heartbeat and updates on an
 
   expect(screen.getByText(/2026-03-23T10:05:00\+08:00/)).toBeInTheDocument();
 });
+
+test("does not expose revision transition badges in the status bar", () => {
+  const store = createResearchSessionStore(
+    makeResearchSessionState({
+      session: {
+        sseState: "open",
+      },
+      remote: {
+        snapshot: makeTaskSnapshot({
+          phase: "delivered",
+          status: "awaiting_feedback",
+        }),
+      },
+      ui: {
+        revisionTransition: {
+          status: "waiting_next_revision",
+          pendingRevisionId: "rev_stage1",
+          pendingRevisionNumber: 2,
+        },
+      },
+    }),
+  );
+
+  renderWithStore(<SessionStatusBar />, { store });
+
+  expect(screen.queryByText("Revision")).not.toBeInTheDocument();
+  expect(screen.queryByText(/等待第 2 轮/)).not.toBeInTheDocument();
+});

@@ -29,9 +29,6 @@ export function SessionStatusBar() {
     (state) => state.session.lastServerActivityAt,
   );
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
-  const revisionTransition = useResearchSessionStore(
-    (state) => state.ui.revisionTransition,
-  );
 
   return (
     <section
@@ -50,16 +47,6 @@ export function SessionStatusBar() {
       <span className="text-slate-500">
         最近服务端活动：{lastServerActivityAt ?? "尚未收到"}
       </span>
-      {revisionTransition.status !== "idle" ? (
-        <>
-          <span className="text-slate-500">Revision</span>
-          <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-900">
-            {revisionTransition.status === "waiting_next_revision"
-              ? `等待第 ${revisionTransition.pendingRevisionNumber ?? "?"} 轮`
-              : `切换到第 ${revisionTransition.pendingRevisionNumber ?? "?"} 轮`}
-          </span>
-        </>
-      ) : null}
     </section>
   );
 }

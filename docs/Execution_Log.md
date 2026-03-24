@@ -3233,3 +3233,53 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 无当前 blocker
   - 本次没有改 planner prompt、collector loop、timeline 前端展示或并发策略；只修 parser/schema 偏差导致的执行遗漏
+
+## R1-051 Hide Word Count And Disable Frontend Feedback
+
+- 日期时间: 2026-03-24 22:22:00 CST (+0800)
+- 任务包编号: R1-051
+- session 标识: `codex/r1-051-hide-word-count-disable-feedback`
+- 目标摘要:
+  - 前端移除最终报告的 `word_count` 展示
+  - 前端隐藏/屏蔽报告完成后的 feedback 功能入口与 revision overlay
+  - 保持后端契约、状态机与 API 端点不变，仅收口前端产品面
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `docs/Architecture.md`
+  - `docs/Release_Readiness_Checklist.md`
+  - `docs/Execution_Log.md`
+  - `apps/web/features/research/components/report-canvas.tsx`
+  - `apps/web/features/research/components/delivery-actions.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/tests/component/report-canvas.spec.tsx`
+  - `apps/web/tests/component/delivery-actions.spec.tsx`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/component/session-status-bar.spec.tsx`
+  - `apps/web/tests/integration/report-delivery-flow.spec.tsx`
+  - `apps/web/tests/integration/feedback-revision-flow.spec.tsx`
+- 测试 / 验证:
+  - 红测:
+    - `cd apps/web && pnpm exec vitest run tests/component/report-canvas.spec.tsx tests/component/delivery-actions.spec.tsx tests/component/research-page-client.spec.tsx tests/component/session-status-bar.spec.tsx tests/integration/report-delivery-flow.spec.tsx tests/integration/feedback-revision-flow.spec.tsx`
+    - 初次结果: `9 failed`
+    - 失败点:
+      - `ReportCanvas` 与 `DeliveryActions` 仍显示 `word_count`
+      - `awaiting_feedback` 时仍渲染 `FeedbackComposer`
+      - `revisionTransition` 仍显示 overlay 与 status badge
+  - 修补后:
+    - 同一命令重跑
+    - 结果: `25 passed`
+  - 回归:
+    - `cd apps/web && pnpm exec vitest run tests/integration/task-stream-lifecycle.spec.tsx tests/integration/clarification-flow.spec.tsx tests/integration/research-transparency.spec.tsx tests/integration/report-delivery-flow.spec.tsx tests/integration/feedback-revision-flow.spec.tsx tests/component/delivery-actions.spec.tsx tests/component/report-canvas.spec.tsx tests/component/research-page-client.spec.tsx tests/component/session-status-bar.spec.tsx`
+    - 结果: `53 passed`
+    - `cd apps/web && pnpm typecheck`
+    - 结果: `passed`
+- 验收结论:
+  - 前端已不再展示 `delivery.word_count`，报告页和下载区只保留 artifact 数量等可用交付信息
+  - `FeedbackComposer` 已从工作台主流程移除；即使后端状态为 `awaiting_feedback + delivered`，前端仍只保留只读报告与下载视图
+  - revision overlay 与状态栏中的 revision transition badge 已隐藏；若 store 中残留 `feedbackDraft`、`feedbackSubmitError`、`revisionTransition` 等状态，前端会安全降级而不暴露 feedback UI
+  - 下载按钮、报告正文、artifact gallery、时间线与页内 SSE 观察能力保持不变；后端 `word_count` 字段、`POST /feedback` 端点和 revision 状态机未做任何修改
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次未改后端能力，仅关闭前端入口；后端 feedback/revision 契约继续存在但处于前端未启用状态

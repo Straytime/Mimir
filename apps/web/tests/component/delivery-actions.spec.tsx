@@ -75,6 +75,27 @@ test("disables download buttons while delivery refresh is in progress", () => {
   expect(screen.getByRole("button", { name: "下载 PDF" })).toBeDisabled();
 });
 
+test("does not render delivery word count in the action panel", () => {
+  const store = createDeliveryStore();
+
+  store.setState((state) => ({
+    ...state,
+    remote: {
+      ...state.remote,
+      delivery: makeDeliverySummary({
+        ...state.remote.delivery!,
+        word_count: 6800,
+        artifact_count: 3,
+      }),
+    },
+  }));
+
+  renderWithStore(<DeliveryActions />, { store });
+
+  expect(screen.queryByText("6800 字")).not.toBeInTheDocument();
+  expect(screen.getByText("3 张配图")).toBeInTheDocument();
+});
+
 test("disables download buttons while waiting for the next revision after feedback submission", () => {
   const store = createDeliveryStore();
 
