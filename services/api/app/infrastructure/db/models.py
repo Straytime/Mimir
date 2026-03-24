@@ -173,6 +173,25 @@ class AgentRunRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class LLMCallTraceRecord(Base):
+    __tablename__ = "llm_call_traces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str | None] = mapped_column(String(64))
+    revision_id: Mapped[str | None] = mapped_column(String(64))
+    stage: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    response_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    parsed_text: Mapped[str | None] = mapped_column(Text)
+    reasoning_text: Mapped[str | None] = mapped_column(Text)
+    tool_calls_json: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(JSONB)
+    provider_finish_reason: Mapped[str | None] = mapped_column(String(64))
+    provider_usage_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    request_id: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ArtifactRecord(Base):
     __tablename__ = "artifacts"
 
@@ -202,4 +221,6 @@ Index("ix_task_events_task_id_seq", TaskEventRecord.task_id, TaskEventRecord.seq
 Index("ix_task_tool_calls_revision_id_created_at", TaskToolCallRecord.revision_id, TaskToolCallRecord.created_at)
 Index("ix_collected_sources_revision_id_created_at", CollectedSourceRecord.revision_id, CollectedSourceRecord.created_at)
 Index("ix_agent_runs_revision_id_created_at", AgentRunRecord.revision_id, AgentRunRecord.created_at)
+Index("ix_llm_call_traces_created_at", LLMCallTraceRecord.created_at)
+Index("ix_llm_call_traces_task_id_created_at", LLMCallTraceRecord.task_id, LLMCallTraceRecord.created_at)
 Index("ix_artifacts_revision_id_created_at", ArtifactRecord.revision_id, ArtifactRecord.created_at)

@@ -37,8 +37,11 @@ class OutlineInvocation:
 class OutlineDecision:
     deltas: tuple[str, ...]
     outline: ResearchOutline
+    request_id: str | None = None
     provider_finish_reason: str | None = None
     provider_usage: dict[str, Any] | None = None
+    request_payload: dict[str, Any] | None = None
+    response_payload: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,5 +111,8 @@ class WriterDecision:
     text: str
     tool_calls: tuple[WriterToolCall, ...]
     reasoning_text: str = ""
+    request_id: str | None = None
     provider_finish_reason: str | None = None
     provider_usage: dict[str, Any] | None = None
+    request_payload: dict[str, Any] | None = None
+    response_payload: dict[str, Any] | None = None

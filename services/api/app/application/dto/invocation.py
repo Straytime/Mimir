@@ -90,6 +90,26 @@ class LLMInvocation:
     prompt_bundle: PromptBundle
     tool_schemas: tuple[ToolSchema, ...] = ()
 
+    def to_provider_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.profile.model,
+            "messages": [
+                message.to_provider_payload()
+                for message in self.prompt_bundle.messages
+            ],
+            "temperature": self.profile.temperature,
+            "top_p": self.profile.top_p,
+            "max_tokens": self.profile.max_tokens,
+            "thinking": self.profile.provider_thinking(),
+            "stream": self.profile.stream,
+        }
+        if self.tool_schemas:
+            payload["tools"] = [
+                tool_schema.to_provider_payload()
+                for tool_schema in self.tool_schemas
+            ]
+        return payload
+
 
 def dump_prompt_bundle(bundle: PromptBundle) -> dict[str, Any]:
     return {

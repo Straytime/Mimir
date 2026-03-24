@@ -846,6 +846,10 @@ DoD：
 - Zhipu non-stream / stream 调用都会提取并传递 provider `finish_reason` 与 `usage`
 - `agent_runs.finish_reason` 保持应用层语义；provider 原始 `finish_reason` 与 `usage` 必须分别落到独立字段
 - planner / collector / summary / outline / writer / feedback_analysis 的持久化测试必须覆盖 `provider_finish_reason` 与 `provider_usage_json`
+- clarification / requirement_analysis / planner / collector / summary / outline / writer / feedback_analysis 都必须写入统一 `llm_call_traces`
+- `llm_call_traces` 必须保存 normalized `request_json`、`response_json`、`parsed_text`、`reasoning_text`、`tool_calls_json`、`provider_finish_reason`、`provider_usage_json`、`request_id`
+- `agent_runs` 继续承担业务 round 观测；`llm_call_traces` 是独立诊断设施，不能混塞进 `agent_runs.content_text`
+- summary / collector stop / outline 等 JSON 解析失败路径，在 retry exhaustion 后也必须保留最后一次 `llm_call_traces`，不能因为 adapter parse error 丢失 request / response 证据
 - 所有 `thinking=True` stage 的 `clear_thinking` 必须显式为 `false`
 - writer 第 2 轮及以后必须回灌历史 reasoning content + tool_calls + tool_results，且顺序稳定
 - writer 达到 `MIMIR_WRITER_MAX_ROUNDS` 后若仍有 `tool_calls`，必须 `task.failed`，不能继续 `report.completed`
@@ -913,6 +917,7 @@ DoD：
 - revision rollover
 - cleanup worker
 - final observability hooks
+- `llm_call_traces` retention cleanup（默认 72 小时）
 - 若 feedback / cleanup 引入新字段或索引，则在 Stage 7 同步提交对应 Alembic migration
 
 DoD：
@@ -975,6 +980,8 @@ DoD：
   - DB 标记变化
   - 文件删除
   - 二次补偿重试
+  - `llm_call_traces` 不会随 task cleanup 立即级联删除
+  - 过期 `llm_call_traces` 会被 cleanup worker 按 retention 独立清理
 
 ## 11.4 风控与异常
 

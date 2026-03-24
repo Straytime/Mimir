@@ -38,13 +38,19 @@ from app.application.ports.research import (
     WebFetchClient,
     WebSearchClient,
 )
-from app.application.services.invocation import RetryableOperationError, RiskControlTriggered
+from app.application.services.invocation import (
+    OperationTraceSnapshot,
+    RetryableOperationError,
+    RiskControlTriggered,
+    TraceableOperationError,
+)
 from app.core.config import Settings
 from app.domain.enums import CollectSummaryStatus, FreshnessRequirement
 from app.domain.schemas import CollectPlan
 from app.infrastructure.db.models import (
     AgentRunRecord,
     CollectedSourceRecord,
+    LLMCallTraceRecord,
     ResearchTaskRecord,
     TaskRevisionRecord,
     TaskToolCallRecord,
@@ -205,6 +211,64 @@ class ScriptedSummaryAgent(SummaryAgent):
             key_findings_markdown=f"- {invocation.plan.collect_target} 已完成总结。",
             provider_finish_reason=self.provider_finish_reason,
             provider_usage=self.provider_usage,
+        )
+
+
+class TraceFailingCollectorAgent(CollectorAgent):
+    def __init__(self, *, parsed_text: str) -> None:
+        self.parsed_text = parsed_text
+        self.invocations: list[CollectorInvocation] = []
+
+    async def plan(self, invocation: CollectorInvocation) -> CollectorDecision:
+        self.invocations.append(invocation)
+        raise TraceableOperationError(
+            "zhipu returned invalid JSON",
+            trace_snapshot=OperationTraceSnapshot(
+                parsed_text=self.parsed_text,
+                reasoning_text="collector failed to emit valid JSON",
+                provider_finish_reason="stop",
+                provider_usage_json={
+                    "prompt_tokens": 22,
+                    "completion_tokens": 11,
+                    "total_tokens": 33,
+                },
+                request_id="req_collector_invalid",
+                request_payload={"model": invocation.profile.model},
+                response_payload={
+                    "request_id": "req_collector_invalid",
+                    "parsed_text": self.parsed_text,
+                    "provider_finish_reason": "stop",
+                },
+            ),
+        )
+
+
+class TraceFailingSummaryAgent(SummaryAgent):
+    def __init__(self, *, parsed_text: str) -> None:
+        self.parsed_text = parsed_text
+        self.invocations: list[SummaryInvocation] = []
+
+    async def summarize(self, invocation: SummaryInvocation) -> SummaryDecision:
+        self.invocations.append(invocation)
+        raise TraceableOperationError(
+            "zhipu returned invalid JSON",
+            trace_snapshot=OperationTraceSnapshot(
+                parsed_text=self.parsed_text,
+                reasoning_text="summary failed to emit valid JSON",
+                provider_finish_reason="stop",
+                provider_usage_json={
+                    "prompt_tokens": 18,
+                    "completion_tokens": 7,
+                    "total_tokens": 25,
+                },
+                request_id="req_summary_invalid",
+                request_payload={"model": invocation.profile.model},
+                response_payload={
+                    "request_id": "req_summary_invalid",
+                    "parsed_text": self.parsed_text,
+                    "provider_finish_reason": "stop",
+                },
+            ),
         )
 
 
@@ -741,6 +805,259 @@ async def test_collection_persists_provider_finish_reason_and_usage_for_agent_ru
         "completion_tokens": 7,
         "total_tokens": 25,
     }
+
+
+@pytest.mark.asyncio
+async def test_collection_persists_unified_llm_traces_for_planner_collector_and_summary(
+    make_stage5_client,
+    db_session: Session,
+) -> None:
+    planner = ScriptedPlannerAgent(
+        rounds=[
+            PlannerDecision(
+                reasoning_deltas=("开始搜集。",),
+                plans=(
+                    CollectPlan(
+                        tool_call_id="call_1",
+                        revision_id="rev_placeholder",
+                        collect_target="收集主要玩家",
+                        additional_info="官方与高可信媒体优先。",
+                        freshness_requirement=FreshnessRequirement.HIGH,
+                    ),
+                ),
+                stop=False,
+                provider_finish_reason="tool_calls",
+                provider_usage={"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+            ),
+            PlannerDecision(
+                reasoning_deltas=("准备进入 merge。",),
+                plans=(),
+                stop=True,
+                provider_finish_reason="stop",
+                provider_usage={"prompt_tokens": 12, "completion_tokens": 6, "total_tokens": 18},
+            ),
+        ]
+    )
+    collector = ScriptedCollectorAgent(
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_search_round(
+                    tool_call_id="call_search_players",
+                    query="q_players",
+                    reasoning="先搜索主要玩家。",
+                    provider_finish_reason="tool_calls",
+                    provider_usage={"prompt_tokens": 21, "completion_tokens": 9, "total_tokens": 30},
+                ),
+                _collector_stop_round(
+                    reasoning="当前信息已足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 A",
+                            link="https://example.com/a",
+                            info="A 内容",
+                        ),
+                    ),
+                    provider_finish_reason="stop",
+                    provider_usage={"prompt_tokens": 15, "completion_tokens": 5, "total_tokens": 20},
+                ),
+            ),
+        }
+    )
+    summarizer = ScriptedSummaryAgent(
+        provider_finish_reason="stop",
+        provider_usage={"prompt_tokens": 18, "completion_tokens": 7, "total_tokens": 25},
+    )
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=collector,
+        summary_agent=summarizer,
+        web_search_client=ScriptedWebSearchClient(
+            SearchScenario(
+                results_by_query={
+                    "q_players": (
+                        SearchHit(
+                            title="来源 A",
+                            link="https://example.com/a",
+                            snippet="A snippet",
+                        ),
+                    ),
+                }
+            )
+        ),
+        web_fetch_client=ScriptedWebFetchClient(content_by_url={}),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_collection_flow(client)
+        await read_until_event(lines, {"sources.merged"})
+        await _close_stream(stream_context, response)
+
+    traces = list(
+        db_session.scalars(
+            select(LLMCallTraceRecord)
+            .where(LLMCallTraceRecord.task_id == create_body["task_id"])
+            .where(LLMCallTraceRecord.stage.in_(("planner", "collector", "summary")))
+            .order_by(LLMCallTraceRecord.id.asc())
+        )
+    )
+
+    assert [trace.stage for trace in traces] == [
+        "planner",
+        "collector",
+        "collector",
+        "summary",
+        "planner",
+    ]
+    assert traces[0].request_json["model"] == "glm-5"
+    assert traces[0].provider_finish_reason == "tool_calls"
+    assert traces[0].provider_usage_json == {
+        "prompt_tokens": 20,
+        "completion_tokens": 10,
+        "total_tokens": 30,
+    }
+    assert traces[1].tool_calls_json == [
+        {
+            "tool_call_id": "call_search_players",
+            "tool_name": "web_search",
+            "arguments_json": {
+                "search_query": "q_players",
+                "search_recency_filter": "noLimit",
+            },
+        }
+    ]
+    assert traces[3].parsed_text == "- 收集主要玩家 已完成总结。"
+
+
+@pytest.mark.asyncio
+async def test_collection_persists_collector_trace_when_invalid_output_retries_exhaust(
+    make_stage5_client,
+    db_session: Session,
+) -> None:
+    planner = ScriptedPlannerAgent(
+        rounds=[
+            PlannerDecision(
+                reasoning_deltas=("开始搜集。",),
+                plans=(
+                    CollectPlan(
+                        tool_call_id="call_1",
+                        revision_id="rev_placeholder",
+                        collect_target="收集主要玩家",
+                        additional_info="优先官方与高可信媒体。",
+                        freshness_requirement=FreshnessRequirement.HIGH,
+                    ),
+                ),
+                stop=False,
+            ),
+        ]
+    )
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=TraceFailingCollectorAgent(
+            parsed_text="说明文字\nnot valid collector json"
+        ),
+        summary_agent=ScriptedSummaryAgent(),
+        web_search_client=ScriptedWebSearchClient(
+            scenario=SearchScenario(results_by_query={})
+        ),
+        web_fetch_client=ScriptedWebFetchClient(content_by_url={}),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_collection_flow(client)
+        _, failed_name, failed_payload = await read_until_event(
+            lines,
+            {"task.failed"},
+            timeout=2.0,
+        )
+        await assert_stream_closed(lines)
+        await _close_stream(stream_context, response)
+
+    trace = db_session.scalar(
+        select(LLMCallTraceRecord)
+        .where(LLMCallTraceRecord.task_id == create_body["task_id"])
+        .where(LLMCallTraceRecord.stage == "collector")
+    )
+
+    assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
+    assert trace is not None
+    assert trace.parsed_text == "说明文字\nnot valid collector json"
+    assert trace.provider_finish_reason == "stop"
+    assert trace.request_id == "req_collector_invalid"
+
+
+@pytest.mark.asyncio
+async def test_collection_persists_summary_trace_when_invalid_output_retries_exhaust(
+    make_stage5_client,
+    db_session: Session,
+) -> None:
+    planner = ScriptedPlannerAgent(
+        rounds=[
+            PlannerDecision(
+                reasoning_deltas=("开始搜集。",),
+                plans=(
+                    CollectPlan(
+                        tool_call_id="call_1",
+                        revision_id="rev_placeholder",
+                        collect_target="收集主要玩家",
+                        additional_info="优先官方与高可信媒体。",
+                        freshness_requirement=FreshnessRequirement.HIGH,
+                    ),
+                ),
+                stop=False,
+            ),
+        ]
+    )
+    collector = ScriptedCollectorAgent(
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_stop_round(
+                    reasoning="已有信息足够。",
+                    items=(
+                        CollectedSourceItem(
+                            title="来源 A",
+                            link="https://example.com/a",
+                            info="A 内容",
+                        ),
+                    ),
+                ),
+            ),
+        }
+    )
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=collector,
+        summary_agent=TraceFailingSummaryAgent(
+            parsed_text="总结如下：not valid summary json"
+        ),
+        web_search_client=ScriptedWebSearchClient(
+            scenario=SearchScenario(results_by_query={})
+        ),
+        web_fetch_client=ScriptedWebFetchClient(content_by_url={}),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_collection_flow(client)
+        _, failed_name, failed_payload = await read_until_event(
+            lines,
+            {"task.failed"},
+            timeout=2.0,
+        )
+        await assert_stream_closed(lines)
+        await _close_stream(stream_context, response)
+
+    trace = db_session.scalar(
+        select(LLMCallTraceRecord)
+        .where(LLMCallTraceRecord.task_id == create_body["task_id"])
+        .where(LLMCallTraceRecord.stage == "summary")
+    )
+
+    assert failed_name == "task.failed"
+    assert failed_payload["payload"]["error"]["code"] == "upstream_service_error"
+    assert trace is not None
+    assert trace.parsed_text == "总结如下：not valid summary json"
+    assert trace.provider_finish_reason == "stop"
+    assert trace.request_id == "req_summary_invalid"
 
 
 @pytest.mark.asyncio

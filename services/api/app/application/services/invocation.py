@@ -1,6 +1,8 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import Any
 from typing import Generic, TypeVar
 
 from app.core.retry import RetryPolicy
@@ -12,6 +14,29 @@ T = TypeVar("T")
 
 class RetryableOperationError(Exception):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class OperationTraceSnapshot:
+    parsed_text: str
+    reasoning_text: str = ""
+    tool_calls_json: tuple[dict[str, Any], ...] = ()
+    provider_finish_reason: str | None = None
+    provider_usage_json: dict[str, Any] | None = None
+    request_id: str | None = None
+    request_payload: dict[str, Any] | None = None
+    response_payload: dict[str, Any] | None = None
+
+
+class TraceableOperationError(RetryableOperationError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        trace_snapshot: OperationTraceSnapshot,
+    ) -> None:
+        super().__init__(message)
+        self.trace_snapshot = trace_snapshot
 
 
 class RiskControlTriggered(Exception):

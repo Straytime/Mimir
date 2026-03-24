@@ -31,8 +31,12 @@ class PlannerDecision:
     reasoning_deltas: tuple[str, ...]
     plans: tuple[CollectPlan, ...]
     stop: bool
+    request_id: str | None = None
     provider_finish_reason: str | None = None
     provider_usage: dict[str, Any] | None = None
+    request_payload: dict[str, Any] | None = None
+    response_payload: dict[str, Any] | None = None
+    tool_calls_json: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,8 +67,11 @@ class CollectorDecision:
     tool_calls: tuple[CollectorToolCall, ...]
     stop: bool
     items: tuple["CollectedSourceItem", ...] = ()
+    request_id: str | None = None
     provider_finish_reason: str | None = None
     provider_usage: dict[str, Any] | None = None
+    request_payload: dict[str, Any] | None = None
+    response_payload: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,8 +133,11 @@ class SummaryDecision:
     status: CollectSummaryStatus
     key_findings_markdown: str | None = None
     message: str | None = None
+    request_id: str | None = None
     provider_finish_reason: str | None = None
     provider_usage: dict[str, Any] | None = None
+    request_payload: dict[str, Any] | None = None
+    response_payload: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)

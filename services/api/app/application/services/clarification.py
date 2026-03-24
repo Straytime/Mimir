@@ -36,6 +36,7 @@ from app.application.prompts.clarification import (
 from app.application.prompts.requirement import build_requirement_analysis_prompt
 from app.application.services.llm import RetryingLLMInvoker
 from app.application.services.llm import RetryableLLMError
+from app.application.services.llm import build_trace_request_payload, build_trace_response_payload
 from app.application.services.tasks import TaskService
 from app.application.services.invocation import RiskControlTriggered
 from app.domain.enums import ClarificationMode, TaskPhase, TaskStatus
@@ -328,6 +329,19 @@ class ClarificationOrchestrator:
             return
         logger.info("natural clarification completed", extra={"task_id": task_id})
         await self._emit_deltas(task_id=task_id, event="clarification.delta", deltas=generation.deltas)
+        self._persist_llm_trace(
+            task_id=task_id,
+            stage="clarification_natural",
+            invocation=invocation,
+            parsed_text=generation.full_text,
+            reasoning_text=generation.reasoning_text,
+            tool_calls_json=list(generation.tool_calls) or None,
+            provider_finish_reason=generation.provider_finish_reason,
+            provider_usage_json=generation.provider_usage,
+            request_id=generation.request_id,
+            request_payload=generation.request_payload,
+            response_payload=generation.response_payload,
+        )
 
         runtime = self._runtimes.setdefault(task_id, ClarificationRuntime())
         runtime.clarification_output = generation.full_text
@@ -390,6 +404,19 @@ class ClarificationOrchestrator:
             return
         logger.info("options clarification completed", extra={"task_id": task_id})
         await self._emit_deltas(task_id=task_id, event="clarification.delta", deltas=generation.deltas)
+        self._persist_llm_trace(
+            task_id=task_id,
+            stage="clarification_options",
+            invocation=invocation,
+            parsed_text=generation.full_text,
+            reasoning_text=generation.reasoning_text,
+            tool_calls_json=list(generation.tool_calls) or None,
+            provider_finish_reason=generation.provider_finish_reason,
+            provider_usage_json=generation.provider_usage,
+            request_id=generation.request_id,
+            request_payload=generation.request_payload,
+            response_payload=generation.response_payload,
+        )
 
         parser = ClarificationOptionsParser()
         try:
@@ -490,6 +517,19 @@ class ClarificationOrchestrator:
             return
         logger.info("requirement analysis completed", extra={"task_id": task_id})
         await self._emit_deltas(task_id=task_id, event="analysis.delta", deltas=generation.deltas)
+        self._persist_llm_trace(
+            task_id=task_id,
+            stage="requirement_analysis",
+            invocation=invocation,
+            parsed_text=generation.full_text,
+            reasoning_text=generation.reasoning_text,
+            tool_calls_json=list(generation.tool_calls) or None,
+            provider_finish_reason=generation.provider_finish_reason,
+            provider_usage_json=generation.provider_usage,
+            request_id=generation.request_id,
+            request_payload=generation.request_payload,
+            response_payload=generation.response_payload,
+        )
 
         parser = RequirementDetailParser()
         try:
@@ -531,6 +571,56 @@ class ClarificationOrchestrator:
                     session.rollback()
                     return
                 session.commit()
+
+    def _persist_llm_trace(
+        self,
+        *,
+        task_id: str,
+        stage: str,
+        invocation: LLMInvocation,
+        parsed_text: str,
+        reasoning_text: str,
+        tool_calls_json: list[object] | None,
+        provider_finish_reason: str | None,
+        provider_usage_json: dict[str, object] | None,
+        request_id: str | None,
+        request_payload: dict[str, object] | None,
+        response_payload: dict[str, object] | None,
+    ) -> None:
+        now = self._clock()
+        with self._session_factory() as session:
+            task = self._task_service.repository.get_task(session=session, task_id=task_id)
+            if task is None:
+                session.rollback()
+                return
+            self._task_service.repository.append_llm_call_trace(
+                session=session,
+                task_id=task_id,
+                revision_id=task.active_revision_id,
+                stage=stage,
+                model=invocation.profile.model,
+                request_json=build_trace_request_payload(
+                    invocation=invocation,
+                    explicit_payload=request_payload,
+                ),
+                response_json=build_trace_response_payload(
+                    explicit_payload=response_payload,
+                    parsed_text=parsed_text,
+                    reasoning_text=reasoning_text,
+                    tool_calls=tuple(tool_calls_json or ()),
+                    provider_finish_reason=provider_finish_reason,
+                    provider_usage=provider_usage_json,
+                    request_id=request_id,
+                ),
+                parsed_text=parsed_text,
+                reasoning_text=reasoning_text or None,
+                tool_calls_json=tool_calls_json,
+                provider_finish_reason=provider_finish_reason,
+                provider_usage_json=provider_usage_json,
+                request_id=request_id,
+                created_at=now,
+            )
+            session.commit()
 
     def _resolve_option_answers(
         self,

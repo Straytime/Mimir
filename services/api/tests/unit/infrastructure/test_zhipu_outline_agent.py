@@ -6,6 +6,7 @@ import pytest
 
 from app.application.dto.delivery import OutlineInvocation
 from app.application.dto.invocation import InvocationProfile, PromptBundle
+from app.application.services.invocation import TraceableOperationError
 from app.application.dto.research import FormattedSource
 from app.domain.enums import FreshnessRequirement, OutputFormat
 from app.domain.schemas import RequirementDetail
@@ -67,7 +68,16 @@ class FakeZhipuChatClient(ZhipuChatClient):
 
     async def complete(self, *, invocation):
         self.calls.append({"invocation": invocation})
-        return ZhipuCompletionResult(text=self._text, request_id="req_test", tool_calls=())
+        return ZhipuCompletionResult(
+            text=self._text,
+            request_id="req_test",
+            tool_calls=(),
+            request_payload=invocation.to_provider_payload(),
+            response_payload={
+                "request_id": "req_test",
+                "parsed_text": self._text,
+            },
+        )
 
 
 @pytest.mark.asyncio
@@ -159,21 +169,19 @@ async def test_parse_prd_format_entities_at_top_level() -> None:
 
 @pytest.mark.asyncio
 async def test_parse_prd_format_missing_research_outline_raises() -> None:
-    """Missing research_outline key raises RetryableOperationError."""
-    from app.application.services.invocation import RetryableOperationError
-
+    """Missing research_outline key raises TraceableOperationError with trace payload."""
     prd_response = json.dumps({"entities": []}, ensure_ascii=False)
     client = FakeZhipuChatClient(prd_response)
     agent = ZhipuOutlineAgent(client=client, model="glm-5")
-    with pytest.raises(RetryableOperationError):
+    with pytest.raises(TraceableOperationError) as exc_info:
         await agent.prepare(_invocation())
+    assert exc_info.value.trace_snapshot.parsed_text == prd_response
+    assert exc_info.value.trace_snapshot.request_payload is not None
 
 
 @pytest.mark.asyncio
 async def test_parse_prd_format_no_sections_raises() -> None:
-    """research_outline with only 标题 and no section keys raises."""
-    from app.application.services.invocation import RetryableOperationError
-
+    """research_outline with only 标题 and no section keys raises traceable error."""
     prd_response = json.dumps(
         {
             "research_outline": {"标题": {"title": "标题"}},
@@ -183,8 +191,9 @@ async def test_parse_prd_format_no_sections_raises() -> None:
     )
     client = FakeZhipuChatClient(prd_response)
     agent = ZhipuOutlineAgent(client=client, model="glm-5")
-    with pytest.raises(RetryableOperationError):
+    with pytest.raises(TraceableOperationError) as exc_info:
         await agent.prepare(_invocation())
+    assert exc_info.value.trace_snapshot.parsed_text == prd_response
 
 
 @pytest.mark.asyncio

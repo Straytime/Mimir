@@ -26,6 +26,7 @@ from app.application.invocation_contracts import (
 from app.application.services.invocation import (
     RetryableOperationError,
     RiskControlTriggered,
+    TraceableOperationError,
 )
 from app.application.services.llm import RetryableLLMError, TextGeneration
 from app.core.config import Settings
@@ -428,6 +429,56 @@ async def test_zhipu_collector_adapter_extracts_first_json_array_from_explanator
 
 
 @pytest.mark.asyncio
+async def test_zhipu_collector_adapter_raises_traceable_error_for_invalid_stop_json() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(
+                        content="下面是搜集结果：not json",
+                        reasoning_content="尝试整理最终结果。",
+                    ),
+                )
+            ]
+        )
+    )
+    adapter = ZhipuCollectorAgent(client=raw_client, model="glm-test")
+
+    with pytest.raises(TraceableOperationError) as exc_info:
+        await adapter.plan(
+            CollectorInvocation(
+                prompt_name="collector_round",
+                subtask_id="sub_1",
+                plan=CollectPlan(
+                    tool_call_id="call_collect_1",
+                    revision_id="rev_1",
+                    collect_target="收集主要玩家",
+                    additional_info="优先官方与高可信媒体。",
+                    freshness_requirement=FreshnessRequirement.HIGH,
+                ),
+                call_index=3,
+                tool_call_limit=10,
+                now=SimpleNamespace(isoformat=lambda: "2026-03-16T15:00:00+00:00"),
+                profile=build_stage_profile(Settings(), stage="collector"),
+                prompt_bundle=PromptBundle(
+                    system_prompt="collector-system",
+                    user_prompt="collector-user",
+                ),
+                tool_schemas=(
+                    build_web_search_tool_schema(),
+                    build_web_fetch_tool_schema(),
+                ),
+            )
+        )
+
+    assert exc_info.value.trace_snapshot.parsed_text == "下面是搜集结果：not json"
+    assert exc_info.value.trace_snapshot.reasoning_text == "尝试整理最终结果。"
+    assert exc_info.value.trace_snapshot.response_payload is not None
+    assert exc_info.value.trace_snapshot.response_payload["parsed_text"] == "下面是搜集结果：not json"
+
+
+@pytest.mark.asyncio
 async def test_zhipu_summary_adapter_extracts_first_json_object_from_explanatory_text() -> None:
     raw_client = FakeZhipuClient(
         response=SimpleNamespace(
@@ -485,6 +536,59 @@ async def test_zhipu_summary_adapter_extracts_first_json_object_from_explanatory
 
     assert decision.status.value == "completed"
     assert decision.key_findings_markdown == "- 发现 1"
+
+
+@pytest.mark.asyncio
+async def test_zhipu_summary_adapter_raises_traceable_error_for_invalid_json() -> None:
+    raw_client = FakeZhipuClient(
+        response=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(
+                        content="总结如下：not json",
+                        reasoning_content="尝试输出结构化总结。",
+                    ),
+                )
+            ]
+        )
+    )
+    adapter = ZhipuSummaryAgent(client=raw_client, model="glm-test")
+
+    with pytest.raises(TraceableOperationError) as exc_info:
+        await adapter.summarize(
+            SummaryInvocation(
+                prompt_name="summary_round",
+                subtask_id="sub_1",
+                plan=CollectPlan(
+                    tool_call_id="call_collect_1",
+                    revision_id="rev_1",
+                    collect_target="收集主要玩家",
+                    additional_info="优先官方与高可信媒体。",
+                    freshness_requirement=FreshnessRequirement.HIGH,
+                ),
+                result_status="completed",
+                search_queries=("中国 AI 搜索",),
+                item_payloads=(
+                    {
+                        "title": "来源 A",
+                        "link": "https://example.com/a",
+                        "info": "A 内容",
+                    },
+                ),
+                now=SimpleNamespace(isoformat=lambda: "2026-03-16T15:00:00+00:00"),
+                profile=build_stage_profile(Settings(), stage="summary"),
+                prompt_bundle=PromptBundle(
+                    system_prompt="summary-system",
+                    user_prompt="summary-user",
+                ),
+            )
+        )
+
+    assert exc_info.value.trace_snapshot.parsed_text == "总结如下：not json"
+    assert exc_info.value.trace_snapshot.reasoning_text == "尝试输出结构化总结。"
+    assert exc_info.value.trace_snapshot.request_payload is not None
+    assert exc_info.value.trace_snapshot.request_payload["model"] == "glm-5"
 
 
 @pytest.mark.asyncio
@@ -1180,6 +1284,11 @@ async def test_zhipu_completion_propagates_non_stream_provider_finish_reason_and
         "completion_tokens": 7,
         "total_tokens": 18,
     }
+    assert result.request_payload is not None
+    assert result.request_payload["model"] == "glm-5"
+    assert result.response_payload is not None
+    assert result.response_payload["request_id"] == "req_non_stream_obs"
+    assert result.response_payload["provider_finish_reason"] == "stop"
 
 
 @pytest.mark.asyncio
@@ -1221,6 +1330,14 @@ async def test_zhipu_completion_propagates_stream_provider_finish_reason_and_usa
         "completion_tokens": 9,
         "total_tokens": 29,
     }
+    assert result.request_payload is not None
+    assert result.request_payload["thinking"] == {
+        "type": "enabled",
+        "clear_thinking": False,
+    }
+    assert result.response_payload is not None
+    assert result.response_payload["request_id"] == "req_stream_obs"
+    assert result.response_payload["provider_finish_reason"] == "tool_calls"
 
 
 @pytest.mark.asyncio

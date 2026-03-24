@@ -22,6 +22,7 @@ from app.infrastructure.db.models import (
     AgentRunRecord,
     ArtifactRecord,
     CollectedSourceRecord,
+    LLMCallTraceRecord,
     IPUsageCounterRecord,
     ResearchTaskRecord,
     SystemLockRecord,
@@ -374,6 +375,43 @@ class TaskRepository:
         session.flush()
         return record
 
+    def append_llm_call_trace(
+        self,
+        *,
+        session: Session,
+        task_id: str | None,
+        revision_id: str | None,
+        stage: str,
+        model: str,
+        request_json: dict[str, object],
+        response_json: dict[str, object],
+        parsed_text: str | None,
+        reasoning_text: str | None,
+        tool_calls_json: dict[str, object] | list[object] | None,
+        provider_finish_reason: str | None,
+        provider_usage_json: dict[str, object] | None,
+        request_id: str | None,
+        created_at: datetime,
+    ) -> LLMCallTraceRecord:
+        record = LLMCallTraceRecord(
+            task_id=task_id,
+            revision_id=revision_id,
+            stage=stage,
+            model=model,
+            request_json=request_json,
+            response_json=response_json,
+            parsed_text=parsed_text,
+            reasoning_text=reasoning_text,
+            tool_calls_json=tool_calls_json,
+            provider_finish_reason=provider_finish_reason,
+            provider_usage_json=provider_usage_json,
+            request_id=request_id,
+            created_at=created_at,
+        )
+        session.add(record)
+        session.flush()
+        return record
+
     def append_tool_call(
         self,
         *,
@@ -705,6 +743,17 @@ class TaskRepository:
     ) -> None:
         session.execute(
             delete(IPUsageCounterRecord).where(IPUsageCounterRecord.created_at < cutoff)
+        )
+        session.flush()
+
+    def prune_llm_call_traces_before(
+        self,
+        *,
+        session: Session,
+        cutoff: datetime,
+    ) -> None:
+        session.execute(
+            delete(LLMCallTraceRecord).where(LLMCallTraceRecord.created_at < cutoff)
         )
         session.flush()
 
