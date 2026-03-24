@@ -34,11 +34,14 @@ from app.application.dto.delivery import (
 from app.application.services.invocation import RetryableOperationError
 
 _PDF_FONT_NAME = "STSong-Light"
-_BLOCK_SPACER = Spacer(1, 0.16 * inch)
 logger = logging.getLogger(__name__)
 _ONE_PIXEL_PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
 )
+
+
+def _block_spacer() -> Spacer:
+    return Spacer(1, 0.16 * inch)
 
 
 class LocalStubOutlineAgent:
@@ -296,7 +299,7 @@ def _build_pdf_story(*, html: str) -> list:
         if isinstance(node, NavigableString):
             if node.strip():
                 story.append(Paragraph(escape(node.strip()), styles["body"]))
-                story.append(_BLOCK_SPACER)
+                story.append(_block_spacer())
             continue
         if not isinstance(node, Tag):
             continue
@@ -319,13 +322,13 @@ def _render_html_block(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
         text = node.get_text(" ", strip=True)
         if not text:
             return []
-        return [Paragraph(escape(text), styles["body"]), _BLOCK_SPACER]
+        return [Paragraph(escape(text), styles["body"]), _block_spacer()]
     if node.name == "hr":
-        return [_BLOCK_SPACER]
+        return [_block_spacer()]
     text = node.get_text(" ", strip=True)
     if not text:
         return []
-    return [Paragraph(escape(text), styles["body"]), _BLOCK_SPACER]
+    return [Paragraph(escape(text), styles["body"]), _block_spacer()]
 
 
 def _render_paragraph_like(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
@@ -338,7 +341,7 @@ def _render_paragraph_like(*, node: Tag, styles: dict[str, ParagraphStyle]) -> l
         if flowable is not None:
             story.append(flowable)
     if story:
-        story.append(_BLOCK_SPACER)
+        story.append(_block_spacer())
     return story
 
 
@@ -355,7 +358,7 @@ def _render_list(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
             if flowable is not None:
                 story.append(flowable)
     if story:
-        story.append(_BLOCK_SPACER)
+        story.append(_block_spacer())
     return story
 
 

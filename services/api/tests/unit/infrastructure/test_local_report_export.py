@@ -3,6 +3,7 @@ from io import BytesIO
 
 import pytest
 from pypdf import PdfReader
+from reportlab.platypus import Spacer
 
 from app.application.dto.delivery import GeneratedArtifact
 from app.application.services.invocation import RetryableOperationError
@@ -36,6 +37,22 @@ def _count_pdf_images(pdf_bytes: bytes) -> int:
                 count += 1
 
     return count
+
+
+def _build_multi_block_markdown() -> str:
+    sections: list[str] = ["# 多页 PDF 导出稳定性验证"]
+    for index in range(1, 19):
+        sections.append(f"## 第 {index} 节")
+        sections.append(
+            "这是一段用于撑开 PDF 布局的较长正文，包含多个句子，用于验证 ReportLab 在多页渲染时不会因为复用同一个 Spacer flowable 而触发 LayoutError。"
+            "我们需要让正文足够长，以便 story 跨页。"
+        )
+        sections.append("- 要点一：布局必须稳定。")
+        sections.append("- 要点二：图片和列表要与段落共同出现。")
+        if index in {3, 9}:
+            artifact_id = "art_pdf_chart_1" if index == 3 else "art_pdf_chart_2"
+            sections.append(f"![图表 {index}](mimir://artifact/{artifact_id})")
+    return "\n\n".join(sections) + "\n"
 
 
 @pytest.mark.asyncio
@@ -72,6 +89,46 @@ async def test_build_pdf_consumes_canonical_artifact_refs_without_renderer_error
 
     assert "Visual Report" in _extract_pdf_text(pdf_bytes)
     assert _count_pdf_images(pdf_bytes) >= 1
+
+
+def test_build_pdf_story_uses_distinct_spacer_instances_per_block() -> None:
+    html = local_delivery.render_markdown(
+        _build_multi_block_markdown(),
+        extensions=("extra", "sane_lists"),
+    )
+
+    story = local_delivery._build_pdf_story(html=html)
+    spacers = [item for item in story if isinstance(item, Spacer)]
+
+    assert len(spacers) >= 10
+    assert len({id(item) for item in spacers}) == len(spacers)
+
+
+@pytest.mark.asyncio
+async def test_build_pdf_handles_multi_page_markdown_with_lists_and_images() -> None:
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown=_build_multi_block_markdown(),
+        artifacts=(
+            GeneratedArtifact(
+                artifact_id="art_pdf_chart_1",
+                filename="chart_market_share.png",
+                mime_type="image/png",
+                content=_ONE_PIXEL_PNG,
+            ),
+            GeneratedArtifact(
+                artifact_id="art_pdf_chart_2",
+                filename="chart_growth.png",
+                mime_type="image/png",
+                content=_ONE_PIXEL_PNG,
+            ),
+        ),
+    )
+
+    reader = PdfReader(BytesIO(pdf_bytes))
+
+    assert len(reader.pages) >= 2
+    assert "多页 PDF 导出稳定性验证" in _extract_pdf_text(pdf_bytes)
+    assert _count_pdf_images(pdf_bytes) >= 2
 
 
 @pytest.mark.asyncio
