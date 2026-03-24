@@ -2992,3 +2992,30 @@ Copy the template below for each completed session:
   - 本任务只完成了 template 代码与仓库资产接线，未实际执行 E2B template build/publish，也未在真实 sandbox 中跑中文图表 smoke；后续若要上线，需要先发布 template 并将其名称配置到 `MIMIR_E2B_TEMPLATE`
 - 下一步建议:
   - 单开一个 real-E2B smoke 任务包，验证已发布 template 在真实 sandbox 中能稳定渲染中文 matplotlib/seaborn 图表且不再出现 `Glyph ... missing from font(s) DejaVu Sans`
+
+## Production Failure Triage Path Hardening
+
+- 日期时间: 2026-03-24 13:50 CST (+0800)
+- session 标识: `production-triage-method-hardening`
+- 目标摘要:
+  - 固化 production 失败任务的快速排查路径，减少在活体任务窗口内重复踩 `railway logs` / `railway ssh` / shell quoting 的同类阻塞
+  - 明确日志、DB、容器交互三条路径的优先级与使用方式
+- 修改文件:
+  - `AGENTS.md`
+  - `CLAUDE.md`
+  - `docs/Execution_Log.md`
+- 收敛结论:
+  - production 活体失败任务做纯排查时，直接排查，不先发任务包
+  - 证据采样顺序固定为：
+    - `research_tasks / task_events / agent_runs / task_tool_calls / artifacts`
+    - Railway 应用日志
+    - 实现层推断
+  - `railway logs --json` 实际返回 NDJSON，后续必须先落盘，再按行 `json.loads(line)` 解析，不能再对整文件 `json.load(...)`
+  - 复杂 SQL / Python 查询不再优先走 `railway ssh ... COMMAND`，而改为：
+    - 先进入 `railway ssh --service mimir-api --environment production`
+    - 或 `railway ssh --service Postgres --environment production`
+    - 再在交互式 shell 内执行 `python - <<'PY'` / `psql`
+  - 若任务已经被 cleanup 删除，立即停止 DB 回补，只保留日志时序还原，不再反复尝试已知会失败的路径
+- blocker / 风险:
+  - 无当前 blocker
+  - 该收敛只优化排查效率，不改变任何运行时行为或契约

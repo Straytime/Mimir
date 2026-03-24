@@ -284,6 +284,34 @@ PR 应当：
   - 因此排查 writer / delivery 正文问题时，必须在 task 仍存活时立即采样原始数据
 - 在拿到存活 task 的 `agent_runs.content_text`、最终 delivery 存储值，以及尾部 `task_events` 之前，不对 writer 正文语义、正文截断或正文拼装问题下实现结论
 
+### Production 失败任务快速排查约定
+
+- 对 production 活体失败任务做纯排查时，直接执行排查，不先发任务包；只有进入 docs / tests / implementation 变更时才切回任务包模式
+- 失败任务的采样顺序固定为：
+  - 先抓 `task_events / agent_runs / task_tool_calls / artifacts / research_tasks`
+  - 再抓 Railway 应用日志
+  - 最后才做实现层推断
+- `railway logs --json` 当前返回的是 **NDJSON**，不是 JSON array：
+  - 先落盘到 `/tmp/*.ndjson`
+  - 再用 Python 按行 `json.loads(line)` 解析
+  - 不要直接对整文件 `json.load(...)`
+- 对 `mimir-api` 容器执行复杂查询时，优先使用：
+  - `railway ssh --service mimir-api --environment production`
+  - 连进去后再运行交互式 `python - <<'PY'`
+- 对 `Postgres` 容器执行复杂 SQL 时，优先使用：
+  - `railway ssh --service Postgres --environment production`
+  - 连进去后再运行交互式 `psql -U postgres -d railway -P pager=off`
+- 避免把复杂 heredoc、多层引号、包含 SQL/Python 代码的长命令直接塞进：
+  - `railway ssh ... COMMAND`
+  - 这类形式很容易被 shell quoting 打断，浪费活体任务窗口
+- 若任务已被 cleanup 删除：
+  - 立即停止继续尝试 DB 回补
+  - 改为只基于已落盘的 Railway 日志做失败时序还原
+  - 并明确说明“原始 DB 记录已丢失，当前无法进一步定界到 content/tool/result 级别”
+- 若问题发生在 `delivery` 末段：
+  - 优先先区分是 `writer`、`export(zip/pdf)`、`artifact_store.put` 还是 token/download 路径
+  - 不要在尚未区分失败子阶段前笼统归因为“报告生成失败”
+
 当前阶段不应做：
 - 新增 API 端点或业务功能
 - 修改 Architecture / OpenAPI / IA / TDD Plan 的设计结论
