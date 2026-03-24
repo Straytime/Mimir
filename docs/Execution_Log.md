@@ -3316,3 +3316,14 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 无当前 blocker
   - 本次没有改 prompt 内容策略，只改源码书写形态；若后续要改 prompt 语义，应另开任务包
+## 2026-03-24 R1-052 Prompt Update Test Alignment
+
+- 背景：当前分支人工更新了 clarification / planner / summary / writer prompt 文案，以及 `collect_agent` 工具描述；实现层无结构性问题，但 prompt 语义锁测试仍停留在旧文案。
+- 变更：
+  - 更新 `tests/unit/application/test_prompts.py`，对齐新的澄清 prompt 文案与图表/图像能力表述。
+  - 更新 `tests/unit/application/test_collection_prompts.py`，对齐 planner 当前时间位置、自包含约束、并行目标去重提醒，以及 summary 禁止高度抽象一句话总结的要求。
+  - 更新 `tests/unit/application/test_delivery_prompts.py`，对齐 writer 当前的防编造、图表使用、脚注描述、GFM 输出与篇幅规划文案。
+  - 更新 `tests/unit/application/test_invocation_contracts.py`，对齐 `collect_agent` 描述与 `additional_info` 的“尽可能自包含”要求。
+- 验证：
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_prompts.py tests/unit/application/prompts/test_planner_prompt.py tests/unit/application/test_collection_prompts.py tests/unit/application/test_delivery_prompts.py tests/unit/application/test_invocation_contracts.py`
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py -k 'prompt or canonical_path or collect_agent or python_interpreter'`

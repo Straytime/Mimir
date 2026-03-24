@@ -74,13 +74,14 @@ def test_tool_schemas_match_current_architecture_contract() -> None:
     assert collect_agent.name == "collect_agent"
     assert (
         collect_agent.description
-        == "创建独立的信息收集 sub agent，针对单个明确的信息获取目标进行检索和搜集，执行完成后会自动将结果暂存，返回执行摘要"
+        == "创建独立的信息收集 agent，针对单个明确的信息获取目标进行检索和搜集，执行完成后会自动将结果暂存，返回执行摘要"
     )
     assert set(collect_agent.parameters) == {
         "collect_target",
         "additional_info",
         "freshness_requirement",
     }
+    assert "尽可能自包含" in collect_agent.parameters["additional_info"]["description"]
     assert collect_agent.parameters["freshness_requirement"]["enum"] == ["low", "high"]
     assert "tool_call_id" not in collect_agent.parameters
     assert "revision_id" not in collect_agent.parameters

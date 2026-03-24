@@ -109,7 +109,7 @@ def build_collect_agent_tool_schema() -> ToolSchema:
     return ToolSchema(
         name="collect_agent",
         description=(
-            "创建独立的信息收集 sub agent，针对单个明确的信息获取目标进行检索和搜集，"
+            "创建独立的信息收集 agent，针对单个明确的信息获取目标进行检索和搜集，"
             "执行完成后会自动将结果暂存，返回执行摘要"
         ),
         parameters={
@@ -119,7 +119,7 @@ def build_collect_agent_tool_schema() -> ToolSchema:
             },
             "additional_info": {
                 "type": "string",
-                "description": "可辅助 sub agent、有助于其更快、更好达成收集目标的补充信息",
+                "description": "可辅助 sub agent、有助于其更快、更好达成收集目标的补充信息，尽可能自包含",
             },
             "freshness_requirement": {
                 "type": "string",

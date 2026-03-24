@@ -110,10 +110,13 @@ def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() ->
 
     assert "你是一个资深研究员" in prompt.system_prompt
     assert "**保证研究内容前后逻辑连贯、合理且清晰、上下文实体一致无冲突。**" in prompt.system_prompt
-    assert "**！重要！绝对不要超过一万字！**" in prompt.system_prompt
-    assert "根据实际使用的参考信息创建脚注参考" in prompt.system_prompt
+    assert "更不能编造" in prompt.system_prompt
+    assert "积极使用图表来进行辅助可视化展示和分析" in prompt.system_prompt
+    assert "根据实际使用的参考信息插入角标，并在输出末尾添加脚注" in prompt.system_prompt
+    assert "若用户需求未指定撰写字数或输出长度" in prompt.system_prompt
     assert "python_interpreter" in prompt.system_prompt
     assert "canonical_path" in prompt.system_prompt
+    assert "GitHub Flavored Markdown 标准语法" in prompt.system_prompt
     assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
     assert "<参考信息>" in prompt.user_prompt
     assert "ref_1" in prompt.user_prompt

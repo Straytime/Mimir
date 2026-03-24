@@ -13,9 +13,9 @@ def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
         invocation.summaries
     )
     return PromptBundle(
-        system_prompt="""
+        system_prompt=f"""
 <背景>
-你是一个 deep research 团队中的信息搜集调度 agent，你负责根据用户的深度研究需求详情，和已经获得的信息摘要，规划调度接下来的信息收集目标。
+你是一个 deep research 团队中的信息搜集调度 agent，你负责根据用户的深度研究需求详情，和已经获得的信息摘要，规划调度接下来的信息收集目标，现在是{invocation.now.isoformat()}。
 </背景>
 
 <工具>
@@ -37,15 +37,16 @@ def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
 
 注意事项
 1. 你并不需要一次性理清所有目标，而是根据已有信息进行动态规划。
-2. 若你决定同时发起多个工具调用：
+2. 发起 `collect_agent` 调用时保证目标与约束自包含，提供必要、精炼的补充描述信息，不能假设 agent 拥有任何预设信息。
+3. 若串行执行能有效提升质量，优先进行串行执行，记住质量比效率更重要。
+4. 若你决定同时发起多个工具调用：
     - 必须保证同时发起的多个`collect_agent`目标之间无逻辑顺序或依赖关系！
-    - 若串行执行能有效提升质量，优先进行串行执行，记住质量比效率更重要。
+    - 使用孤立的、相互独立的目标进行并行调用，避免多个目标之间存在交叉和重叠，以免引起信息冗余和混乱。
     - 最多只能同时发起 3 个`collect_agent`工具调用。
-3. `collect_agent` 工具会将完整搜集结果暂存，供后续 agent 使用，因此信息搜集全部完成后无需提供任何结果信息，仅声明通知即可。
+5. `collect_agent` 工具会将完整搜集结果暂存，供后续 agent 使用，因此信息搜集全部完成后无需提供任何结果信息，仅声明通知即可。
+</任务>
 """.strip(),
         user_prompt=f"""
-当前时间: {invocation.now.isoformat()}
-当前 collect_agent 已使用次数: {invocation.collect_agent_calls_used}
 <需求详情>
 {json.dumps(invocation.requirement_detail.model_dump(mode="json", exclude_none=True), ensure_ascii=False, indent=2)}
 </需求详情>
@@ -153,6 +154,8 @@ def build_summary_prompt(*, invocation: SummaryInvocation) -> PromptBundle:
 - 提取5-10条关键发现
 - 必须与目标相关
 - 如果搜集结果中有不相关内容，直接忽略，不要提及
+**必须遵循上述约束，输出有效内容，严禁给出高度抽象的一句话总结**
+
 使用 markdown 格式直接输出，不要解释或询问。
 </任务>
 """.strip(),
