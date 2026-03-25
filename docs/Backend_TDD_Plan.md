@@ -836,9 +836,14 @@ DoD：
 - pdf 下载
 - `build_pdf()` 产物必须可被真实 PDF 解析器打开并抽取基本正文
 - `report.pdf` 下载接口返回的二进制必须是可解析 PDF，而不是伪造 header
+- PDF 主路径必须采用标准 `markdown / 受支持的 GFM 子集 -> HTML -> PDF` 渲染，而不是继续使用手写 HTML 节点翻译器逐项补丁；当前实现口径应收敛为 sanitized HTML + headless Chromium 打印 HTML
+- 含 markdown table 的报告导出 PDF 后，表头与关键单元格内容必须可读
 - 含 `mimir://artifact/{artifact_id}` 图片引用时，PDF 导出必须能消费图片资源并完成渲染，不得因导出器本身报错
 - 含标准 footnotes `[^n]` / `[^n]: [title](url)` 时，PDF 导出必须保留正文脚注编号和文末脚注列表，至少保证来源文本与顺序正确
-- PDF renderer 的 block spacer 不能复用同一个 `Spacer` flowable；多段正文、多列表、多图片场景下不得触发 `LayoutError`
+- 含外链的 PDF 导出必须保留可读链接文本；若渲染器支持链接 annotation，应视为额外收益，但不是唯一验收方式
+- 中英文混排在 PDF 中必须保持基本可读，不允许出现整体性方块字或结构性乱码
+- markdown 中的 raw HTML 必须先经过 allowlist sanitize，再进入 Chromium 打印环境
+- Railway provisioning 需要在仓库内给出确定性方案；当前应通过 `services/api/railpack.json` 将 `chromium` 安装到最终镜像，而不是只在文档中声明
 - 研究输出准备 prompt invariant tests
 - 研究输出撰写 prompt invariant tests
 - outline / writer 调用 profile contract tests

@@ -1,9 +1,11 @@
 from base64 import b64decode
 from io import BytesIO
+import json
+from pathlib import Path
+import unicodedata
 
 import pytest
 from pypdf import PdfReader
-from reportlab.platypus import Spacer
 
 from app.application.dto.delivery import GeneratedArtifact
 from app.application.services.invocation import RetryableOperationError
@@ -13,11 +15,23 @@ from app.infrastructure.delivery.local import LocalReportExportService
 _ONE_PIXEL_PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
 )
+_SECOND_PIXEL_PNG = b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNg+M8AAAICAQB7CYF4AAAAAElFTkSuQmCC"
+)
+LOCAL_REPORT_EXPORT_SOURCE = (
+    Path(__file__).resolve().parents[3] / "app/infrastructure/delivery/local.py"
+).read_text(encoding="utf-8")
+RAILPACK_CONFIG_PATH = Path(__file__).resolve().parents[3] / "railpack.json"
+_PDF_TEXT_TRANSLATION = str.maketrans({
+    "⻚": "页",
+    "⻓": "长",
+})
 
 
 def _extract_pdf_text(pdf_bytes: bytes) -> str:
     reader = PdfReader(BytesIO(pdf_bytes))
-    return "\n".join((page.extract_text() or "") for page in reader.pages)
+    text = "\n".join((page.extract_text() or "") for page in reader.pages)
+    return unicodedata.normalize("NFKC", text).translate(_PDF_TEXT_TRANSLATION)
 
 
 def _count_pdf_images(pdf_bytes: bytes) -> int:
@@ -37,6 +51,26 @@ def _count_pdf_images(pdf_bytes: bytes) -> int:
                 count += 1
 
     return count
+
+
+def _extract_pdf_link_targets(pdf_bytes: bytes) -> list[str]:
+    reader = PdfReader(BytesIO(pdf_bytes))
+    uris: list[str] = []
+
+    for page in reader.pages:
+        annotations = page.get("/Annots")
+        if annotations is None:
+            continue
+        for annotation_ref in annotations:
+            annotation = annotation_ref.get_object()
+            action = annotation.get("/A")
+            if action is None:
+                continue
+            uri = action.get("/URI")
+            if uri is not None:
+                uris.append(str(uri))
+
+    return uris
 
 
 def _build_multi_block_markdown() -> str:
@@ -61,6 +95,16 @@ def _build_footnote_markdown() -> str:
         "核心结论[^1] 与扩展判断[^2] 需要保留引用关系。\n\n"
         "[^1]: [第一来源](https://example.com/source-1)\n"
         "[^2]: [第二来源](https://example.com/source-2)\n"
+    )
+
+
+def _build_table_markdown() -> str:
+    return (
+        "# 表格 PDF 导出验证\n\n"
+        "| 公司 | 市占率 | 增速 |\n"
+        "| --- | --- | --- |\n"
+        "| Alpha | 42% | 18% |\n"
+        "| Beta | 31% | 12% |\n"
     )
 
 
@@ -117,17 +161,127 @@ async def test_build_pdf_renders_gfm_footnotes_with_references_and_sources() -> 
     assert pdf_text.index("[1] 第一来源") < pdf_text.index("[2] 第二来源")
 
 
-def test_build_pdf_story_uses_distinct_spacer_instances_per_block() -> None:
-    html = local_delivery.render_markdown(
-        _build_multi_block_markdown(),
-        extensions=("extra", "sane_lists"),
+@pytest.mark.asyncio
+async def test_build_pdf_renders_gfm_tables_with_headers_and_cells() -> None:
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown=_build_table_markdown(),
+        artifacts=(),
     )
 
-    story = local_delivery._build_pdf_story(html=html)
-    spacers = [item for item in story if isinstance(item, Spacer)]
+    pdf_text = _extract_pdf_text(pdf_bytes)
 
-    assert len(spacers) >= 10
-    assert len({id(item) for item in spacers}) == len(spacers)
+    assert "表格 PDF 导出验证" in pdf_text
+    assert "公司" in pdf_text
+    assert "市占率" in pdf_text
+    assert "增速" in pdf_text
+    assert "Alpha" in pdf_text
+    assert "42%" in pdf_text
+    assert "Beta" in pdf_text
+    assert "12%" in pdf_text
+
+
+@pytest.mark.asyncio
+async def test_build_pdf_preserves_external_links_as_readable_text_and_annotations() -> None:
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown="# 外链导出验证\n\n请查看[行业报告](https://example.com/report)。\n",
+        artifacts=(),
+    )
+
+    pdf_text = _extract_pdf_text(pdf_bytes)
+    link_targets = _extract_pdf_link_targets(pdf_bytes)
+
+    assert "外链导出验证" in pdf_text
+    assert "行业报告" in pdf_text
+    assert "https://example.com/report" in link_targets
+
+
+def test_local_report_export_source_uses_standard_html_pdf_renderer() -> None:
+    assert "--print-to-pdf" in LOCAL_REPORT_EXPORT_SOURCE
+    assert "weasyprint" not in LOCAL_REPORT_EXPORT_SOURCE.lower()
+    assert "--allow-file-access-from-files" not in LOCAL_REPORT_EXPORT_SOURCE
+    assert "SimpleDocTemplate" not in LOCAL_REPORT_EXPORT_SOURCE
+    assert "_build_pdf_story" not in LOCAL_REPORT_EXPORT_SOURCE
+
+
+def test_render_gfm_html_sanitizes_raw_html_and_unsafe_attributes() -> None:
+    html = local_delivery._render_gfm_html(
+        markdown=(
+            "# 安全导出\n\n"
+            "正常正文。\n\n"
+            "<script>alert('boom')</script>"
+            "<p onclick=\"evil()\">段落</p>"
+            "<a href=\"javascript:alert(1)\">坏链接</a>"
+            "<a href=\"https://example.com/safe\">好链接</a>"
+            "<iframe src=\"https://evil.example/embed\"></iframe>"
+            "<img src=\"file:///etc/passwd\" onerror=\"boom()\" alt=\"bad\">"
+        )
+    )
+
+    assert "<script" not in html
+    assert "<iframe" not in html
+    assert "onclick=" not in html
+    assert "onerror=" not in html
+    assert "javascript:alert" not in html
+    assert "file:///etc/passwd" not in html
+    assert 'href="https://example.com/safe"' in html
+
+
+def test_rewrite_markdown_artifact_refs_for_pdf_inlines_images_as_data_uris(
+    tmp_path: Path,
+) -> None:
+    rewritten = local_delivery._rewrite_markdown_artifact_refs_for_pdf(
+        markdown="![Chart](mimir://artifact/art_pdf_chart)\n",
+        artifacts=(
+            GeneratedArtifact(
+                artifact_id="art_pdf_chart",
+                filename="chart_market_share.png",
+                mime_type="image/png",
+                content=_ONE_PIXEL_PNG,
+            ),
+        ),
+        temp_dir=tmp_path,
+    )
+
+    assert "mimir://artifact/art_pdf_chart" not in rewritten
+    assert "file://" not in rewritten
+    assert "data:image/png;base64," in rewritten
+
+
+def test_resolve_chromium_executable_raises_clear_error_when_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(local_delivery, "_iter_chromium_executable_candidates", lambda: ())
+
+    with pytest.raises(FileNotFoundError, match="Chromium executable not found"):
+        local_delivery._resolve_chromium_executable(None)
+
+
+def test_railpack_config_provisions_runtime_chromium() -> None:
+    config = json.loads(RAILPACK_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    assert config["$schema"] == "https://schema.railpack.com"
+    assert "chromium" in config["deploy"]["aptPackages"]
+
+
+@pytest.mark.asyncio
+async def test_build_pdf_sanitizes_raw_html_but_keeps_readable_text() -> None:
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown=(
+            "# 安全 PDF\n\n"
+            "保留这段安全正文。\n\n"
+            "<script>alert('boom')</script>"
+            "<p onclick=\"evil()\">保留段落文本</p>"
+            "<a href=\"javascript:alert(1)\">移除危险链接</a>"
+        ),
+        artifacts=(),
+    )
+
+    pdf_text = _extract_pdf_text(pdf_bytes)
+
+    assert "安全 PDF" in pdf_text
+    assert "保留这段安全正文" in pdf_text
+    assert "保留段落文本" in pdf_text
+    assert "alert('boom')" not in pdf_text
 
 
 @pytest.mark.asyncio
@@ -145,7 +299,7 @@ async def test_build_pdf_handles_multi_page_markdown_with_lists_and_images() -> 
                 artifact_id="art_pdf_chart_2",
                 filename="chart_growth.png",
                 mime_type="image/png",
-                content=_ONE_PIXEL_PNG,
+                content=_SECOND_PIXEL_PNG,
             ),
         ),
     )
@@ -162,10 +316,15 @@ async def test_build_pdf_logs_real_exception_before_wrapping(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    def broken_story(*, html: str):
+    def broken_renderer(
+        *,
+        html_document: str,
+        temp_dir: Path,
+        chromium_executable: str | None,
+    ) -> bytes:
         raise ValueError("bad pdf story")
 
-    monkeypatch.setattr(local_delivery, "_build_pdf_story", broken_story)
+    monkeypatch.setattr(local_delivery, "_render_pdf_from_html_document", broken_renderer)
 
     with pytest.raises(RetryableOperationError, match="pdf render failed"):
         await LocalReportExportService().build_pdf(

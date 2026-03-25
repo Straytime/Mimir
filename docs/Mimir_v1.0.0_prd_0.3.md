@@ -1186,7 +1186,7 @@ stateDiagram-v2
     2. 需捕获输出的 markdown 图片引用，并渲染对应的图片
 2. 全部输出完成后，支持用户手动下载，提供两种下载模式
     1. markdown 下载：提供包含 markdown 文件+图片的打包 zip 文件
-    2. PDF 下载：将图文输出转换为 PDF 后下载
+    2. PDF 下载：将当前受支持的 markdown / GFM 子集图文输出转换为 PDF 后下载
 3. 单次研究任务至此结束
 
 ### func_15_研究输出反馈

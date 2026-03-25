@@ -46,6 +46,9 @@ Browser
 - `uvicorn` 已作为生产依赖声明，避免 `--no-dev` 构建后缺少启动器。
 - Start command 依赖 Railway 注入的 `PORT`。
 - `/api/v1/health` 同时作为 Railway liveness probe 和发布后最小检查。
+- `report.pdf` 当前采用 `Python-Markdown(extra + sane_lists) -> sanitized HTML -> headless Chromium print-to-pdf`。
+- Railway 不再只停留在“人工环境必须有 Chromium”的口头约束；`services/api/railpack.json` 是仓库内 provisioning source of truth，用于把 `chromium` 安装到最终镜像。
+- 后端优先通过 `PATH` 发现 Chromium；若运行时路径不是标准位置，可用 `MIMIR_PDF_CHROMIUM_EXECUTABLE` 显式覆盖。
 
 ### 2.3 Production Required Env
 
@@ -66,6 +69,7 @@ Browser
   - 当前实现会自动把 artifact root 收敛到 `${RAILWAY_VOLUME_MOUNT_PATH}/mimir-artifacts`
   - 如果不想使用默认路径，可显式设置 `MIMIR_ARTIFACT_ROOT_DIR`
 - 当 `python_interpreter` 需要稳定的中文图表输出时，使用自定义 E2B template，并通过 `MIMIR_E2B_TEMPLATE` 显式指向已发布的 template 名称
+- `services/api/railpack.json` 必须随部署一起生效，以确保 `report.pdf` 的 Chromium runtime 被稳定 provision
 
 ### 2.4 Production Optional Env
 
@@ -76,6 +80,7 @@ Browser
 - `MIMIR_WEB_FETCH_PROVIDER_MODE`
 - `MIMIR_E2B_PROVIDER_MODE`
 - `MIMIR_E2B_TEMPLATE`
+- `MIMIR_PDF_CHROMIUM_EXECUTABLE`
 - `MIMIR_ZHIPU_BASE_URL`
 - `MIMIR_JINA_BASE_URL`
 - `MIMIR_ZHIPU_TIMEOUT_SECONDS`
@@ -96,6 +101,10 @@ Browser
 
 - 当前 artifact store 仍是本地文件系统实现，因此生产必须依赖 Railway Volume 或等价持久挂载目录。
 - `markdown zip`、`pdf`、图片 artifact 都写入同一 artifact root。
+- `report.pdf` 当前采用标准 `markdown / 受支持的 GFM 子集 -> HTML -> PDF` 导出路径，而不是手写 HTML 节点翻译器；实际渲染器为 headless Chromium。
+- PDF HTML 在进入 Chromium 前必须先经过 allowlist sanitize，只保留导出所需标签、属性和安全 scheme。
+- PDF 渲染用到的 artifact 图片资源会在导出层内联为受控数据 URI；主路径不再依赖 `--allow-file-access-from-files` 访问本地文件。
+- Railway production 通过 `services/api/railpack.json` 的 `deploy.aptPackages=["chromium"]` 为最终镜像 provision Chromium；`MIMIR_PDF_CHROMIUM_EXECUTABLE` 只作为非标准路径 override。
 - 由于 Railway Volume 与 PostgreSQL 不共享事务，删除仍按补偿一致性执行：
   1. DB 标记 `cleanup_pending`
   2. 删除 artifact / sandbox / 临时文件

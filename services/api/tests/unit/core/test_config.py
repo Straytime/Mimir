@@ -74,6 +74,17 @@ def test_settings_from_env_reads_e2b_template(monkeypatch) -> None:
     assert settings.e2b_template == "mimir-cjk-template"
 
 
+def test_settings_from_env_reads_pdf_chromium_executable(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "MIMIR_PDF_CHROMIUM_EXECUTABLE",
+        "/opt/chromium/chrome",
+    )
+
+    settings = Settings.from_env()
+
+    assert settings.pdf_chromium_executable == "/opt/chromium/chrome"
+
+
 def test_settings_from_env_uses_default_llm_trace_retention_hours(monkeypatch) -> None:
     monkeypatch.delenv("MIMIR_LLM_TRACE_RETENTION_HOURS", raising=False)
 

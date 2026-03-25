@@ -1,24 +1,15 @@
-from base64 import b64decode
-from html import escape
-from io import BytesIO
+from base64 import b64decode, b64encode
 import logging
+import os
 from pathlib import Path
-import re
+import shutil
+import subprocess
 import tempfile
 from tempfile import TemporaryDirectory
-from urllib.parse import urlparse
 import zipfile
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag
 from markdown import markdown as render_markdown
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.lib.utils import ImageReader
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.platypus import Image as PlatypusImage
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from app.application.dto.delivery import (
     GeneratedArtifact,
@@ -34,15 +25,75 @@ from app.application.dto.delivery import (
 )
 from app.application.services.invocation import RetryableOperationError
 
-_PDF_FONT_NAME = "STSong-Light"
 logger = logging.getLogger(__name__)
 _ONE_PIXEL_PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
 )
-
-
-def _block_spacer() -> Spacer:
-    return Spacer(1, 0.16 * inch)
+_PDF_FONT_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "assets"
+    / "fonts"
+    / "NotoSansCJKsc-Regular.otf"
+)
+_PDF_ALLOWED_TAGS = {
+    "a",
+    "blockquote",
+    "br",
+    "code",
+    "del",
+    "div",
+    "em",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "img",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "span",
+    "strong",
+    "sup",
+    "table",
+    "tbody",
+    "td",
+    "thead",
+    "th",
+    "tr",
+    "ul",
+}
+_PDF_DANGEROUS_TAGS = {
+    "button",
+    "embed",
+    "form",
+    "iframe",
+    "input",
+    "link",
+    "meta",
+    "object",
+    "script",
+    "select",
+    "style",
+    "svg",
+    "textarea",
+}
+_PDF_ALLOWED_CLASSES = {
+    "a": {"footnote-ref", "footnote-backref"},
+    "div": {"footnote"},
+    "span": {"footnote-label"},
+}
+_PDF_ALLOWED_ATTRIBUTES = {
+    "a": {"class", "href"},
+    "div": {"class"},
+    "img": {"alt", "src"},
+    "span": {"class"},
+    "td": {"colspan", "rowspan"},
+    "th": {"colspan", "rowspan"},
+}
 
 
 class LocalStubOutlineAgent:
@@ -90,13 +141,10 @@ class LocalStubWriterAgent:
         return WriterDecision(
             text=(
                 f"# {invocation.outline.title}\n\n"
-                "## \u4e00\u3001\u7814\u7a76\u80cc\u666f\u4e0e\u95ee\u9898\u5b9a\u4e49\n"
-                "\u4e2d\u56fd AI \u641c\u7d22\u5e02\u573a\u5728\u8fd1\u4e24\u5e74"
-                "\u5feb\u901f\u6f14\u8fdb\u3002\n\n"
-                "## \u4e8c\u3001\u7ade\u4e89\u683c\u5c40\u4e0e\u4e3b\u8981\u73a9\u5bb6\n"
-                "\u6838\u5fc3\u73a9\u5bb6\u56f4\u7ed5\u641c\u7d22\u4f53\u9a8c\u3001"
-                "\u6a21\u578b\u80fd\u529b\u4e0e\u5546\u4e1a\u5316\u8def\u5f84"
-                "\u5c55\u5f00\u7ade\u4e89\u3002\n"
+                "## 一、研究背景与问题定义\n"
+                "中国 AI 搜索市场在近两年快速演进。\n\n"
+                "## 二、竞争格局与主要玩家\n"
+                "核心玩家围绕搜索体验、模型能力与商业化路径展开竞争。\n"
             ),
             tool_calls=(),
         )
@@ -106,7 +154,11 @@ class LocalStubSandboxClient:
     async def create(self) -> str:
         return "sandbox_local_1"
 
-    async def execute_python(self, sandbox_id: str, code: str) -> SandboxExecutionResult:
+    async def execute_python(
+        self,
+        sandbox_id: str,
+        code: str,
+    ) -> SandboxExecutionResult:
         return SandboxExecutionResult(
             success=True,
             stdout=f"executed:{sandbox_id}:{code}",
@@ -151,18 +203,25 @@ class LocalArtifactStore:
 
 
 class LocalReportExportService:
+    def __init__(self, *, chromium_executable: str | None = None) -> None:
+        self._chromium_executable = chromium_executable
+
     async def build_markdown_zip(
         self,
         *,
         markdown: str,
         artifacts: tuple[GeneratedArtifact, ...],
     ) -> bytes:
-        buffer = BytesIO()
-        with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr("report.md", markdown)
-            for artifact in artifacts:
-                archive.writestr(f"artifacts/{artifact.filename}", artifact.content)
-        return buffer.getvalue()
+        buffer = tempfile.SpooledTemporaryFile()
+        try:
+            with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("report.md", markdown)
+                for artifact in artifacts:
+                    archive.writestr(f"artifacts/{artifact.filename}", artifact.content)
+            buffer.seek(0)
+            return buffer.read()
+        finally:
+            buffer.close()
 
     async def build_pdf(
         self,
@@ -178,23 +237,13 @@ class LocalReportExportService:
                     artifacts=artifacts,
                     temp_dir=temp_dir,
                 )
-                html = render_markdown(
-                    pdf_markdown,
-                    extensions=("extra", "sane_lists"),
+                html_body = _render_gfm_html(markdown=pdf_markdown)
+                html_document = _build_pdf_html_document(html_body=html_body)
+                return _render_pdf_from_html_document(
+                    html_document=html_document,
+                    temp_dir=temp_dir,
+                    chromium_executable=self._chromium_executable,
                 )
-                story = _build_pdf_story(html=html)
-                buffer = BytesIO()
-                document = SimpleDocTemplate(
-                    buffer,
-                    pagesize=A4,
-                    leftMargin=0.75 * inch,
-                    rightMargin=0.75 * inch,
-                    topMargin=0.75 * inch,
-                    bottomMargin=0.75 * inch,
-                    title="Mimir Report",
-                )
-                document.build(story or [Paragraph(" ", _pdf_styles()["body"])])
-                return buffer.getvalue()
         except RetryableOperationError:
             raise
         except Exception as exc:  # pragma: no cover - defensive wrapper
@@ -212,71 +261,6 @@ class LocalReportExportService:
             raise RetryableOperationError("pdf render failed") from exc
 
 
-def _ensure_pdf_font_registered() -> None:
-    if _PDF_FONT_NAME not in pdfmetrics.getRegisteredFontNames():
-        pdfmetrics.registerFont(UnicodeCIDFont(_PDF_FONT_NAME))
-
-
-def _pdf_styles() -> dict[str, ParagraphStyle]:
-    _ensure_pdf_font_registered()
-    stylesheet = getSampleStyleSheet()
-    return {
-        "title": ParagraphStyle(
-            "MimirPdfTitle",
-            parent=stylesheet["Heading1"],
-            fontName=_PDF_FONT_NAME,
-            fontSize=20,
-            leading=28,
-            spaceAfter=14,
-        ),
-        "heading_2": ParagraphStyle(
-            "MimirPdfHeading2",
-            parent=stylesheet["Heading2"],
-            fontName=_PDF_FONT_NAME,
-            fontSize=16,
-            leading=22,
-            spaceBefore=6,
-            spaceAfter=10,
-        ),
-        "heading_3": ParagraphStyle(
-            "MimirPdfHeading3",
-            parent=stylesheet["Heading3"],
-            fontName=_PDF_FONT_NAME,
-            fontSize=13,
-            leading=18,
-            spaceBefore=4,
-            spaceAfter=8,
-        ),
-        "body": ParagraphStyle(
-            "MimirPdfBody",
-            parent=stylesheet["BodyText"],
-            fontName=_PDF_FONT_NAME,
-            fontSize=10.5,
-            leading=16,
-            spaceAfter=8,
-        ),
-        "bullet": ParagraphStyle(
-            "MimirPdfBullet",
-            parent=stylesheet["BodyText"],
-            fontName=_PDF_FONT_NAME,
-            fontSize=10.5,
-            leading=16,
-            leftIndent=14,
-            firstLineIndent=-10,
-            spaceAfter=6,
-        ),
-        "footnote": ParagraphStyle(
-            "MimirPdfFootnote",
-            parent=stylesheet["BodyText"],
-            fontName=_PDF_FONT_NAME,
-            fontSize=9.5,
-            leading=14,
-            leftIndent=10,
-            spaceAfter=5,
-        ),
-    }
-
-
 def _rewrite_markdown_artifact_refs_for_pdf(
     *,
     markdown: str,
@@ -287,108 +271,122 @@ def _rewrite_markdown_artifact_refs_for_pdf(
     for artifact in artifacts:
         if artifact.artifact_id is None:
             continue
-        safe_filename = f"{artifact.artifact_id}_{Path(artifact.filename).name}"
-        path = temp_dir / safe_filename
-        path.write_bytes(artifact.content)
         rewritten = rewritten.replace(
             build_canonical_artifact_path(artifact.artifact_id),
-            path.as_uri(),
+            _build_data_uri(artifact.content, artifact.mime_type),
         )
     return rewritten
 
 
-def _build_pdf_story(*, html: str) -> list:
-    styles = _pdf_styles()
-    soup = BeautifulSoup(f"<body>{html}</body>", "html.parser")
-    body = soup.body
-    if body is None:
-        return []
+def _render_gfm_html(*, markdown: str) -> str:
+    html = render_markdown(
+        markdown,
+        extensions=("extra", "sane_lists"),
+        output_format="html5",
+    )
+    normalized_html = _normalize_gfm_html_for_pdf(html)
+    return _sanitize_html_for_pdf(normalized_html)
 
-    story: list = []
-    for node in body.children:
-        if isinstance(node, NavigableString):
-            if node.strip():
-                story.append(Paragraph(escape(node.strip()), styles["body"]))
-                story.append(_block_spacer())
+
+def _normalize_gfm_html_for_pdf(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+
+    for footnote_ref in soup.select("sup a.footnote-ref"):
+        label = footnote_ref.get_text("", strip=True)
+        if label:
+            footnote_ref.string = f"[{label}]"
+
+    for backref in soup.select("a.footnote-backref"):
+        backref.decompose()
+
+    for index, footnote_item in enumerate(soup.select("div.footnote > ol > li"), start=1):
+        label = _extract_footnote_label(footnote_item, fallback_index=index)
+        label_tag = soup.new_tag("span")
+        label_tag["class"] = ["footnote-label"]
+        label_tag.string = f"[{label}] "
+        first_paragraph = footnote_item.find("p", recursive=False)
+        if first_paragraph is not None:
+            first_paragraph.insert(0, label_tag)
+        else:
+            footnote_item.insert(0, label_tag)
+
+    return str(soup)
+
+
+def _sanitize_html_for_pdf(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+
+    for tag in list(soup.find_all(True)):
+        if tag.name in _PDF_DANGEROUS_TAGS:
+            tag.decompose()
             continue
-        if not isinstance(node, Tag):
+        if tag.name not in _PDF_ALLOWED_TAGS:
+            tag.unwrap()
             continue
-        story.extend(_render_html_block(node=node, styles=styles))
-    return story
+        _sanitize_tag_attributes(tag)
+
+    return str(soup)
 
 
-def _render_html_block(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
-    if node.name == "div" and "footnote" in (node.get("class") or []):
-        return _render_footnote_block(node=node, styles=styles)
-    if node.name == "h1":
-        return [Paragraph(escape(node.get_text(" ", strip=True)), styles["title"])]
-    if node.name == "h2":
-        return [Paragraph(escape(node.get_text(" ", strip=True)), styles["heading_2"])]
-    if node.name == "h3":
-        return [Paragraph(escape(node.get_text(" ", strip=True)), styles["heading_3"])]
-    if node.name in {"p", "div"}:
-        return _render_paragraph_like(node=node, styles=styles)
-    if node.name in {"ul", "ol"}:
-        return _render_list(node=node, styles=styles)
-    if node.name == "blockquote":
-        markup = _render_inline_markup(node)
-        if not markup:
-            return []
-        return [Paragraph(markup, styles["body"]), _block_spacer()]
-    if node.name == "hr":
-        return [_block_spacer()]
-    markup = _render_inline_markup(node)
-    if not markup:
-        return []
-    return [Paragraph(markup, styles["body"]), _block_spacer()]
-
-
-def _render_paragraph_like(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
-    story: list = []
-    markup = _render_inline_markup(node)
-    if markup:
-        story.append(Paragraph(markup, styles["body"]))
-    for image in node.find_all("img"):
-        flowable = _build_image_flowable(src=image.get("src"))
-        if flowable is not None:
-            story.append(flowable)
-    if story:
-        story.append(_block_spacer())
-    return story
-
-
-def _render_list(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
-    story: list = []
-    ordered = node.name == "ol"
-    for index, item in enumerate(node.find_all("li", recursive=False), start=1):
-        prefix = f"{index}. " if ordered else "• "
-        markup = _render_inline_markup(item)
-        if markup:
-            story.append(Paragraph(f"{escape(prefix)}{markup}", styles["bullet"]))
-        for image in item.find_all("img"):
-            flowable = _build_image_flowable(src=image.get("src"))
-            if flowable is not None:
-                story.append(flowable)
-    if story:
-        story.append(_block_spacer())
-    return story
-
-
-def _render_footnote_block(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
-    story: list = []
-    footnotes = node.select("ol > li")
-    for index, item in enumerate(footnotes, start=1):
-        label = _extract_footnote_label(item=item, fallback_index=index)
-        markup = _render_inline_markup(item)
-        if not markup:
+def _sanitize_tag_attributes(tag: Tag) -> None:
+    allowed_attributes = _PDF_ALLOWED_ATTRIBUTES.get(tag.name, set())
+    for attribute_name in list(tag.attrs):
+        if attribute_name.startswith("on"):
+            del tag.attrs[attribute_name]
             continue
-        story.append(Paragraph(f"[{escape(label)}] {markup}", styles["footnote"]))
-    if story:
-        story.append(_block_spacer())
-    return story
+        if attribute_name not in allowed_attributes:
+            del tag.attrs[attribute_name]
+            continue
+
+        if attribute_name == "class":
+            allowed_classes = _PDF_ALLOWED_CLASSES.get(tag.name, set())
+            values = tag.get(attribute_name) or []
+            if isinstance(values, str):
+                values = [values]
+            sanitized = [value for value in values if value in allowed_classes]
+            if sanitized:
+                tag.attrs[attribute_name] = sanitized
+            else:
+                del tag.attrs[attribute_name]
+            continue
+
+        if attribute_name == "href":
+            href = str(tag.attrs[attribute_name]).strip()
+            if _is_safe_link_href(href):
+                tag.attrs[attribute_name] = href
+            else:
+                del tag.attrs[attribute_name]
+            continue
+
+        if attribute_name == "src":
+            src = str(tag.attrs[attribute_name]).strip()
+            if tag.name == "img" and _is_safe_image_src(src):
+                tag.attrs[attribute_name] = src
+            else:
+                del tag.attrs[attribute_name]
 
 
-def _extract_footnote_label(*, item: Tag, fallback_index: int) -> str:
+def _is_safe_link_href(value: str) -> bool:
+    lower_value = value.lower()
+    return (
+        lower_value.startswith("http://")
+        or lower_value.startswith("https://")
+        or lower_value.startswith("mailto:")
+        or value.startswith("#")
+    )
+
+
+def _is_safe_image_src(value: str) -> bool:
+    lower_value = value.lower()
+    return lower_value.startswith("data:image/png;base64,")
+
+
+def _build_data_uri(content: bytes, mime_type: str) -> str:
+    encoded = b64encode(content).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def _extract_footnote_label(item: Tag, *, fallback_index: int) -> str:
     item_id = item.get("id")
     if item_id and item_id.startswith("fn:"):
         suffix = item_id.split("fn:", 1)[1].strip()
@@ -397,98 +395,309 @@ def _extract_footnote_label(*, item: Tag, fallback_index: int) -> str:
     return str(fallback_index)
 
 
-def _render_inline_markup(node: Tag) -> str:
-    rendered = "".join(_render_inline_node(child) for child in node.children)
-    return _normalize_inline_markup(rendered)
+def _build_pdf_html_document(*, html_body: str) -> str:
+    return f"""<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+{_build_pdf_stylesheet()}
+    </style>
+  </head>
+  <body>
+    <main class="report-body">
+      {html_body}
+    </main>
+  </body>
+</html>
+""".strip()
 
 
-def _render_inline_node(node: Tag | NavigableString) -> str:
-    if isinstance(node, NavigableString):
-        return escape(str(node).replace("\xa0", " "))
-    if not isinstance(node, Tag):
-        return ""
-    if node.name == "img":
-        return ""
-    if node.name == "br":
-        return "<br/>"
-    if node.name == "sup":
-        if any(
-            isinstance(child, Tag) and "footnote-ref" in (child.get("class") or [])
-            for child in node.children
-        ):
-            return "".join(_render_inline_node(child) for child in node.children)
-        content = _normalize_inline_markup(
-            "".join(_render_inline_node(child) for child in node.children)
+def _build_pdf_stylesheet() -> str:
+    font_face = ""
+    if _PDF_FONT_PATH.exists():
+        font_data = b64encode(_PDF_FONT_PATH.read_bytes()).decode("ascii")
+        font_face = f"""
+@font-face {{
+  font-family: "MimirCJK";
+  src: url("data:font/otf;base64,{font_data}") format("opentype");
+}}
+""".strip()
+
+    return f"""
+{font_face}
+
+@page {{
+  size: A4;
+  margin: 18mm 16mm 18mm 16mm;
+}}
+
+html {{
+  color: #111827;
+  font-size: 11pt;
+  line-height: 1.65;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}}
+
+body {{
+  margin: 0;
+  font-family: "MimirCJK", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}}
+
+.report-body {{
+  font-kerning: normal;
+}}
+
+h1, h2, h3, h4, h5, h6 {{
+  color: #111827;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 1.2em 0 0.6em;
+  page-break-after: avoid;
+  break-after: avoid-page;
+}}
+
+h1 {{
+  font-size: 22pt;
+  margin-top: 0;
+}}
+
+h2 {{
+  font-size: 17pt;
+}}
+
+h3 {{
+  font-size: 14pt;
+}}
+
+p, ul, ol, blockquote, table, pre {{
+  margin: 0 0 0.95em;
+}}
+
+ul, ol {{
+  padding-left: 1.4em;
+}}
+
+li + li {{
+  margin-top: 0.2em;
+}}
+
+blockquote {{
+  border-left: 3px solid #d0d7de;
+  color: #374151;
+  padding-left: 0.9em;
+}}
+
+code {{
+  font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
+  font-size: 0.92em;
+  background: #f6f8fa;
+  padding: 0.08em 0.28em;
+  border-radius: 4px;
+}}
+
+pre {{
+  white-space: pre-wrap;
+  background: #f6f8fa;
+  padding: 0.8em 0.95em;
+  border-radius: 8px;
+}}
+
+pre code {{
+  background: transparent;
+  padding: 0;
+}}
+
+table {{
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: 10.2pt;
+  table-layout: fixed;
+}}
+
+thead {{
+  display: table-header-group;
+}}
+
+tr {{
+  break-inside: avoid;
+}}
+
+th, td {{
+  border: 1px solid #d0d7de;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}}
+
+th {{
+  background: #f6f8fa;
+  font-weight: 700;
+}}
+
+img {{
+  display: block;
+  max-width: 100%;
+  max-height: 220mm;
+  height: auto;
+  margin: 0.9em auto;
+  break-inside: avoid;
+}}
+
+a {{
+  color: #0b57d0;
+  text-decoration: underline;
+}}
+
+sup {{
+  font-size: 0.75em;
+  line-height: 0;
+}}
+
+a.footnote-ref {{
+  text-decoration: none;
+  color: inherit;
+}}
+
+a.footnote-backref {{
+  display: none;
+}}
+
+.footnote {{
+  margin-top: 1.6em;
+  padding-top: 0.6em;
+  border-top: 1px solid #d0d7de;
+  font-size: 9.6pt;
+}}
+
+.footnote ol {{
+  padding-left: 1.2em;
+}}
+
+.footnote li {{
+  margin-bottom: 0.45em;
+}}
+""".strip()
+
+
+def _render_pdf_from_html_document(
+    *,
+    html_document: str,
+    temp_dir: Path,
+    chromium_executable: str | None,
+) -> bytes:
+    input_path = temp_dir / "report.html"
+    output_path = temp_dir / "report.pdf"
+    input_path.write_text(html_document, encoding="utf-8")
+
+    executable = _resolve_chromium_executable(chromium_executable)
+    last_message = ""
+    for headless_flag in ("--headless=new", "--headless"):
+        if output_path.exists():
+            output_path.unlink()
+        command = [
+            executable,
+            headless_flag,
+            "--disable-gpu",
+            "--disable-dev-shm-usage",
+            "--no-sandbox",
+            "--no-pdf-header-footer",
+            f"--print-to-pdf={output_path}",
+            input_path.as_uri(),
+        ]
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=90,
         )
-        if not content:
-            return ""
-        return f"<super>{content}</super>"
-    if node.name == "a":
-        classes = set(node.get("class") or [])
-        if "footnote-backref" in classes:
-            return ""
-        if "footnote-ref" in classes:
-            number = escape(node.get_text("", strip=True))
-            return f"<super>[{number}]</super>" if number else ""
+        if result.returncode == 0 and output_path.exists():
+            return output_path.read_bytes()
+        last_message = (result.stderr or result.stdout or "").strip()
 
-        content = _normalize_inline_markup(
-            "".join(_render_inline_node(child) for child in node.children)
+    raise RuntimeError(
+        "chromium print-to-pdf failed"
+        + (f": {last_message}" if last_message else "")
+    )
+
+
+def _resolve_chromium_executable(configured_executable: str | None) -> str:
+    if configured_executable:
+        configured_path = Path(configured_executable).expanduser()
+        if _is_executable_file(configured_path):
+            return str(configured_path)
+        raise FileNotFoundError(
+            f"Configured Chromium executable does not exist or is not executable: {configured_executable}"
         )
-        if not content:
-            return ""
 
-        href = (node.get("href") or "").strip()
-        if not href or href.startswith("#"):
-            return content
-        return f'<link href="{escape(href, quote=True)}">{content}</link>'
-    if node.name in {"strong", "b"}:
-        content = _normalize_inline_markup(
-            "".join(_render_inline_node(child) for child in node.children)
+    for candidate in _iter_chromium_executable_candidates():
+        if _is_executable_file(candidate):
+            return str(candidate)
+
+    raise FileNotFoundError(
+        "Chromium executable not found. Install a headless Chromium runtime or set MIMIR_PDF_CHROMIUM_EXECUTABLE."
+    )
+
+
+def _iter_chromium_executable_candidates() -> tuple[Path, ...]:
+    candidates: list[Path] = []
+
+    home = Path.home()
+    playwright_globs = (
+        home / "Library" / "Caches" / "ms-playwright",
+        home / ".cache" / "ms-playwright",
+    )
+    for root in playwright_globs:
+        if not root.exists():
+            continue
+        candidates.extend(
+            sorted(
+                root.glob(
+                    "chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+                )
+            )
         )
-        return f"<b>{content}</b>" if content else ""
-    if node.name in {"em", "i"}:
-        content = _normalize_inline_markup(
-            "".join(_render_inline_node(child) for child in node.children)
+        candidates.extend(sorted(root.glob("chromium-*/chrome-linux/chrome")))
+        candidates.extend(sorted(root.glob("chromium-*/chrome-linux64/chrome")))
+
+    for name in (
+        "chromium",
+        "chromium-browser",
+        "google-chrome",
+        "google-chrome-stable",
+        "chrome",
+    ):
+        resolved = shutil.which(name)
+        if resolved:
+            candidates.append(Path(resolved))
+
+    if os.name == "posix" and Path("/Applications/Google Chrome.app").exists():
+        candidates.append(
+            Path(
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            )
         )
-        return f"<i>{content}</i>" if content else ""
-    if node.name == "code":
-        content = _normalize_inline_markup(
-            "".join(_render_inline_node(child) for child in node.children)
+    if os.name == "posix" and Path("/Applications/Chromium.app").exists():
+        candidates.append(
+            Path("/Applications/Chromium.app/Contents/MacOS/Chromium")
         )
-        return f'<font name="Courier">{content}</font>' if content else ""
-    return "".join(_render_inline_node(child) for child in node.children)
+
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+    return tuple(deduped)
 
 
-def _normalize_inline_markup(markup: str) -> str:
-    if not markup:
-        return ""
-    normalized = markup.replace("\r", " ").replace("\n", " ").replace("\xa0", " ")
-    normalized = re.sub(r"[ \t\f\v]+", " ", normalized)
-    normalized = re.sub(r"\s*<br/>\s*", "<br/>", normalized)
-    return normalized.strip()
-
-
-def _build_image_flowable(*, src: str | None):
-    if not src:
-        return None
-    path = _resolve_pdf_image_path(src)
-    if path is None or not path.exists():
-        return None
-    width, height = ImageReader(str(path)).getSize()
-    if width <= 0 or height <= 0:
-        return None
-    max_width = 6.5 * inch
-    max_height = 6.5 * inch
-    scale = min(max_width / width, max_height / height, 1)
-    image = PlatypusImage(str(path), width=width * scale, height=height * scale)
-    image.hAlign = "LEFT"
-    return image
-
-
-def _resolve_pdf_image_path(src: str) -> Path | None:
-    parsed = urlparse(src)
-    if parsed.scheme == "file":
-        return Path(parsed.path)
-    if parsed.scheme:
-        return None
-    return Path(src)
+def _is_executable_file(path: Path) -> bool:
+    return path.is_file() and os.access(path, os.X_OK)

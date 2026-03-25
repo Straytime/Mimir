@@ -3458,3 +3458,96 @@ Copy the template below for each completed session:
     - 输出约束增加“一次性给出完整研究内容”
 - blocker / 风险:
   - 无当前 blocker
+
+## R1-055 Replace PDF Renderer With Standard GFM HTML Pipeline
+
+- 日期时间: 2026-03-25 18:28:00 CST (+0800)
+- 任务包编号: R1-055
+- session 标识: `codex/r1-055-standard-gfm-html-pdf`
+- 目标摘要:
+  - 用标准 `GFM -> HTML -> PDF` 导出链路替换当前手写的 HTML -> ReportLab flowable 翻译器
+  - 让 `report.pdf` 对标题、段落、列表、表格、图片、脚注、链接提供整体支持
+  - 保持现有下载端点、`access_token` 和 `markdown.zip` 契约不变
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Deploy_Contract.md`
+  - `docs/Execution_Log.md`
+  - `services/api/.env.example`
+  - `services/api/README.md`
+  - `services/api/app/core/config.py`
+  - `services/api/app/main.py`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/pyproject.toml`
+  - `services/api/uv.lock`
+  - `services/api/tests/unit/core/test_config.py`
+  - `services/api/tests/unit/infrastructure/test_local_report_export.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+- 测试 / 验证:
+  - 初始评估:
+    - WeasyPrint 路线在当前本机环境可导入，但最小 `write_pdf()` 直接触发 native segmentation fault，因此未作为最终主实现保留
+    - 本机 Playwright 缓存中的 Chromium CLI 已验证可稳定执行 `--print-to-pdf`
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/infrastructure/test_local_report_export.py tests/integration/delivery/test_report_delivery.py -k 'pdf or footnote or table or link or rich_gfm or standard_html_pdf_renderer or chromium_executable'`
+    - 初次结果: `3 failed`
+    - 失败点: 旧主路径仍是 WeasyPrint / ReportLab 混合过渡实现，脚注角标与文末脚注列表未保留稳定可读文本，多页标题断言也受 Chromium PDF 提取的 CJK 兼容字形影响
+  - 修补后:
+    - 同一命令重跑
+    - 结果: `14 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/infrastructure/test_local_report_export.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `49 passed`
+- 验收结论:
+  - `report.pdf` 主路径已从手写 HTML -> ReportLab 翻译器切换为标准 `GFM -> HTML -> headless Chromium print-to-pdf`
+  - markdown 仍通过 Python Markdown `extra + sane_lists` 生成 HTML；当前 writer 使用到的标题、段落、列表、表格、脚注、链接、图片都由浏览器级 HTML/CSS 渲染统一处理，而不是继续逐项补丁
+  - canonical 图片引用 `mimir://artifact/{artifact_id}` 仍只在导出层临时改写为本地 `file://` 资源，不回写正文
+  - PDF 导出现在优先使用 `MIMIR_PDF_CHROMIUM_EXECUTABLE`，未配置时会自动发现常见系统 Chromium 路径和 Playwright 缓存安装
+  - headless Chromium 打印时已关闭默认页眉页脚，避免把文件路径、日期和分页元信息污染正文
+  - 脚注 HTML 做了最小归一化：正文角标保留 `[n]`，文末脚注列表保留 `[n] 来源`，backref 被隐藏；不再依赖手写节点翻译器维护这套结构
+  - `markdown.zip`、下载端点和 access token 契约未变，delivery 导出 observability 日志也未回退
+- blocker / 风险:
+  - Railway 部署现在需要明确提供 headless Chromium 运行时；路径可通过 `PATH` 自动发现，或显式配置 `MIMIR_PDF_CHROMIUM_EXECUTABLE`
+  - PDF 文本抽取在 CJK 场景下仍可能出现兼容字形差异；测试侧已做最小 Unicode 归一化，不影响用户阅读和导出主路径
+
+## R1-056 Harden Chromium PDF Export
+
+- 日期时间: 2026-03-25 18:55:41 CST (+0800)
+- 任务包编号: R1-056
+- session 标识: `codex/r1-055-standard-gfm-html-pdf`
+- 目标摘要:
+  - 收敛 Chromium PDF 导出链路在安全性、部署可执行性和文档口径上的遗留风险
+  - 关闭 `unsanitized HTML + local file access` 安全回归，并补齐 Railway 上 Chromium 的仓库内确定性 provisioning
+  - 将 PDF 支持口径从“完整标准 GFM”收敛到与当前 parser/renderer 一致的“受支持 markdown / GFM 子集”
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Deploy_Contract.md`
+  - `docs/Mimir_v1.0.0_prd_0.3.md`
+  - `docs/Execution_Log.md`
+  - `services/api/.env.example`
+  - `services/api/README.md`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/railpack.json`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+  - `services/api/tests/unit/infrastructure/test_local_report_export.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_local_report_export.py -k 'sanitizes or data_uris or chromium_executable_raises or railpack_config_provisions_runtime_chromium or uses_standard_html_pdf_renderer'`
+    - 初次结果: `5 failed`
+    - 失败点: HTML 尚未 sanitize；canonical artifact 图片仍改写为 `file://`；源码仍包含 `--allow-file-access-from-files`；仓库内缺少 Chromium provisioning 定义
+  - 定向回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/integration/delivery/test_report_delivery.py::test_delivery_pdf_renders_rich_gfm_content_with_tables_footnotes_links_and_images tests/unit/infrastructure/test_local_report_export.py::test_build_pdf_handles_multi_page_markdown_with_lists_and_images -q`
+    - 结果: `2 passed`
+    - 说明: Chromium 会对完全相同的内联图片资源去重；测试夹具已改为使用两张不同像素内容的 PNG，以继续锁定“多图进入 PDF”而非依赖 PDF XObject 计数的偶然行为
+  - 主回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/infrastructure/test_local_report_export.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `54 passed`
+- 验收结论:
+  - Chromium PDF 主路径现在只消费 allowlist-sanitized HTML；`<script>`、`<iframe>`、事件处理器、`javascript:` 链接、`file://` 资源等不会再原样进入打印环境
+  - canonical artifact 图片在导出层被改写为受控 `data:image/png;base64,...` 内联资源，不再依赖 `--allow-file-access-from-files`
+  - Chromium CLI 启动参数已去掉 `--allow-file-access-from-files`，同时保留标题、列表、表格、链接、脚注、图片、多页报告的成功路径
+  - Railway 的 Chromium runtime 已有仓库内确定性 provisioning：`services/api/railpack.json` 通过 `aptPackages = ["chromium"]` 固化运行时依赖，`MIMIR_PDF_CHROMIUM_EXECUTABLE` 仅作为非标准路径覆盖项
+  - 文档与 README / `.env.example` 已统一收敛为“受支持 markdown / GFM 子集”，不再把当前 `Python-Markdown(extra + sane_lists)` 路径表述成完整标准 GFM
+- blocker / 风险:
+  - 当前 parser 仍是 `Python-Markdown(extra + sane_lists)`；若未来需要 literal 完整 GFM 语义，需单独任务包升级 parser，而不是继续扩张本次安全收口范围
+  - 当前图片 allowlist 只接受 `data:image/png;base64,...`，与现有 delivery artifact 契约一致；若后续新增其他图片类型，需要单独审查 sanitize 和导出边界
