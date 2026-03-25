@@ -3327,3 +3327,12 @@ Copy the template below for each completed session:
 - 验证：
   - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_prompts.py tests/unit/application/prompts/test_planner_prompt.py tests/unit/application/test_collection_prompts.py tests/unit/application/test_delivery_prompts.py tests/unit/application/test_invocation_contracts.py`
   - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py -k 'prompt or canonical_path or collect_agent or python_interpreter'`
+## 2026-03-25 Prompt Update 0325-1056
+
+- 背景：当前分支继续调整 collection / delivery 提示词文案，主要涉及 planner 串行优先提示、collector 最终 JSON 输出格式、summary 关键发现条数上限，以及 writer footnotes/GFM 输出说明。
+- 变更：
+  - 更新 `tests/unit/application/test_collection_prompts.py`，对齐 planner 的“未搞清研究主体时优先串行”提示、collector 的最终 JSON 输出模板，以及 summary “不超过10条”约束。
+  - 更新 `tests/unit/application/test_delivery_prompts.py`，对齐 writer 当前的标准 footnotes 语法、脚注链接格式与 GFM 输出说明。
+- 验证：
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_collection_prompts.py tests/unit/application/test_delivery_prompts.py`
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py -k 'prompt or canonical_path or collect_agent or python_interpreter'`
