@@ -3374,3 +3374,14 @@ Copy the template below for each completed session:
 - 验证：
   - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_collection_prompts.py tests/unit/application/test_delivery_prompts.py`
   - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py -k 'prompt or canonical_path or collect_agent or python_interpreter'`
+## 2026-03-25 Prompt Update 0325-1341
+
+- 背景：当前分支继续微调 writer 提示词，将脚注引用从泛化的数字角标约束收敛为与 `FormattedSource.refer=ref_n` 对齐的脚注写法，并同步收紧图表使用描述。
+- 变更：
+  - 更新 `services/api/tests/unit/application/test_delivery_prompts.py`，将 writer prompt 语义锁断言改为当前文案：
+    - 图表约束使用“数据不足”口径
+    - 脚注显式基于 `ref_n`
+    - 示例统一为 `[^ref_n]` 与 `[^ref_n]: [title](link)`
+- 验证：
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_delivery_prompts.py`
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`

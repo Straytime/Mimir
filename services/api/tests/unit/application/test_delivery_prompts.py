@@ -112,10 +112,11 @@ def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() ->
     assert "**保证研究内容前后逻辑连贯、合理且清晰、上下文实体一致无冲突。**" in prompt.system_prompt
     assert "更不能编造" in prompt.system_prompt
     assert "积极使用图表来进行辅助可视化展示和分析" in prompt.system_prompt
-    assert "使用标准 footnotes 语法插入数字角标" in prompt.system_prompt
-    assert "`[^n]`" in prompt.system_prompt
-    assert "`[^n]`: 来源信息内容" in prompt.system_prompt
-    assert "[来源 title](URL链接)" in prompt.system_prompt
+    assert "数据不足的情况下编造或强行拼凑图表" in prompt.system_prompt
+    assert "提供的参考信息都已通过 `ref_n` 的方式编号" in prompt.system_prompt
+    assert "使用标准 footnotes 语法插入角标" in prompt.system_prompt
+    assert "`[^ref_n]`" in prompt.system_prompt
+    assert "`[^ref_n]: [title](link)`" in prompt.system_prompt
     assert "若用户需求未指定撰写字数或输出长度" in prompt.system_prompt
     assert "python_interpreter" in prompt.system_prompt
     assert "canonical_path" in prompt.system_prompt
