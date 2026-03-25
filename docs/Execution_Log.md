@@ -3436,3 +3436,25 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 无当前 blocker
   - clarification 的 `web_search` 上限由后端显式限制为 1；超过 1 次时会回灌确定性的 `tool_call_limit_exceeded` tool payload，而不是继续执行额外搜索
+
+## Delivery Prompt Wording Follow-up
+
+- 日期时间: 2026-03-25 17:25:00 CST (+0800)
+- session 标识: `prompt-update-0325-1715`
+- 目标摘要:
+  - 复核当前分支上的 writer prompt 文案调整
+  - 将 unit prompt 锁测试同步到最新文案，不改运行时行为
+- 修改文件:
+  - `docs/Execution_Log.md`
+  - `services/api/tests/unit/application/test_delivery_prompts.py`
+- 测试 / 验证:
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_delivery_prompts.py`
+  - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+- 验收结论:
+  - writer prompt 当前文案调整本身无实现缺陷
+  - prompt 锁测试已改为匹配最新文案：
+    - 图表约束使用“按需使用图表”口径
+    - 篇幅约束增加“避免输出过长”
+    - 输出约束增加“一次性给出完整研究内容”
+- blocker / 风险:
+  - 无当前 blocker
