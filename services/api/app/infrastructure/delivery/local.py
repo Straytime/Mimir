@@ -1,4 +1,4 @@
-from base64 import b64decode
+from base64 import b64decode, b64encode
 import logging
 import os
 from pathlib import Path
@@ -35,6 +35,65 @@ _PDF_FONT_PATH = (
     / "fonts"
     / "NotoSansCJKsc-Regular.otf"
 )
+_PDF_ALLOWED_TAGS = {
+    "a",
+    "blockquote",
+    "br",
+    "code",
+    "del",
+    "div",
+    "em",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "img",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "span",
+    "strong",
+    "sup",
+    "table",
+    "tbody",
+    "td",
+    "thead",
+    "th",
+    "tr",
+    "ul",
+}
+_PDF_DANGEROUS_TAGS = {
+    "button",
+    "embed",
+    "form",
+    "iframe",
+    "input",
+    "link",
+    "meta",
+    "object",
+    "script",
+    "select",
+    "style",
+    "svg",
+    "textarea",
+}
+_PDF_ALLOWED_CLASSES = {
+    "a": {"footnote-ref", "footnote-backref"},
+    "div": {"footnote"},
+    "span": {"footnote-label"},
+}
+_PDF_ALLOWED_ATTRIBUTES = {
+    "a": {"class", "href"},
+    "div": {"class"},
+    "img": {"alt", "src"},
+    "span": {"class"},
+    "td": {"colspan", "rowspan"},
+    "th": {"colspan", "rowspan"},
+}
 
 
 class LocalStubOutlineAgent:
@@ -212,12 +271,9 @@ def _rewrite_markdown_artifact_refs_for_pdf(
     for artifact in artifacts:
         if artifact.artifact_id is None:
             continue
-        safe_filename = f"{artifact.artifact_id}_{Path(artifact.filename).name}"
-        path = temp_dir / safe_filename
-        path.write_bytes(artifact.content)
         rewritten = rewritten.replace(
             build_canonical_artifact_path(artifact.artifact_id),
-            path.as_uri(),
+            _build_data_uri(artifact.content, artifact.mime_type),
         )
     return rewritten
 
@@ -228,7 +284,8 @@ def _render_gfm_html(*, markdown: str) -> str:
         extensions=("extra", "sane_lists"),
         output_format="html5",
     )
-    return _normalize_gfm_html_for_pdf(html)
+    normalized_html = _normalize_gfm_html_for_pdf(html)
+    return _sanitize_html_for_pdf(normalized_html)
 
 
 def _normalize_gfm_html_for_pdf(html: str) -> str:
@@ -254,6 +311,79 @@ def _normalize_gfm_html_for_pdf(html: str) -> str:
             footnote_item.insert(0, label_tag)
 
     return str(soup)
+
+
+def _sanitize_html_for_pdf(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+
+    for tag in list(soup.find_all(True)):
+        if tag.name in _PDF_DANGEROUS_TAGS:
+            tag.decompose()
+            continue
+        if tag.name not in _PDF_ALLOWED_TAGS:
+            tag.unwrap()
+            continue
+        _sanitize_tag_attributes(tag)
+
+    return str(soup)
+
+
+def _sanitize_tag_attributes(tag: Tag) -> None:
+    allowed_attributes = _PDF_ALLOWED_ATTRIBUTES.get(tag.name, set())
+    for attribute_name in list(tag.attrs):
+        if attribute_name.startswith("on"):
+            del tag.attrs[attribute_name]
+            continue
+        if attribute_name not in allowed_attributes:
+            del tag.attrs[attribute_name]
+            continue
+
+        if attribute_name == "class":
+            allowed_classes = _PDF_ALLOWED_CLASSES.get(tag.name, set())
+            values = tag.get(attribute_name) or []
+            if isinstance(values, str):
+                values = [values]
+            sanitized = [value for value in values if value in allowed_classes]
+            if sanitized:
+                tag.attrs[attribute_name] = sanitized
+            else:
+                del tag.attrs[attribute_name]
+            continue
+
+        if attribute_name == "href":
+            href = str(tag.attrs[attribute_name]).strip()
+            if _is_safe_link_href(href):
+                tag.attrs[attribute_name] = href
+            else:
+                del tag.attrs[attribute_name]
+            continue
+
+        if attribute_name == "src":
+            src = str(tag.attrs[attribute_name]).strip()
+            if tag.name == "img" and _is_safe_image_src(src):
+                tag.attrs[attribute_name] = src
+            else:
+                del tag.attrs[attribute_name]
+
+
+def _is_safe_link_href(value: str) -> bool:
+    lower_value = value.lower()
+    return (
+        lower_value.startswith("http://")
+        or lower_value.startswith("https://")
+        or lower_value.startswith("mailto:")
+        or value.startswith("#")
+    )
+
+
+def _is_safe_image_src(value: str) -> bool:
+    lower_value = value.lower()
+    return lower_value.startswith("data:image/png;base64,")
+
+
+def _build_data_uri(content: bytes, mime_type: str) -> str:
+    encoded = b64encode(content).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
 
 
 def _extract_footnote_label(item: Tag, *, fallback_index: int) -> str:
@@ -287,10 +417,11 @@ def _build_pdf_html_document(*, html_body: str) -> str:
 def _build_pdf_stylesheet() -> str:
     font_face = ""
     if _PDF_FONT_PATH.exists():
+        font_data = b64encode(_PDF_FONT_PATH.read_bytes()).decode("ascii")
         font_face = f"""
 @font-face {{
   font-family: "MimirCJK";
-  src: url("{_PDF_FONT_PATH.as_uri()}") format("opentype");
+  src: url("data:font/otf;base64,{font_data}") format("opentype");
 }}
 """.strip()
 
@@ -475,7 +606,6 @@ def _render_pdf_from_html_document(
             "--disable-gpu",
             "--disable-dev-shm-usage",
             "--no-sandbox",
-            "--allow-file-access-from-files",
             "--no-pdf-header-footer",
             f"--print-to-pdf={output_path}",
             input_path.as_uri(),
@@ -518,29 +648,7 @@ def _resolve_chromium_executable(configured_executable: str | None) -> str:
 def _iter_chromium_executable_candidates() -> tuple[Path, ...]:
     candidates: list[Path] = []
 
-    for name in (
-        "chromium",
-        "chromium-browser",
-        "google-chrome",
-        "google-chrome-stable",
-        "chrome",
-    ):
-        resolved = shutil.which(name)
-        if resolved:
-            candidates.append(Path(resolved))
-
     home = Path.home()
-    if os.name == "posix" and Path("/Applications/Google Chrome.app").exists():
-        candidates.append(
-            Path(
-                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-            )
-        )
-    if os.name == "posix" and Path("/Applications/Chromium.app").exists():
-        candidates.append(
-            Path("/Applications/Chromium.app/Contents/MacOS/Chromium")
-        )
-
     playwright_globs = (
         home / "Library" / "Caches" / "ms-playwright",
         home / ".cache" / "ms-playwright",
@@ -557,6 +665,28 @@ def _iter_chromium_executable_candidates() -> tuple[Path, ...]:
         )
         candidates.extend(sorted(root.glob("chromium-*/chrome-linux/chrome")))
         candidates.extend(sorted(root.glob("chromium-*/chrome-linux64/chrome")))
+
+    for name in (
+        "chromium",
+        "chromium-browser",
+        "google-chrome",
+        "google-chrome-stable",
+        "chrome",
+    ):
+        resolved = shutil.which(name)
+        if resolved:
+            candidates.append(Path(resolved))
+
+    if os.name == "posix" and Path("/Applications/Google Chrome.app").exists():
+        candidates.append(
+            Path(
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            )
+        )
+    if os.name == "posix" and Path("/Applications/Chromium.app").exists():
+        candidates.append(
+            Path("/Applications/Chromium.app/Contents/MacOS/Chromium")
+        )
 
     deduped: list[Path] = []
     seen: set[str] = set()

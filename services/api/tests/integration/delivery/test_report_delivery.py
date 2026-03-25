@@ -59,6 +59,9 @@ from tests.fixtures.runtime import FakeClock
 _ONE_PIXEL_PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
 )
+_SECOND_PIXEL_PNG = b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNg+M8AAAICAQB7CYF4AAAAAElFTkSuQmCC"
+)
 _PDF_TEXT_TRANSLATION = str.maketrans({
     "⻚": "页",
     "⻓": "长",
@@ -958,7 +961,7 @@ async def test_writer_persists_reasoning_text_and_assembles_multi_round_markdown
                     GeneratedArtifact(
                         filename="chart_growth.png",
                         mime_type="image/png",
-                        content=_ONE_PIXEL_PNG,
+                        content=_SECOND_PIXEL_PNG,
                     ),
                 ),
             },
@@ -1456,7 +1459,7 @@ async def test_pdf_export_handles_multi_page_markdown_with_multiple_images(
                     GeneratedArtifact(
                         filename="chart_growth.png",
                         mime_type="image/png",
-                        content=_ONE_PIXEL_PNG,
+                        content=_SECOND_PIXEL_PNG,
                     ),
                 ),
             },
@@ -1508,7 +1511,7 @@ async def test_delivery_pdf_renders_rich_gfm_content_with_tables_footnotes_links
                     GeneratedArtifact(
                         filename="chart_growth.png",
                         mime_type="image/png",
-                        content=_ONE_PIXEL_PNG,
+                        content=_SECOND_PIXEL_PNG,
                     ),
                 ),
             },

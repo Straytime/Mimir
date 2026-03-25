@@ -1,5 +1,6 @@
 from base64 import b64decode
 from io import BytesIO
+import json
 from pathlib import Path
 import unicodedata
 
@@ -14,9 +15,13 @@ from app.infrastructure.delivery.local import LocalReportExportService
 _ONE_PIXEL_PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
 )
+_SECOND_PIXEL_PNG = b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNg+M8AAAICAQB7CYF4AAAAAElFTkSuQmCC"
+)
 LOCAL_REPORT_EXPORT_SOURCE = (
     Path(__file__).resolve().parents[3] / "app/infrastructure/delivery/local.py"
 ).read_text(encoding="utf-8")
+RAILPACK_CONFIG_PATH = Path(__file__).resolve().parents[3] / "railpack.json"
 _PDF_TEXT_TRANSLATION = str.maketrans({
     "⻚": "页",
     "⻓": "长",
@@ -193,8 +198,90 @@ async def test_build_pdf_preserves_external_links_as_readable_text_and_annotatio
 def test_local_report_export_source_uses_standard_html_pdf_renderer() -> None:
     assert "--print-to-pdf" in LOCAL_REPORT_EXPORT_SOURCE
     assert "weasyprint" not in LOCAL_REPORT_EXPORT_SOURCE.lower()
+    assert "--allow-file-access-from-files" not in LOCAL_REPORT_EXPORT_SOURCE
     assert "SimpleDocTemplate" not in LOCAL_REPORT_EXPORT_SOURCE
     assert "_build_pdf_story" not in LOCAL_REPORT_EXPORT_SOURCE
+
+
+def test_render_gfm_html_sanitizes_raw_html_and_unsafe_attributes() -> None:
+    html = local_delivery._render_gfm_html(
+        markdown=(
+            "# 安全导出\n\n"
+            "正常正文。\n\n"
+            "<script>alert('boom')</script>"
+            "<p onclick=\"evil()\">段落</p>"
+            "<a href=\"javascript:alert(1)\">坏链接</a>"
+            "<a href=\"https://example.com/safe\">好链接</a>"
+            "<iframe src=\"https://evil.example/embed\"></iframe>"
+            "<img src=\"file:///etc/passwd\" onerror=\"boom()\" alt=\"bad\">"
+        )
+    )
+
+    assert "<script" not in html
+    assert "<iframe" not in html
+    assert "onclick=" not in html
+    assert "onerror=" not in html
+    assert "javascript:alert" not in html
+    assert "file:///etc/passwd" not in html
+    assert 'href="https://example.com/safe"' in html
+
+
+def test_rewrite_markdown_artifact_refs_for_pdf_inlines_images_as_data_uris(
+    tmp_path: Path,
+) -> None:
+    rewritten = local_delivery._rewrite_markdown_artifact_refs_for_pdf(
+        markdown="![Chart](mimir://artifact/art_pdf_chart)\n",
+        artifacts=(
+            GeneratedArtifact(
+                artifact_id="art_pdf_chart",
+                filename="chart_market_share.png",
+                mime_type="image/png",
+                content=_ONE_PIXEL_PNG,
+            ),
+        ),
+        temp_dir=tmp_path,
+    )
+
+    assert "mimir://artifact/art_pdf_chart" not in rewritten
+    assert "file://" not in rewritten
+    assert "data:image/png;base64," in rewritten
+
+
+def test_resolve_chromium_executable_raises_clear_error_when_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(local_delivery, "_iter_chromium_executable_candidates", lambda: ())
+
+    with pytest.raises(FileNotFoundError, match="Chromium executable not found"):
+        local_delivery._resolve_chromium_executable(None)
+
+
+def test_railpack_config_provisions_runtime_chromium() -> None:
+    config = json.loads(RAILPACK_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    assert config["$schema"] == "https://schema.railpack.com"
+    assert "chromium" in config["deploy"]["aptPackages"]
+
+
+@pytest.mark.asyncio
+async def test_build_pdf_sanitizes_raw_html_but_keeps_readable_text() -> None:
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown=(
+            "# 安全 PDF\n\n"
+            "保留这段安全正文。\n\n"
+            "<script>alert('boom')</script>"
+            "<p onclick=\"evil()\">保留段落文本</p>"
+            "<a href=\"javascript:alert(1)\">移除危险链接</a>"
+        ),
+        artifacts=(),
+    )
+
+    pdf_text = _extract_pdf_text(pdf_bytes)
+
+    assert "安全 PDF" in pdf_text
+    assert "保留这段安全正文" in pdf_text
+    assert "保留段落文本" in pdf_text
+    assert "alert('boom')" not in pdf_text
 
 
 @pytest.mark.asyncio
@@ -212,7 +299,7 @@ async def test_build_pdf_handles_multi_page_markdown_with_lists_and_images() -> 
                 artifact_id="art_pdf_chart_2",
                 filename="chart_growth.png",
                 mime_type="image/png",
-                content=_ONE_PIXEL_PNG,
+                content=_SECOND_PIXEL_PNG,
             ),
         ),
     )

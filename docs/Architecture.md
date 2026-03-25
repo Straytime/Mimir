@@ -1474,14 +1474,15 @@ SSE 观察流与客户端心跳：
 
 实现建议：
 
-- 由后端负责标准 `GFM -> HTML -> PDF` 渲染
+- 由后端负责 `markdown / 受支持的 GFM 子集 -> HTML -> PDF` 渲染
 - v1 推荐在 Railway 后端内实现 `ReportExportService`
-- PDF 主实现不再使用手写 HTML 节点翻译器；应改用标准 HTML/CSS 级 PDF 渲染路径。当前主路径采用 `GFM -> HTML -> headless Chromium print-to-pdf`
-- PDF 导出层可以把正文中的 `mimir://artifact/{artifact_id}` 临时改写为渲染器可消费的图片资源，但该改写只发生在导出过程中，不回写数据库中的正文 markdown
-- v1 PDF 导出应对 writer 当前使用的 GitHub Flavored Markdown / 标准 footnotes 提供整体、可用支持；标题、段落、列表、表格、图片、脚注、链接都应在 HTML -> PDF 渲染层保持基本结构语义
+- PDF 主实现不再使用手写 HTML 节点翻译器；应改用标准 HTML/CSS 级 PDF 渲染路径。当前主路径采用 `Python-Markdown(extra + sane_lists) -> sanitized HTML -> headless Chromium print-to-pdf`
+- Chromium 只能消费经过 allowlist sanitize 的 HTML；不得把 markdown 中的 raw HTML 原样送入打印环境
+- PDF 导出层可以把正文中的 `mimir://artifact/{artifact_id}` 临时改写为渲染器可消费的内联图片资源，但该改写只发生在导出过程中，不回写数据库中的正文 markdown
+- v1 PDF 导出当前承诺的是 writer 正在使用的受支持 markdown / GFM 子集：标题、段落、列表、表格、图片、脚注、链接在 HTML -> PDF 渲染层保持基本结构语义；不承诺完整浏览器级 GitHub Flavored Markdown 语法覆盖
 - `report.pdf` 必须是真实、可被标准 PDF 解析器打开的 PDF 二进制；不能继续使用伪 PDF header + markdown bytes 的占位方案
 - markdown zip 仍是 source of truth；PDF 是其标准可读导出，不得反向影响数据库中的正文 markdown
-- 若 PDF 渲染方案引入 Railway 运行时系统依赖，必须在部署文档中显式记录对应 packages / build 要求；当前需要明确记录 headless Chromium 运行时
+- Chromium 运行时属于 deploy contract 的一部分，必须在仓库内提供确定性 provisioning 方案。当前实现要求 `services/api/railpack.json` 把 `chromium` 安装进 Railway 最终镜像，并允许通过 `MIMIR_PDF_CHROMIUM_EXECUTABLE` 覆盖非标准路径
 - PDF 与 markdown zip 都属于短期制品，纳入统一 Artifact 清理策略
 - delivery 导出阶段必须把 `markdown_zip`、`pdf`、最终下载制品 `upload` 视为三个独立观察点；应用层重试语义保持不变，但日志必须能区分失败子阶段并记录原始异常类型，不能继续统一落成“报告导出失败且重试耗尽”
 
