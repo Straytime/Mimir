@@ -79,6 +79,7 @@ class SearchHit:
     title: str
     link: str
     snippet: str
+    publish_date: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +87,40 @@ class SearchResponse:
     query: str
     recency_filter: str
     results: tuple[SearchHit, ...]
+
+
+def build_web_search_tool_payload(
+    search_response: SearchResponse | None,
+    *,
+    search_query: str | None = None,
+    search_recency_filter: str | None = None,
+    error_code: str | None = None,
+) -> dict[str, Any]:
+    if search_response is not None:
+        payload: dict[str, Any] = {
+            "success": True,
+            "search_query": search_response.query,
+            "search_recency_filter": search_response.recency_filter,
+            "results": [
+                {
+                    "title": result.title,
+                    "link": result.link,
+                    "snippet": result.snippet,
+                    "publish_date": result.publish_date,
+                }
+                for result in search_response.results
+            ],
+        }
+    else:
+        payload = {
+            "success": False,
+            "search_query": search_query or "",
+            "search_recency_filter": search_recency_filter or "noLimit",
+            "results": [],
+        }
+    if error_code is not None:
+        payload["error_code"] = error_code
+    return payload
 
 
 @dataclass(frozen=True, slots=True)

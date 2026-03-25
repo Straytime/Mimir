@@ -570,6 +570,7 @@ async def test_full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_m
                         title="来源 A",
                         link="https://example.com/a",
                         snippet="A snippet",
+                        publish_date="2025-06-10",
                     ),
                     SearchHit(
                         title="来源 Shared",
@@ -694,6 +695,7 @@ async def test_full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_m
     assert collector_replay_round_2[0].tool_calls[0]["function"]["name"] == "web_search"
     assert collector_replay_round_2[1].tool_call_id == "call_search_players"
     assert "\"q_players\"" in collector_replay_round_2[1].content
+    assert "\"publish_date\": \"2025-06-10\"" in collector_replay_round_2[1].content
     collector_replay_round_3 = collector.invocations_by_tool_call["call_1"][2].prompt_bundle.transcript
     assert collector_replay_round_3 is not None
     assert [message.role for message in collector_replay_round_3] == [

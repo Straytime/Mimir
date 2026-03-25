@@ -3385,3 +3385,54 @@ Copy the template below for each completed session:
 - 验证：
   - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_delivery_prompts.py`
   - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+
+## R1-054 Clarification Web Search Loop + Unified Search Result Payload
+
+- 日期时间: 2026-03-25 15:40:00 CST (+0800)
+- 任务包编号: R1-054
+- session 标识: `clarify-update-0325-1453`
+- 目标摘要:
+  - 将 `func_4` / `func_5` 澄清阶段升级为最多一次 `web_search` 的标准 tool-call loop
+  - 统一 `func_4` / `func_5` / `func_8` 回灌给模型的 `web_search` tool message 结构
+  - 在既有标准化结果上补齐 `publish_date`，不透传 provider 原始 `search_result`
+- 修改文件:
+  - `docs/Mimir_v1.0.0_prd_0.3.md`
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/application/dto/research.py`
+  - `services/api/app/application/prompts/clarification.py`
+  - `services/api/app/application/services/clarification.py`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/app/infrastructure/research/real_http.py`
+  - `services/api/app/main.py`
+  - `services/api/tests/unit/application/test_prompts.py`
+  - `services/api/tests/unit/application/test_search_payloads.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/tests/integration/lifecycle/test_clarification_lifecycle.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_prompts.py tests/unit/application/test_search_payloads.py tests/unit/infrastructure/test_zhipu_adapters.py tests/integration/lifecycle/test_clarification_lifecycle.py tests/integration/collection/test_collection_engine.py -k 'clarification or web_search or publish_date or payload or full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_merge'`
+    - 初次结果: `1 error`
+    - 失败点: 当前实现缺少统一 `build_web_search_tool_payload()`，同时 clarification 仍是单轮文本生成，不支持一次 `web_search` loop 和 transcript 回灌
+  - 修补后:
+    - 同一命令重跑
+    - 结果: `19 passed`
+  - follow-up 修补:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/integration/lifecycle/test_clarification_lifecycle.py -k 'can_execute_one_web_search'`
+    - 结果: `2 passed`
+    - 修补点: clarification 第二轮 transcript 中 assistant `tool_calls` 改为 provider 标准结构 `{"id","type":"function","function":{"name","arguments"}}`，不再回灌简化形状 `{"id","name","arguments"}`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_prompts.py tests/unit/application/test_invocation_contracts.py tests/unit/application/test_search_payloads.py tests/unit/infrastructure/test_zhipu_adapters.py tests/contract/rest/test_collection_events.py tests/integration/lifecycle/test_clarification_lifecycle.py tests/integration/collection/test_collection_engine.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `102 passed`
+- 验收结论:
+  - clarification natural / options 现在按 PRD 最新 system / user split 构造 prompt，并显式挂载 `web_search` tool schema
+  - clarification 阶段已接入标准 tool-call loop：assistant tool_calls -> 执行最多一次 `web_search` -> tool message 回灌 -> 下一轮输出最终澄清内容
+  - clarification 第二轮 invocation 的 transcript 已按 collector / writer 同口径回灌标准 provider tool-call 结构，真实 provider 下不会再因历史 `tool_calls` 形状失真
+  - clarification 与 collector 现在共用统一的 `web_search` tool payload builder，结构固定为 `success/search_query/search_recency_filter/results[]`
+  - `results[]` 统一保留 `title`、`link`、`snippet`、`publish_date`；provider `icon`、`media`、`search_intent` 等字段不会透传给模型
+  - collector replay transcript 已同步包含 `publish_date`，collection / delivery 主链路未回退
+- blocker / 风险:
+  - 无当前 blocker
+  - clarification 的 `web_search` 上限由后端显式限制为 1；超过 1 次时会回灌确定性的 `tool_call_limit_exceeded` tool payload，而不是继续执行额外搜索

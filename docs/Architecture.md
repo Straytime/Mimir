@@ -1015,7 +1015,7 @@ E2B 生命周期约束：
 约束：
 
 1. 以上五类 prompt 的模型可见文本，以 PRD 原文为准逐字落实；允许的变化只有运行时变量插值、空白规范化和 JSON 示例中的动态值替换。
-2. `clarification natural` 与 `clarification options` 必须保持 PRD 的“空 system prompt”约束，不能再由 adapter 私自补一个新的 system prompt。
+2. `clarification natural` 与 `clarification options` 必须保持 PRD 最新的 system / user split：system prompt 承载稳定角色与“一次 `web_search` 上限”等硬约束，user prompt 只承载用户初始需求与当前时间；不得再回退到“全部内容塞进单个 user prompt”的旧实现。
 3. `requirement analysis` 与 `feedback analysis` 的 system prompt / user prompt 边界，以 PRD 为准；不得把 PRD 中模型可见的角色说明挪到 adapter 不可见的默认字符串里。
 4. `planner` 对应 PRD `func_7`，其 system prompt 与 `collect_agent` 的模型可见 description 以 PRD 0.4 原文为准；planner user prompt 允许继续保留当前实现中的运行时上下文包装，但不得改变 PRD 定义的角色边界、并发限制、tool 语义与 `freshness_requirement` 枚举语义。
 5. `collector` 对应 PRD `func_8`，其 system prompt、user prompt 与 tools description 以 PRD 0.4 原文为准；collector user prompt 允许在 `<补充信息>` 之后追加显式 `<时效要求>` runtime block，以保留 `freshness_requirement` 的独立信号。除此之外只允许运行时变量插值、空白规范化，以及 transcript 作为独立 message 注入。
@@ -1051,16 +1051,41 @@ system / user prompt 组织规则：
 | tool | 可用阶段 | 模型可见 request schema | 设计约束 |
 | --- | --- | --- | --- |
 | `collect_agent` | planner | `collect_target`、`additional_info`、`freshness_requirement` | 对模型暴露的 schema 与 description 以 PRD 0.4 为准；`freshness_requirement` 继续保持内部枚举语义（`low \| high`），不扩成自由字符串；`tool_call_id`、`revision_id`、`subtask_id` 这些内部元数据由后端在解析后补齐。 |
-| `web_search` | collector | `search_query`、`search_recency_filter` | `search_recency_filter` 的模型可见规范值与真实 provider 请求值一致，均为 `oneDay | oneWeek | oneMonth | oneYear | noLimit`；adapter 只负责 `nolimit` 等历史兼容归一化。 |
+| `web_search` | clarification、collector | `search_query`、`search_recency_filter` | clarification 与 collector 必须共用同一套 tool schema 与 tool message 契约；`search_recency_filter` 的模型可见规范值与真实 provider 请求值一致，均为 `oneDay | oneWeek | oneMonth | oneYear | noLimit`；adapter 只负责 `nolimit` 等历史兼容归一化。 |
 | `web_fetch` | collector | `url` | 只允许模型传目标 URL，不对模型暴露 header、timeout、parser 等实现细节。 |
 | `python_interpreter` | writer | `code` | 只允许模型提交待执行 Python 代码；sandbox 创建、复用、上传 artifact、下载签名 URL 都由后端 orchestrator / adapter 负责。 |
 
 tool result 归一化规则：
 
 1. `collect_agent` 返回给 planner 的是后端综合后的 subtask 摘要，不是原始 `web_search` / `web_fetch` provider payload。
-2. `web_search` 与 `web_fetch` 的 tool result 都必须在 adapter 层标准化为“成功但内容为空”或“失败但可继续”的统一 envelope，避免 collector loop 因 provider 响应形态差异挂起。
+2. `web_search` 与 `web_fetch` 的 tool result 都必须在 adapter / orchestrator 层标准化为“成功但内容为空”或“失败但可继续”的统一 envelope，避免 clarification / collector loop 因 provider 响应形态差异挂起。
 3. `python_interpreter` tool result 只允许返回文本摘要与 artifact 元数据，不能把二进制文件内容直接放进 transcript 或 SSE payload。
 4. planner 对 `collect_agent` tool call 的 parser 必须严格服从 tool schema：`collect_target` 必填，`additional_info` 可选且缺失时收敛为空字符串，`freshness_requirement` 可选且默认 `high`；不得因为缺少可选字段丢弃整个 `CollectPlan`。
+
+统一 `web_search` tool message：
+
+```json
+{
+  "success": true,
+  "search_query": "中国 AI 搜索 产品 2026",
+  "search_recency_filter": "oneWeek",
+  "results": [
+    {
+      "title": "某条结果标题",
+      "link": "https://example.com/article",
+      "snippet": "结果摘要",
+      "publish_date": "2025-06-10"
+    }
+  ]
+}
+```
+
+补充约束：
+
+1. `clarification func_4 / func_5` 与 `collector func_8` 回灌给模型的 `web_search` tool message 必须完全一致，不允许各自维护不同 shape。
+2. `results[]` 只保留 `title`、`link`、`snippet`、`publish_date` 四个字段；`snippet` 由 provider `content/summary` 映射，`publish_date` 缺失时统一为 `null`。
+3. `icon`、`media`、`search_intent`、`refer` 等 provider 展示性或诊断字段不得透传给模型。
+4. clarification 阶段允许模型最多调用一次 `web_search`；该上限必须由后端显式控制，而不是只依赖 prompt。
 
 ### 8.5.4 Tool request construction 与结果清洗
 
@@ -1081,8 +1106,12 @@ tool result 归一化规则：
 
 1. `search_engine`、`query_rewrite`、`count` 属于固定 provider contract，不允许由 planner / collector prompt 或 adapter 默认值自由漂移。
 2. collector 对模型可见的 `search_recency_filter` 与真实 provider 请求值统一为 PRD `oneDay | oneWeek | oneMonth | oneYear | noLimit`；adapter 只允许做 `nolimit -> noLimit`、历史旧值回放等兼容归一化，不得改成另一套 request enum。
-3. tool result 回灌给 collector 时，只保留 `search_result` 列表中的核心字段；`icon`、`media` 及其他展示性厂商字段一律剔除。
-4. provider 如果返回 `results`、`data.search_result` 等兼容形态，adapter 负责归一到同一内部结构，再返回给上层。
+3. tool result 回灌给 clarification / collector 时，统一标准化为：
+   - 顶层：`success`、`search_query`、`search_recency_filter`、`results`
+   - `results[]`：`title`、`link`、`snippet`、`publish_date`
+4. `results[].snippet` 由 provider `search_result[].content` / `summary` 等字段归一得到；`results[].publish_date` 直接保留 provider `publish_date`，缺失时输出 `null`。
+5. `icon`、`media` 及其他展示性厂商字段一律剔除。
+6. provider 如果返回 `results`、`data.search_result` 等兼容形态，adapter 负责归一到同一内部结构，再返回给上层。
 
 #### Jina Reader `web_fetch`
 

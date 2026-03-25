@@ -453,6 +453,7 @@ class ZhipuWebSearchClient:
                     title=title,
                     link=link,
                     snippet=snippet or "",
+                    publish_date=_coerce_optional_string(item.get("publish_date")),
                 )
             )
 
