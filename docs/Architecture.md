@@ -1474,12 +1474,14 @@ SSE 观察流与客户端心跳：
 
 实现建议：
 
-- 由后端负责 `markdown -> HTML -> PDF` 渲染
+- 由后端负责标准 `GFM -> HTML -> PDF` 渲染
 - v1 推荐在 Railway 后端内实现 `ReportExportService`
+- PDF 主实现不再使用手写 HTML 节点翻译器；应改用标准 HTML/CSS 级 PDF 渲染路径。当前主路径采用 `GFM -> HTML -> headless Chromium print-to-pdf`
 - PDF 导出层可以把正文中的 `mimir://artifact/{artifact_id}` 临时改写为渲染器可消费的图片资源，但该改写只发生在导出过程中，不回写数据库中的正文 markdown
-- v1 PDF 导出应对 writer 当前使用的 GitHub Flavored Markdown / 标准 footnotes 提供可用支持；正文脚注引用与文末脚注列表不得在 HTML -> PDF 渲染层丢失语义
+- v1 PDF 导出应对 writer 当前使用的 GitHub Flavored Markdown / 标准 footnotes 提供整体、可用支持；标题、段落、列表、表格、图片、脚注、链接都应在 HTML -> PDF 渲染层保持基本结构语义
 - `report.pdf` 必须是真实、可被标准 PDF 解析器打开的 PDF 二进制；不能继续使用伪 PDF header + markdown bytes 的占位方案
-- 若使用 ReportLab，story 中的 flowable 不得复用同一个 `Spacer` 等实例；块级间距必须按使用点生成新实例，避免确定性 `LayoutError`
+- markdown zip 仍是 source of truth；PDF 是其标准可读导出，不得反向影响数据库中的正文 markdown
+- 若 PDF 渲染方案引入 Railway 运行时系统依赖，必须在部署文档中显式记录对应 packages / build 要求；当前需要明确记录 headless Chromium 运行时
 - PDF 与 markdown zip 都属于短期制品，纳入统一 Artifact 清理策略
 - delivery 导出阶段必须把 `markdown_zip`、`pdf`、最终下载制品 `upload` 视为三个独立观察点；应用层重试语义保持不变，但日志必须能区分失败子阶段并记录原始异常类型，不能继续统一落成“报告导出失败且重试耗尽”
 

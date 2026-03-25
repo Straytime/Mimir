@@ -39,6 +39,7 @@ class Settings:
     e2b_request_timeout_seconds: float = 30.0
     e2b_execution_timeout_seconds: float = 120.0
     e2b_sandbox_timeout_seconds: int = 600
+    pdf_chromium_executable: str | None = None
     zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4/"
     zhipu_timeout_seconds: float = 30.0
     zhipu_clarification_natural_model: str = "glm-5"
@@ -147,6 +148,7 @@ class Settings:
             e2b_sandbox_timeout_seconds=int(
                 os.getenv("MIMIR_E2B_SANDBOX_TIMEOUT_SECONDS", "600")
             ),
+            pdf_chromium_executable=os.getenv("MIMIR_PDF_CHROMIUM_EXECUTABLE"),
             zhipu_base_url=os.getenv(
                 "MIMIR_ZHIPU_BASE_URL",
                 "https://open.bigmodel.cn/api/paas/v4/",

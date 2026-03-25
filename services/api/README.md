@@ -33,6 +33,7 @@ See [`.env.example`](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects
 - Model IDs are configurable per agent role; the current default contract is `glm-5` for all roles unless you explicitly override them in local env.
 - `MIMIR_WEB_SEARCH_ENGINE` defaults to `search_prime`, which matches the current architecture contract for Zhipu `web_search`.
 - `MIMIR_WRITER_MAX_ROUNDS` controls the writer tool-call round limit. Default is `5`; if the final allowed round still returns `tool_calls`, the task now fails instead of silently delivering an empty report.
+- `MIMIR_PDF_CHROMIUM_EXECUTABLE` is optional. When set, `report.pdf` export uses that Chromium binary; otherwise the backend auto-discovers common system paths and Playwright cache installs.
 
 ## Deploy contract
 
@@ -60,6 +61,7 @@ Artifact / storage contract:
 - 当前文件制品实现仍走本地文件系统 artifact store。
 - Railway 生产环境应挂载 Volume；若存在 `RAILWAY_VOLUME_MOUNT_PATH`，应用会默认把 artifact root 收敛到 `${RAILWAY_VOLUME_MOUNT_PATH}/mimir-artifacts`。
 - 若需要自定义目录，可显式设置 `MIMIR_ARTIFACT_ROOT_DIR`。
+- `report.pdf` export now relies on a headless Chromium executable. In Railway, make Chromium available on `PATH` or set `MIMIR_PDF_CHROMIUM_EXECUTABLE` to the installed binary path.
 
 完整 env matrix、CORS、download/access-token 约束见 [docs/Deploy_Contract.md](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/docs/Deploy_Contract.md)。
 

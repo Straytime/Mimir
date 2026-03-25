@@ -46,6 +46,7 @@ Browser
 - `uvicorn` 已作为生产依赖声明，避免 `--no-dev` 构建后缺少启动器。
 - Start command 依赖 Railway 注入的 `PORT`。
 - `/api/v1/health` 同时作为 Railway liveness probe 和发布后最小检查。
+- `report.pdf` 当前采用 `GFM -> HTML -> headless Chromium print-to-pdf`。Railway 运行时必须提供可执行的 Chromium，并确保后端能通过 `PATH` 或 `MIMIR_PDF_CHROMIUM_EXECUTABLE` 找到该二进制。
 
 ### 2.3 Production Required Env
 
@@ -76,6 +77,7 @@ Browser
 - `MIMIR_WEB_FETCH_PROVIDER_MODE`
 - `MIMIR_E2B_PROVIDER_MODE`
 - `MIMIR_E2B_TEMPLATE`
+- `MIMIR_PDF_CHROMIUM_EXECUTABLE`
 - `MIMIR_ZHIPU_BASE_URL`
 - `MIMIR_JINA_BASE_URL`
 - `MIMIR_ZHIPU_TIMEOUT_SECONDS`
@@ -96,6 +98,7 @@ Browser
 
 - 当前 artifact store 仍是本地文件系统实现，因此生产必须依赖 Railway Volume 或等价持久挂载目录。
 - `markdown zip`、`pdf`、图片 artifact 都写入同一 artifact root。
+- `report.pdf` 当前采用标准 `GFM -> HTML -> PDF` 导出路径，而不是手写 HTML 节点翻译器；实际渲染器为 headless Chromium，部署时需满足 Chromium 安装与可执行路径发现要求。
 - 由于 Railway Volume 与 PostgreSQL 不共享事务，删除仍按补偿一致性执行：
   1. DB 标记 `cleanup_pending`
   2. 删除 artifact / sandbox / 临时文件

@@ -3458,3 +3458,53 @@ Copy the template below for each completed session:
     - 输出约束增加“一次性给出完整研究内容”
 - blocker / 风险:
   - 无当前 blocker
+
+## R1-055 Replace PDF Renderer With Standard GFM HTML Pipeline
+
+- 日期时间: 2026-03-25 18:28:00 CST (+0800)
+- 任务包编号: R1-055
+- session 标识: `codex/r1-055-standard-gfm-html-pdf`
+- 目标摘要:
+  - 用标准 `GFM -> HTML -> PDF` 导出链路替换当前手写的 HTML -> ReportLab flowable 翻译器
+  - 让 `report.pdf` 对标题、段落、列表、表格、图片、脚注、链接提供整体支持
+  - 保持现有下载端点、`access_token` 和 `markdown.zip` 契约不变
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Deploy_Contract.md`
+  - `docs/Execution_Log.md`
+  - `services/api/.env.example`
+  - `services/api/README.md`
+  - `services/api/app/core/config.py`
+  - `services/api/app/main.py`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/pyproject.toml`
+  - `services/api/uv.lock`
+  - `services/api/tests/unit/core/test_config.py`
+  - `services/api/tests/unit/infrastructure/test_local_report_export.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+- 测试 / 验证:
+  - 初始评估:
+    - WeasyPrint 路线在当前本机环境可导入，但最小 `write_pdf()` 直接触发 native segmentation fault，因此未作为最终主实现保留
+    - 本机 Playwright 缓存中的 Chromium CLI 已验证可稳定执行 `--print-to-pdf`
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/infrastructure/test_local_report_export.py tests/integration/delivery/test_report_delivery.py -k 'pdf or footnote or table or link or rich_gfm or standard_html_pdf_renderer or chromium_executable'`
+    - 初次结果: `3 failed`
+    - 失败点: 旧主路径仍是 WeasyPrint / ReportLab 混合过渡实现，脚注角标与文末脚注列表未保留稳定可读文本，多页标题断言也受 Chromium PDF 提取的 CJK 兼容字形影响
+  - 修补后:
+    - 同一命令重跑
+    - 结果: `14 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/unit/infrastructure/test_local_report_export.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py tests/integration/delivery/test_report_delivery.py`
+    - 结果: `49 passed`
+- 验收结论:
+  - `report.pdf` 主路径已从手写 HTML -> ReportLab 翻译器切换为标准 `GFM -> HTML -> headless Chromium print-to-pdf`
+  - markdown 仍通过 Python Markdown `extra + sane_lists` 生成 HTML；当前 writer 使用到的标题、段落、列表、表格、脚注、链接、图片都由浏览器级 HTML/CSS 渲染统一处理，而不是继续逐项补丁
+  - canonical 图片引用 `mimir://artifact/{artifact_id}` 仍只在导出层临时改写为本地 `file://` 资源，不回写正文
+  - PDF 导出现在优先使用 `MIMIR_PDF_CHROMIUM_EXECUTABLE`，未配置时会自动发现常见系统 Chromium 路径和 Playwright 缓存安装
+  - headless Chromium 打印时已关闭默认页眉页脚，避免把文件路径、日期和分页元信息污染正文
+  - 脚注 HTML 做了最小归一化：正文角标保留 `[n]`，文末脚注列表保留 `[n] 来源`，backref 被隐藏；不再依赖手写节点翻译器维护这套结构
+  - `markdown.zip`、下载端点和 access token 契约未变，delivery 导出 observability 日志也未回退
+- blocker / 风险:
+  - Railway 部署现在需要明确提供 headless Chromium 运行时；路径可通过 `PATH` 自动发现，或显式配置 `MIMIR_PDF_CHROMIUM_EXECUTABLE`
+  - PDF 文本抽取在 CJK 场景下仍可能出现兼容字形差异；测试侧已做最小 Unicode 归一化，不影响用户阅读和导出主路径

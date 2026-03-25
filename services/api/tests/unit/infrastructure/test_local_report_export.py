@@ -1,9 +1,10 @@
 from base64 import b64decode
 from io import BytesIO
+from pathlib import Path
+import unicodedata
 
 import pytest
 from pypdf import PdfReader
-from reportlab.platypus import Spacer
 
 from app.application.dto.delivery import GeneratedArtifact
 from app.application.services.invocation import RetryableOperationError
@@ -13,11 +14,19 @@ from app.infrastructure.delivery.local import LocalReportExportService
 _ONE_PIXEL_PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
 )
+LOCAL_REPORT_EXPORT_SOURCE = (
+    Path(__file__).resolve().parents[3] / "app/infrastructure/delivery/local.py"
+).read_text(encoding="utf-8")
+_PDF_TEXT_TRANSLATION = str.maketrans({
+    "⻚": "页",
+    "⻓": "长",
+})
 
 
 def _extract_pdf_text(pdf_bytes: bytes) -> str:
     reader = PdfReader(BytesIO(pdf_bytes))
-    return "\n".join((page.extract_text() or "") for page in reader.pages)
+    text = "\n".join((page.extract_text() or "") for page in reader.pages)
+    return unicodedata.normalize("NFKC", text).translate(_PDF_TEXT_TRANSLATION)
 
 
 def _count_pdf_images(pdf_bytes: bytes) -> int:
@@ -37,6 +46,26 @@ def _count_pdf_images(pdf_bytes: bytes) -> int:
                 count += 1
 
     return count
+
+
+def _extract_pdf_link_targets(pdf_bytes: bytes) -> list[str]:
+    reader = PdfReader(BytesIO(pdf_bytes))
+    uris: list[str] = []
+
+    for page in reader.pages:
+        annotations = page.get("/Annots")
+        if annotations is None:
+            continue
+        for annotation_ref in annotations:
+            annotation = annotation_ref.get_object()
+            action = annotation.get("/A")
+            if action is None:
+                continue
+            uri = action.get("/URI")
+            if uri is not None:
+                uris.append(str(uri))
+
+    return uris
 
 
 def _build_multi_block_markdown() -> str:
@@ -61,6 +90,16 @@ def _build_footnote_markdown() -> str:
         "核心结论[^1] 与扩展判断[^2] 需要保留引用关系。\n\n"
         "[^1]: [第一来源](https://example.com/source-1)\n"
         "[^2]: [第二来源](https://example.com/source-2)\n"
+    )
+
+
+def _build_table_markdown() -> str:
+    return (
+        "# 表格 PDF 导出验证\n\n"
+        "| 公司 | 市占率 | 增速 |\n"
+        "| --- | --- | --- |\n"
+        "| Alpha | 42% | 18% |\n"
+        "| Beta | 31% | 12% |\n"
     )
 
 
@@ -117,17 +156,45 @@ async def test_build_pdf_renders_gfm_footnotes_with_references_and_sources() -> 
     assert pdf_text.index("[1] 第一来源") < pdf_text.index("[2] 第二来源")
 
 
-def test_build_pdf_story_uses_distinct_spacer_instances_per_block() -> None:
-    html = local_delivery.render_markdown(
-        _build_multi_block_markdown(),
-        extensions=("extra", "sane_lists"),
+@pytest.mark.asyncio
+async def test_build_pdf_renders_gfm_tables_with_headers_and_cells() -> None:
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown=_build_table_markdown(),
+        artifacts=(),
     )
 
-    story = local_delivery._build_pdf_story(html=html)
-    spacers = [item for item in story if isinstance(item, Spacer)]
+    pdf_text = _extract_pdf_text(pdf_bytes)
 
-    assert len(spacers) >= 10
-    assert len({id(item) for item in spacers}) == len(spacers)
+    assert "表格 PDF 导出验证" in pdf_text
+    assert "公司" in pdf_text
+    assert "市占率" in pdf_text
+    assert "增速" in pdf_text
+    assert "Alpha" in pdf_text
+    assert "42%" in pdf_text
+    assert "Beta" in pdf_text
+    assert "12%" in pdf_text
+
+
+@pytest.mark.asyncio
+async def test_build_pdf_preserves_external_links_as_readable_text_and_annotations() -> None:
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown="# 外链导出验证\n\n请查看[行业报告](https://example.com/report)。\n",
+        artifacts=(),
+    )
+
+    pdf_text = _extract_pdf_text(pdf_bytes)
+    link_targets = _extract_pdf_link_targets(pdf_bytes)
+
+    assert "外链导出验证" in pdf_text
+    assert "行业报告" in pdf_text
+    assert "https://example.com/report" in link_targets
+
+
+def test_local_report_export_source_uses_standard_html_pdf_renderer() -> None:
+    assert "--print-to-pdf" in LOCAL_REPORT_EXPORT_SOURCE
+    assert "weasyprint" not in LOCAL_REPORT_EXPORT_SOURCE.lower()
+    assert "SimpleDocTemplate" not in LOCAL_REPORT_EXPORT_SOURCE
+    assert "_build_pdf_story" not in LOCAL_REPORT_EXPORT_SOURCE
 
 
 @pytest.mark.asyncio
@@ -162,10 +229,15 @@ async def test_build_pdf_logs_real_exception_before_wrapping(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    def broken_story(*, html: str):
+    def broken_renderer(
+        *,
+        html_document: str,
+        temp_dir: Path,
+        chromium_executable: str | None,
+    ) -> bytes:
         raise ValueError("bad pdf story")
 
-    monkeypatch.setattr(local_delivery, "_build_pdf_story", broken_story)
+    monkeypatch.setattr(local_delivery, "_render_pdf_from_html_document", broken_renderer)
 
     with pytest.raises(RetryableOperationError, match="pdf render failed"):
         await LocalReportExportService().build_pdf(

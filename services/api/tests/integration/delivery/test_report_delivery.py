@@ -6,6 +6,7 @@ from io import BytesIO
 import json
 from pathlib import Path
 from types import SimpleNamespace
+import unicodedata
 
 import pytest
 import pytest_asyncio
@@ -58,11 +59,16 @@ from tests.fixtures.runtime import FakeClock
 _ONE_PIXEL_PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Z7xQAAAAASUVORK5CYII="
 )
+_PDF_TEXT_TRANSLATION = str.maketrans({
+    "⻚": "页",
+    "⻓": "长",
+})
 
 
 def _extract_pdf_text(pdf_bytes: bytes) -> str:
     reader = PdfReader(BytesIO(pdf_bytes))
-    return "\n".join((page.extract_text() or "") for page in reader.pages)
+    text = "\n".join((page.extract_text() or "") for page in reader.pages)
+    return unicodedata.normalize("NFKC", text).translate(_PDF_TEXT_TRANSLATION)
 
 
 def _count_pdf_images(pdf_bytes: bytes) -> int:
@@ -204,6 +210,47 @@ class MultiImageTranscriptWriterAgent(WriterAgent):
                 sections.append(image_blocks)
 
         return WriterDecision(text="\n\n".join(sections) + "\n", tool_calls=())
+
+
+class RichGfmTranscriptWriterAgent(WriterAgent):
+    def __init__(self, *, tool_call: WriterToolCall) -> None:
+        self.tool_call = tool_call
+        self.invocations: list[WriterInvocation] = []
+
+    async def write(self, invocation: WriterInvocation) -> WriterDecision:
+        self.invocations.append(invocation)
+        has_transcript = (
+            invocation.prompt_bundle is not None
+            and len(invocation.prompt_bundle.transcript) > 0
+        )
+        if not has_transcript:
+            return WriterDecision(text="", tool_calls=(self.tool_call,))
+
+        tool_payload = json.loads(invocation.prompt_bundle.transcript[-1].content)
+        artifacts = tool_payload.get("artifacts", [])
+        image_blocks = "\n\n".join(
+            f"![图表 {index}]({artifact['canonical_path']})"
+            for index, artifact in enumerate(artifacts, start=1)
+        )
+
+        return WriterDecision(
+            text=(
+                "# 中国 AI 搜索产品竞争格局研究\n\n"
+                "## 市场概览\n\n"
+                "这是一段说明性正文，并引用外部资料[行业报告](https://example.com/report)与脚注来源[^1]。\n\n"
+                "- 观察一：市场正在快速重排。\n"
+                "- 观察二：多模态能力影响差异化。\n\n"
+                "## 竞争对比\n\n"
+                "| 公司 | 市占率 | 增速 |\n"
+                "| --- | --- | --- |\n"
+                "| Alpha | 42% | 18% |\n"
+                "| Beta | 31% | 12% |\n\n"
+                f"{image_blocks}\n\n"
+                "[^1]: [第一来源](https://example.com/source-1)\n"
+                "[^2]: [第二来源](https://example.com/source-2)\n"
+            ),
+            tool_calls=(),
+        )
 
 
 class ExecutionFailureAwareWriterAgent(WriterAgent):
@@ -1432,6 +1479,63 @@ async def test_pdf_export_handles_multi_page_markdown_with_multiple_images(
     reader = PdfReader(BytesIO(pdf_response.content))
     assert len(reader.pages) >= 2
     assert "分析章节 12" in _extract_pdf_text(pdf_response.content)
+    assert _count_pdf_images(pdf_response.content) >= 2
+
+
+@pytest.mark.asyncio
+async def test_delivery_pdf_renders_rich_gfm_content_with_tables_footnotes_links_and_images(
+    make_stage6_client,
+) -> None:
+    writer_agent = RichGfmTranscriptWriterAgent(
+        tool_call=WriterToolCall(
+            tool_call_id="call_writer_chart_pdf_rich",
+            tool_name="python_interpreter",
+            code="plot_chart_pdf_rich",
+        )
+    )
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={
+                "plot_chart_pdf_rich": (
+                    GeneratedArtifact(
+                        filename="chart_market_share.png",
+                        mime_type="image/png",
+                        content=_ONE_PIXEL_PNG,
+                    ),
+                    GeneratedArtifact(
+                        filename="chart_growth.png",
+                        mime_type="image/png",
+                        content=_ONE_PIXEL_PNG,
+                    ),
+                ),
+            },
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"report.completed"}, timeout=2.0)
+        task_detail_response = await client.get(
+            f"/api/v1/tasks/{create_body['task_id']}",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+        )
+        assert task_detail_response.status_code == 200
+        pdf_url = task_detail_response.json()["delivery"]["pdf_url"]
+        pdf_response = await client.get(pdf_url)
+        await _close_stream(stream_context, response)
+
+    assert pdf_response.status_code == 200
+    pdf_text = _extract_pdf_text(pdf_response.content)
+    PdfReader(BytesIO(pdf_response.content))
+    assert "中国 AI 搜索产品竞争格局研究" in pdf_text
+    assert "公司" in pdf_text
+    assert "Alpha" in pdf_text
+    assert "42%" in pdf_text
+    assert "[1] 第一来源" in pdf_text
+    assert "行业报告" in pdf_text
     assert _count_pdf_images(pdf_response.content) >= 2
 
 

@@ -149,7 +149,10 @@ def create_app(
         writer_agent=writer_agent or provider_runtime.writer_agent,
         sandbox_client=sandbox_client or provider_runtime.sandbox_client,
         artifact_store=application.state.artifact_store,
-        report_export_service=report_export_service or LocalReportExportService(),
+        report_export_service=report_export_service
+        or LocalReportExportService(
+            chromium_executable=resolved_settings.pdf_chromium_executable
+        ),
         operation_invoker=operation_invoker,
         settings=resolved_settings,
         clock=resolved_clock,
