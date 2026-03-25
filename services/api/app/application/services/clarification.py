@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from collections.abc import Callable
 from contextlib import suppress
@@ -18,8 +19,12 @@ from app.application.dto.clarification import (
     NaturalClarificationSubmission,
     OptionsClarificationSubmission,
 )
-from app.application.dto.invocation import LLMInvocation
-from app.application.invocation_contracts import build_stage_profile
+from app.application.dto.invocation import LLMInvocation, PromptBundle, PromptMessage
+from app.application.dto.research import SearchResponse, build_web_search_tool_payload
+from app.application.invocation_contracts import (
+    build_stage_profile,
+    build_web_search_tool_schema,
+)
 from app.application.parsers.clarification import (
     ClarificationOptionsParseError,
     ClarificationOptionsParser,
@@ -29,6 +34,7 @@ from app.application.parsers.requirement import (
     RequirementDetailParser,
 )
 from app.application.ports.llm import ClarificationGenerator, RequirementAnalyzer
+from app.application.ports.research import WebSearchClient
 from app.application.prompts.clarification import (
     build_natural_clarification_prompt,
     build_options_clarification_prompt,
@@ -36,9 +42,10 @@ from app.application.prompts.clarification import (
 from app.application.prompts.requirement import build_requirement_analysis_prompt
 from app.application.services.llm import RetryingLLMInvoker
 from app.application.services.llm import RetryableLLMError
-from app.application.services.llm import build_trace_request_payload, build_trace_response_payload
+from app.application.services.llm import TextGeneration, build_trace_request_payload, build_trace_response_payload
 from app.application.services.tasks import TaskService
 from app.application.services.invocation import RiskControlTriggered
+from app.application.services.invocation import RetryableOperationError, RetryingOperationInvoker
 from app.domain.enums import ClarificationMode, TaskPhase, TaskStatus
 
 
@@ -76,6 +83,13 @@ class ClarificationRuntime:
     analysis_task: asyncio.Task[None] | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ClarificationSearchToolCall:
+    tool_call_id: str
+    search_query: str
+    search_recency_filter: str
+
+
 class ClarificationOrchestrator:
     def __init__(
         self,
@@ -84,7 +98,9 @@ class ClarificationOrchestrator:
         task_service: TaskService,
         clarification_generator: ClarificationGenerator,
         requirement_analyzer: RequirementAnalyzer,
+        web_search_client: WebSearchClient,
         llm_invoker: RetryingLLMInvoker,
+        operation_invoker: RetryingOperationInvoker[object],
         settings,
         on_requirement_completed: Callable[[str], Awaitable[None]] | None = None,
         clock: Callable[[], datetime] | None = None,
@@ -93,7 +109,9 @@ class ClarificationOrchestrator:
         self._task_service = task_service
         self._clarification_generator = clarification_generator
         self._requirement_analyzer = requirement_analyzer
+        self._web_search_client = web_search_client
         self._llm_invoker = llm_invoker
+        self._operation_invoker = operation_invoker
         self._settings = settings
         self._on_requirement_completed = on_requirement_completed
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -295,53 +313,20 @@ class ClarificationOrchestrator:
         task_id: str,
         initial_query: str,
     ) -> None:
-        prompt = build_natural_clarification_prompt(
-            initial_query=initial_query,
-            now=self._clock(),
-        )
-        invocation = LLMInvocation(
-            profile=build_stage_profile(
-                settings=self._settings,
-                stage="clarification_natural",
-            ),
-            prompt_bundle=prompt,
-        )
         logger.info("natural clarification starting", extra={"task_id": task_id})
-        try:
-            generation = await self._llm_invoker.invoke(
-                lambda: self._clarification_generator.generate_natural(invocation)
-            )
-        except RiskControlTriggered:
-            logger.error("clarification risk control triggered", extra={"task_id": task_id, "error_code": "risk_control_triggered"}, exc_info=True)
-            await self._fail_task(
-                task_id=task_id,
-                error_code="risk_control_triggered",
-                message="澄清阶段触发风控。",
-            )
-            return
-        except RetryableLLMError:
-            logger.error("clarification upstream error after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
-            await self._fail_task(
-                task_id=task_id,
-                error_code="upstream_service_error",
-                message="澄清生成失败且重试耗尽。",
-            )
+        generation = await self._run_clarification_loop(
+            task_id=task_id,
+            stage="clarification_natural",
+            prompt=build_natural_clarification_prompt(
+                initial_query=initial_query,
+                now=self._clock(),
+            ),
+            generator=self._clarification_generator.generate_natural,
+        )
+        if generation is None:
             return
         logger.info("natural clarification completed", extra={"task_id": task_id})
         await self._emit_deltas(task_id=task_id, event="clarification.delta", deltas=generation.deltas)
-        self._persist_llm_trace(
-            task_id=task_id,
-            stage="clarification_natural",
-            invocation=invocation,
-            parsed_text=generation.full_text,
-            reasoning_text=generation.reasoning_text,
-            tool_calls_json=list(generation.tool_calls) or None,
-            provider_finish_reason=generation.provider_finish_reason,
-            provider_usage_json=generation.provider_usage,
-            request_id=generation.request_id,
-            request_payload=generation.request_payload,
-            response_payload=generation.response_payload,
-        )
 
         runtime = self._runtimes.setdefault(task_id, ClarificationRuntime())
         runtime.clarification_output = generation.full_text
@@ -370,53 +355,20 @@ class ClarificationOrchestrator:
         task_id: str,
         initial_query: str,
     ) -> None:
-        prompt = build_options_clarification_prompt(
-            initial_query=initial_query,
-            now=self._clock(),
-        )
-        invocation = LLMInvocation(
-            profile=build_stage_profile(
-                settings=self._settings,
-                stage="clarification_options",
-            ),
-            prompt_bundle=prompt,
-        )
         logger.info("options clarification starting", extra={"task_id": task_id})
-        try:
-            generation = await self._llm_invoker.invoke(
-                lambda: self._clarification_generator.generate_options(invocation)
-            )
-        except RiskControlTriggered:
-            logger.error("clarification risk control triggered", extra={"task_id": task_id, "error_code": "risk_control_triggered"}, exc_info=True)
-            await self._fail_task(
-                task_id=task_id,
-                error_code="risk_control_triggered",
-                message="澄清阶段触发风控。",
-            )
-            return
-        except RetryableLLMError:
-            logger.error("clarification upstream error after retries", extra={"task_id": task_id, "error_code": "upstream_service_error"}, exc_info=True)
-            await self._fail_task(
-                task_id=task_id,
-                error_code="upstream_service_error",
-                message="澄清生成失败且重试耗尽。",
-            )
+        generation = await self._run_clarification_loop(
+            task_id=task_id,
+            stage="clarification_options",
+            prompt=build_options_clarification_prompt(
+                initial_query=initial_query,
+                now=self._clock(),
+            ),
+            generator=self._clarification_generator.generate_options,
+        )
+        if generation is None:
             return
         logger.info("options clarification completed", extra={"task_id": task_id})
         await self._emit_deltas(task_id=task_id, event="clarification.delta", deltas=generation.deltas)
-        self._persist_llm_trace(
-            task_id=task_id,
-            stage="clarification_options",
-            invocation=invocation,
-            parsed_text=generation.full_text,
-            reasoning_text=generation.reasoning_text,
-            tool_calls_json=list(generation.tool_calls) or None,
-            provider_finish_reason=generation.provider_finish_reason,
-            provider_usage_json=generation.provider_usage,
-            request_id=generation.request_id,
-            request_payload=generation.request_payload,
-            response_payload=generation.response_payload,
-        )
 
         parser = ClarificationOptionsParser()
         try:
@@ -476,6 +428,210 @@ class ClarificationOrchestrator:
                 },
             )
             session.commit()
+
+    async def _run_clarification_loop(
+        self,
+        *,
+        task_id: str,
+        stage: str,
+        prompt: PromptBundle,
+        generator: Callable[[LLMInvocation], Awaitable[TextGeneration]],
+    ) -> TextGeneration | None:
+        transcript: tuple[PromptMessage, ...] = ()
+        search_calls_used = 0
+        max_rounds = 3
+
+        for _ in range(max_rounds):
+            invocation = LLMInvocation(
+                profile=build_stage_profile(
+                    settings=self._settings,
+                    stage=stage,
+                ),
+                prompt_bundle=PromptBundle(
+                    system_prompt=prompt.system_prompt,
+                    user_prompt=prompt.user_prompt,
+                    transcript=transcript,
+                ),
+                tool_schemas=(build_web_search_tool_schema(),),
+            )
+            try:
+                generation = await self._llm_invoker.invoke(
+                    lambda: generator(invocation)
+                )
+            except RiskControlTriggered:
+                logger.error(
+                    "clarification risk control triggered",
+                    extra={"task_id": task_id, "error_code": "risk_control_triggered"},
+                    exc_info=True,
+                )
+                await self._fail_task(
+                    task_id=task_id,
+                    error_code="risk_control_triggered",
+                    message="澄清阶段触发风控。",
+                )
+                return None
+            except RetryableLLMError:
+                logger.error(
+                    "clarification upstream error after retries",
+                    extra={"task_id": task_id, "error_code": "upstream_service_error"},
+                    exc_info=True,
+                )
+                await self._fail_task(
+                    task_id=task_id,
+                    error_code="upstream_service_error",
+                    message="澄清生成失败且重试耗尽。",
+                )
+                return None
+
+            self._persist_llm_trace(
+                task_id=task_id,
+                stage=stage,
+                invocation=invocation,
+                parsed_text=generation.full_text,
+                reasoning_text=generation.reasoning_text,
+                tool_calls_json=list(generation.tool_calls) or None,
+                provider_finish_reason=generation.provider_finish_reason,
+                provider_usage_json=generation.provider_usage,
+                request_id=generation.request_id,
+                request_payload=generation.request_payload,
+                response_payload=generation.response_payload,
+            )
+
+            if not generation.tool_calls:
+                return generation
+
+            transcript += (
+                PromptMessage(
+                    role="assistant",
+                    content=generation.full_text,
+                    tool_calls=_clarification_tool_call_payloads(generation.tool_calls),
+                ),
+            )
+            tool_message, executed_search = await self._build_clarification_search_tool_message(
+                task_id=task_id,
+                raw_tool_calls=generation.tool_calls,
+                search_calls_used=search_calls_used,
+            )
+            if executed_search:
+                search_calls_used += 1
+            transcript += (tool_message,)
+
+        await self._fail_task(
+            task_id=task_id,
+            error_code="clarification_invalid_output",
+            message="澄清生成未返回最终内容。",
+        )
+        return None
+
+    async def _build_clarification_search_tool_message(
+        self,
+        *,
+        task_id: str,
+        raw_tool_calls: tuple[dict[str, object], ...],
+        search_calls_used: int,
+    ) -> tuple[PromptMessage, bool]:
+        parsed_calls = [
+            parsed
+            for parsed in (
+                self._parse_clarification_search_tool_call(tool_call)
+                for tool_call in raw_tool_calls
+            )
+            if parsed is not None
+        ]
+        first_tool_call_id = str(raw_tool_calls[0].get("id") or "") if raw_tool_calls else ""
+
+        if search_calls_used >= 1 or len(raw_tool_calls) != 1 or len(parsed_calls) != 1:
+            selected = parsed_calls[0] if parsed_calls else None
+            payload = build_web_search_tool_payload(
+                None,
+                search_query="" if selected is None else selected.search_query,
+                search_recency_filter=(
+                    "noLimit" if selected is None else selected.search_recency_filter
+                ),
+                error_code=(
+                    "tool_call_limit_exceeded"
+                    if search_calls_used >= 1 or len(raw_tool_calls) > 1 or len(parsed_calls) > 1
+                    else "invalid_tool_arguments"
+                ),
+            )
+            return (
+                PromptMessage(
+                    role="tool",
+                    name="web_search",
+                    tool_call_id=(
+                        first_tool_call_id
+                        or (selected.tool_call_id if selected is not None else None)
+                    ),
+                    content=json.dumps(payload, ensure_ascii=False, indent=2),
+                ),
+                False,
+            )
+
+        search_call = parsed_calls[0]
+        try:
+            search_response = await self._operation_invoker.invoke(
+                lambda: self._web_search_client.search(
+                    search_call.search_query,
+                    search_call.search_recency_filter,
+                )
+            )
+            error_code = None
+        except RiskControlTriggered:
+            logger.warning(
+                "clarification web_search risk control triggered",
+                extra={"task_id": task_id, "tool_call_id": search_call.tool_call_id},
+                exc_info=True,
+            )
+            search_response = None
+            error_code = "risk_control_triggered"
+        except RetryableOperationError:
+            logger.warning(
+                "clarification web_search retry exhausted",
+                extra={"task_id": task_id, "tool_call_id": search_call.tool_call_id},
+                exc_info=True,
+            )
+            search_response = None
+            error_code = "retry_exhausted"
+
+        payload = build_web_search_tool_payload(
+            search_response,
+            search_query=search_call.search_query,
+            search_recency_filter=search_call.search_recency_filter,
+            error_code=error_code,
+        )
+        return (
+            PromptMessage(
+                role="tool",
+                name="web_search",
+                tool_call_id=search_call.tool_call_id,
+                content=json.dumps(payload, ensure_ascii=False, indent=2),
+            ),
+            True,
+        )
+
+    @staticmethod
+    def _parse_clarification_search_tool_call(
+        tool_call: dict[str, object],
+    ) -> ClarificationSearchToolCall | None:
+        if str(tool_call.get("name") or "").strip() != "web_search":
+            return None
+        try:
+            args = json.loads(str(tool_call.get("arguments") or "{}"))
+        except (json.JSONDecodeError, TypeError):
+            return None
+        if not isinstance(args, dict):
+            return None
+        search_query = str(args.get("search_query") or "").strip()
+        if not search_query:
+            return None
+        return ClarificationSearchToolCall(
+            tool_call_id=str(tool_call.get("id") or ""),
+            search_query=search_query,
+            search_recency_filter=str(
+                args.get("search_recency_filter") or "noLimit"
+            ).strip()
+            or "noLimit",
+        )
 
     async def _run_requirement_analysis(
         self,
@@ -681,3 +837,19 @@ class ClarificationOrchestrator:
                 message=message,
             )
             session.commit()
+
+
+def _clarification_tool_call_payloads(
+    raw_tool_calls: tuple[dict[str, object], ...],
+) -> tuple[dict[str, object], ...]:
+    return tuple(
+        {
+            "id": str(tool_call.get("id") or ""),
+            "type": "function",
+            "function": {
+                "name": str(tool_call.get("name") or ""),
+                "arguments": str(tool_call.get("arguments") or "{}"),
+            },
+        }
+        for tool_call in raw_tool_calls
+    )

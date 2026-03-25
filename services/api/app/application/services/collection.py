@@ -21,6 +21,7 @@ from app.application.dto.research import (
     CollectorToolCall,
     PlannerInvocation,
     SummaryInvocation,
+    build_web_search_tool_payload,
 )
 from app.application.invocation_contracts import (
     build_collect_agent_tool_schema,
@@ -872,23 +873,12 @@ class CollectionOrchestrator:
             },
         )
 
-        payload: dict[str, object] = {
-            "success": search_response is not None,
-            "search_query": search_query,
-            "search_recency_filter": search_recency_filter,
-            "results": []
-            if search_response is None
-            else [
-                {
-                    "title": result.title,
-                    "link": result.link,
-                    "snippet": result.snippet,
-                }
-                for result in search_response.results
-            ],
-        }
-        if error_code is not None:
-            payload["error_code"] = error_code
+        payload = build_web_search_tool_payload(
+            search_response,
+            search_query=search_query,
+            search_recency_filter=search_recency_filter,
+            error_code=error_code,
+        )
         return (
             PromptMessage(
                 role="tool",

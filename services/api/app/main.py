@@ -190,7 +190,9 @@ def create_app(
         or provider_runtime.clarification_generator,
         requirement_analyzer=requirement_analyzer
         or provider_runtime.requirement_analyzer,
+        web_search_client=web_search_client or provider_runtime.web_search_client,
         llm_invoker=llm_invoker,
+        operation_invoker=operation_invoker,
         settings=resolved_settings,
         on_requirement_completed=lambda task_id: collection_orchestrator.ensure_started(
             task_id=task_id

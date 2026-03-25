@@ -675,6 +675,7 @@ async def test_web_search_uses_fixed_provider_contract_fields() -> None:
                         "title": "智谱 AI 搜索进展",
                         "link": "https://example.com/news",
                         "content": "发布了新的联网搜索能力。",
+                        "publish_date": "2025-06-10",
                         "icon": "https://example.com/icon.png",
                         "media": "example",
                     }
@@ -694,6 +695,7 @@ async def test_web_search_uses_fixed_provider_contract_fields() -> None:
     assert result.query == "智谱 AI 搜索"
     assert result.recency_filter == "noLimit"
     assert result.results[0].title == "智谱 AI 搜索进展"
+    assert result.results[0].publish_date == "2025-06-10"
 
 
 @pytest.mark.asyncio
