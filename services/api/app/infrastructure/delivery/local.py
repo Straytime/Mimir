@@ -3,6 +3,7 @@ from html import escape
 from io import BytesIO
 import logging
 from pathlib import Path
+import re
 import tempfile
 from tempfile import TemporaryDirectory
 from urllib.parse import urlparse
@@ -264,6 +265,15 @@ def _pdf_styles() -> dict[str, ParagraphStyle]:
             firstLineIndent=-10,
             spaceAfter=6,
         ),
+        "footnote": ParagraphStyle(
+            "MimirPdfFootnote",
+            parent=stylesheet["BodyText"],
+            fontName=_PDF_FONT_NAME,
+            fontSize=9.5,
+            leading=14,
+            leftIndent=10,
+            spaceAfter=5,
+        ),
     }
 
 
@@ -308,6 +318,8 @@ def _build_pdf_story(*, html: str) -> list:
 
 
 def _render_html_block(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
+    if node.name == "div" and "footnote" in (node.get("class") or []):
+        return _render_footnote_block(node=node, styles=styles)
     if node.name == "h1":
         return [Paragraph(escape(node.get_text(" ", strip=True)), styles["title"])]
     if node.name == "h2":
@@ -319,23 +331,23 @@ def _render_html_block(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
     if node.name in {"ul", "ol"}:
         return _render_list(node=node, styles=styles)
     if node.name == "blockquote":
-        text = node.get_text(" ", strip=True)
-        if not text:
+        markup = _render_inline_markup(node)
+        if not markup:
             return []
-        return [Paragraph(escape(text), styles["body"]), _block_spacer()]
+        return [Paragraph(markup, styles["body"]), _block_spacer()]
     if node.name == "hr":
         return [_block_spacer()]
-    text = node.get_text(" ", strip=True)
-    if not text:
+    markup = _render_inline_markup(node)
+    if not markup:
         return []
-    return [Paragraph(escape(text), styles["body"]), _block_spacer()]
+    return [Paragraph(markup, styles["body"]), _block_spacer()]
 
 
 def _render_paragraph_like(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
     story: list = []
-    text = node.get_text(" ", strip=True)
-    if text:
-        story.append(Paragraph(escape(text), styles["body"]))
+    markup = _render_inline_markup(node)
+    if markup:
+        story.append(Paragraph(markup, styles["body"]))
     for image in node.find_all("img"):
         flowable = _build_image_flowable(src=image.get("src"))
         if flowable is not None:
@@ -350,9 +362,9 @@ def _render_list(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
     ordered = node.name == "ol"
     for index, item in enumerate(node.find_all("li", recursive=False), start=1):
         prefix = f"{index}. " if ordered else "• "
-        text = item.get_text(" ", strip=True)
-        if text:
-            story.append(Paragraph(escape(prefix + text), styles["bullet"]))
+        markup = _render_inline_markup(item)
+        if markup:
+            story.append(Paragraph(f"{escape(prefix)}{markup}", styles["bullet"]))
         for image in item.find_all("img"):
             flowable = _build_image_flowable(src=image.get("src"))
             if flowable is not None:
@@ -360,6 +372,100 @@ def _render_list(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
     if story:
         story.append(_block_spacer())
     return story
+
+
+def _render_footnote_block(*, node: Tag, styles: dict[str, ParagraphStyle]) -> list:
+    story: list = []
+    footnotes = node.select("ol > li")
+    for index, item in enumerate(footnotes, start=1):
+        label = _extract_footnote_label(item=item, fallback_index=index)
+        markup = _render_inline_markup(item)
+        if not markup:
+            continue
+        story.append(Paragraph(f"[{escape(label)}] {markup}", styles["footnote"]))
+    if story:
+        story.append(_block_spacer())
+    return story
+
+
+def _extract_footnote_label(*, item: Tag, fallback_index: int) -> str:
+    item_id = item.get("id")
+    if item_id and item_id.startswith("fn:"):
+        suffix = item_id.split("fn:", 1)[1].strip()
+        if suffix:
+            return suffix
+    return str(fallback_index)
+
+
+def _render_inline_markup(node: Tag) -> str:
+    rendered = "".join(_render_inline_node(child) for child in node.children)
+    return _normalize_inline_markup(rendered)
+
+
+def _render_inline_node(node: Tag | NavigableString) -> str:
+    if isinstance(node, NavigableString):
+        return escape(str(node).replace("\xa0", " "))
+    if not isinstance(node, Tag):
+        return ""
+    if node.name == "img":
+        return ""
+    if node.name == "br":
+        return "<br/>"
+    if node.name == "sup":
+        if any(
+            isinstance(child, Tag) and "footnote-ref" in (child.get("class") or [])
+            for child in node.children
+        ):
+            return "".join(_render_inline_node(child) for child in node.children)
+        content = _normalize_inline_markup(
+            "".join(_render_inline_node(child) for child in node.children)
+        )
+        if not content:
+            return ""
+        return f"<super>{content}</super>"
+    if node.name == "a":
+        classes = set(node.get("class") or [])
+        if "footnote-backref" in classes:
+            return ""
+        if "footnote-ref" in classes:
+            number = escape(node.get_text("", strip=True))
+            return f"<super>[{number}]</super>" if number else ""
+
+        content = _normalize_inline_markup(
+            "".join(_render_inline_node(child) for child in node.children)
+        )
+        if not content:
+            return ""
+
+        href = (node.get("href") or "").strip()
+        if not href or href.startswith("#"):
+            return content
+        return f'<link href="{escape(href, quote=True)}">{content}</link>'
+    if node.name in {"strong", "b"}:
+        content = _normalize_inline_markup(
+            "".join(_render_inline_node(child) for child in node.children)
+        )
+        return f"<b>{content}</b>" if content else ""
+    if node.name in {"em", "i"}:
+        content = _normalize_inline_markup(
+            "".join(_render_inline_node(child) for child in node.children)
+        )
+        return f"<i>{content}</i>" if content else ""
+    if node.name == "code":
+        content = _normalize_inline_markup(
+            "".join(_render_inline_node(child) for child in node.children)
+        )
+        return f'<font name="Courier">{content}</font>' if content else ""
+    return "".join(_render_inline_node(child) for child in node.children)
+
+
+def _normalize_inline_markup(markup: str) -> str:
+    if not markup:
+        return ""
+    normalized = markup.replace("\r", " ").replace("\n", " ").replace("\xa0", " ")
+    normalized = re.sub(r"[ \t\f\v]+", " ", normalized)
+    normalized = re.sub(r"\s*<br/>\s*", "<br/>", normalized)
+    return normalized.strip()
 
 
 def _build_image_flowable(*, src: str | None):

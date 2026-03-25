@@ -832,6 +832,7 @@ DoD：
 - `build_pdf()` 产物必须可被真实 PDF 解析器打开并抽取基本正文
 - `report.pdf` 下载接口返回的二进制必须是可解析 PDF，而不是伪造 header
 - 含 `mimir://artifact/{artifact_id}` 图片引用时，PDF 导出必须能消费图片资源并完成渲染，不得因导出器本身报错
+- 含标准 footnotes `[^n]` / `[^n]: [title](url)` 时，PDF 导出必须保留正文脚注编号和文末脚注列表，至少保证来源文本与顺序正确
 - PDF renderer 的 block spacer 不能复用同一个 `Spacer` flowable；多段正文、多列表、多图片场景下不得触发 `LayoutError`
 - 研究输出准备 prompt invariant tests
 - 研究输出撰写 prompt invariant tests

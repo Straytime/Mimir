@@ -1448,6 +1448,7 @@ SSE 观察流与客户端心跳：
 - 由后端负责 `markdown -> HTML -> PDF` 渲染
 - v1 推荐在 Railway 后端内实现 `ReportExportService`
 - PDF 导出层可以把正文中的 `mimir://artifact/{artifact_id}` 临时改写为渲染器可消费的图片资源，但该改写只发生在导出过程中，不回写数据库中的正文 markdown
+- v1 PDF 导出应对 writer 当前使用的 GitHub Flavored Markdown / 标准 footnotes 提供可用支持；正文脚注引用与文末脚注列表不得在 HTML -> PDF 渲染层丢失语义
 - `report.pdf` 必须是真实、可被标准 PDF 解析器打开的 PDF 二进制；不能继续使用伪 PDF header + markdown bytes 的占位方案
 - 若使用 ReportLab，story 中的 flowable 不得复用同一个 `Spacer` 等实例；块级间距必须按使用点生成新实例，避免确定性 `LayoutError`
 - PDF 与 markdown zip 都属于短期制品，纳入统一 Artifact 清理策略

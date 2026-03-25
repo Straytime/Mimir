@@ -55,6 +55,15 @@ def _build_multi_block_markdown() -> str:
     return "\n\n".join(sections) + "\n"
 
 
+def _build_footnote_markdown() -> str:
+    return (
+        "# 脚注 PDF 导出验证\n\n"
+        "核心结论[^1] 与扩展判断[^2] 需要保留引用关系。\n\n"
+        "[^1]: [第一来源](https://example.com/source-1)\n"
+        "[^2]: [第二来源](https://example.com/source-2)\n"
+    )
+
+
 @pytest.mark.asyncio
 async def test_build_pdf_returns_parseable_pdf_with_readable_text() -> None:
     pdf_bytes = await LocalReportExportService().build_pdf(
@@ -89,6 +98,23 @@ async def test_build_pdf_consumes_canonical_artifact_refs_without_renderer_error
 
     assert "Visual Report" in _extract_pdf_text(pdf_bytes)
     assert _count_pdf_images(pdf_bytes) >= 1
+
+
+@pytest.mark.asyncio
+async def test_build_pdf_renders_gfm_footnotes_with_references_and_sources() -> None:
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown=_build_footnote_markdown(),
+        artifacts=(),
+    )
+
+    pdf_text = _extract_pdf_text(pdf_bytes)
+
+    assert "脚注 PDF 导出验证" in pdf_text
+    assert "核心结论[1]" in pdf_text
+    assert "扩展判断[2]" in pdf_text
+    assert "[1] 第一来源" in pdf_text
+    assert "[2] 第二来源" in pdf_text
+    assert pdf_text.index("[1] 第一来源") < pdf_text.index("[2] 第二来源")
 
 
 def test_build_pdf_story_uses_distinct_spacer_instances_per_block() -> None:
