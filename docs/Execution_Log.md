@@ -3316,6 +3316,44 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 无当前 blocker
   - 本次没有改 prompt 内容策略，只改源码书写形态；若后续要改 prompt 语义，应另开任务包
+
+## R1-053 GFM Footnote-Aware PDF Rendering
+
+- 日期时间: 2026-03-25 12:00:00 CST (+0800)
+- 任务包编号: R1-053
+- session 标识: `codex/r1-053-gfm-footnote-aware-pdf-rendering`
+- 目标摘要:
+  - 让 `report.pdf` 对 writer 当前使用的标准 footnotes 语法 `[^n]` / `[^n]: [title](url)` 提供可用支持
+  - 在 PDF 中保留正文脚注角标引用，并正确输出文末脚注列表与来源链接文本
+  - 保持现有下载端点与 access_token 契约不变，只修 HTML -> PDF 渲染层
+- 修改文件:
+  - `docs/Architecture.md`
+  - `docs/Backend_TDD_Plan.md`
+  - `docs/Execution_Log.md`
+  - `services/api/app/infrastructure/delivery/local.py`
+  - `services/api/tests/unit/infrastructure/test_local_report_export.py`
+  - `services/api/tests/integration/delivery/test_report_delivery.py`
+- 测试 / 验证:
+  - 红测:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_local_report_export.py tests/integration/delivery/test_report_delivery.py -k 'footnote'`
+    - 初次结果: `2 failed`
+    - 失败点:
+      - 正文脚注角标在 PDF 文本里被压平成普通数字，未保留可读引用关系
+      - 文末脚注块被 `get_text()` 压成连续的“来源 ↩”文本，丢失列表与 backref 过滤
+  - 修补后:
+    - 同一命令重跑
+    - 结果: `2 passed`
+  - 回归:
+    - `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_local_report_export.py tests/integration/delivery/test_report_delivery.py tests/contract/rest/test_delivery_events.py tests/contract/rest/test_downloads.py`
+    - 结果: `33 passed`
+- 验收结论:
+  - PDF renderer 现在对 `sup > a.footnote-ref`、`div.footnote > ol > li` 与普通 `a[href]` 做了专门处理
+  - 正文中的脚注引用现在会以可读的 `[n]` 角标形式保留在 PDF 文本中
+  - 文末脚注块会渲染为独立的 `[n] 来源` 列表；backref 箭头不再混入正文，来源链接文本会被保留
+  - 标题、列表、图片、多页排版、markdown zip、delivery events 与 downloads 契约未回退
+- blocker / 风险:
+  - 无当前 blocker
+  - 本次只补了 footnotes / links / 基本 inline 语义；并未引入完整浏览器级 HTML/CSS 渲染，因此其他更复杂 GFM 扩展仍应单独评估
 ## 2026-03-24 R1-052 Prompt Update Test Alignment
 
 - 背景：当前分支人工更新了 clarification / planner / summary / writer prompt 文案，以及 `collect_agent` 工具描述；实现层无结构性问题，但 prompt 语义锁测试仍停留在旧文案。

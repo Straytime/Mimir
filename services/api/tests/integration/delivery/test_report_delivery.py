@@ -773,6 +773,50 @@ async def test_writer_creates_sandbox_lazily_reuses_it_and_destroys_it_on_delive
 
 
 @pytest.mark.asyncio
+async def test_delivery_pdf_keeps_standard_footnotes_readable(
+    make_stage6_client,
+) -> None:
+    writer_agent = ScriptedWriterAgent(
+        WriterDecision(
+            text=(
+                "# 中国 AI 搜索产品竞争格局研究\n\n"
+                "核心结论[^1] 与扩展判断[^2] 需要保留引用关系。\n\n"
+                "[^1]: [第一来源](https://example.com/source-1)\n"
+                "[^2]: [第二来源](https://example.com/source-2)\n"
+            ),
+            tool_calls=(),
+        )
+    )
+    client = await make_stage6_client(
+        outline_agent=ScriptedOutlineAgent(build_outline_decision()),
+        writer_agent=writer_agent,
+        sandbox_client=ScriptedSandboxClient(
+            scenario=SandboxScenario(),
+            artifacts_by_code={},
+        ),
+    )
+
+    async with client:
+        create_body, (stream_context, response, lines) = await _start_delivery_flow(client)
+        await read_until_event(lines, {"task.awaiting_feedback"}, timeout=2.0)
+        task_detail_response = await client.get(
+            f"/api/v1/tasks/{create_body['task_id']}",
+            headers={"Authorization": f"Bearer {create_body['task_token']}"},
+        )
+        assert task_detail_response.status_code == 200
+
+        pdf_response = await client.get(task_detail_response.json()["delivery"]["pdf_url"])
+        await _close_stream(stream_context, response)
+
+    assert pdf_response.status_code == 200
+    pdf_text = _extract_pdf_text(pdf_response.content)
+    assert "核心结论[1]" in pdf_text
+    assert "扩展判断[2]" in pdf_text
+    assert "[1] 第一来源" in pdf_text
+    assert "[2] 第二来源" in pdf_text
+
+
+@pytest.mark.asyncio
 async def test_writer_collects_tmp_png_artifacts_into_delivery(
     make_stage6_client,
     db_session: Session,
