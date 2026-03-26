@@ -22,6 +22,7 @@ const TERMINAL_CONTENT = {
 
 export function TerminalBanner() {
   const terminalReason = useResearchSessionStore((state) => state.ui.terminalReason);
+  const reset = useResearchSessionStore((state) => state.reset);
 
   if (terminalReason === null) {
     return null;
@@ -33,6 +34,13 @@ export function TerminalBanner() {
     <section className={`px-5 py-4 text-sm ${content.tone}`}>
       <h2 className="text-base font-semibold">{content.title}</h2>
       <p className="mt-2 leading-6">{content.detail}</p>
+      <button
+        className="mt-4 bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+        onClick={reset}
+        type="button"
+      >
+        开始新研究
+      </button>
     </section>
   );
 }

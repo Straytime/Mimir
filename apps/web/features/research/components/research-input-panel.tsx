@@ -83,7 +83,11 @@ export function ResearchInputPanel() {
           className="bg-surface-container-high px-4 py-3 text-sm text-[#FFB86C]"
           role="alert"
         >
-          <p>{createTaskUi.submitError}</p>
+          <p>
+            {createTaskUi.errorCode === "resource_busy"
+              ? "当前已有一个研究任务正在进行中。请等待其完成或终止后再创建新任务。"
+              : createTaskUi.submitError}
+          </p>
           {createTaskUi.nextAvailableAt !== null ? (
             <p className="mt-1">下次可创建时间：{createTaskUi.nextAvailableAt}</p>
           ) : null}
