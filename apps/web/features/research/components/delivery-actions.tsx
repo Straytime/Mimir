@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useDeliveryRefresh } from "../hooks/use-delivery-refresh";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
@@ -9,6 +9,48 @@ import {
   selectCanDownloadPdf,
 } from "../store/selectors";
 import { fmt02 } from "../utils/format";
+
+type CopyState = "idle" | "copied" | "error";
+
+function useCopyMarkdown() {
+  const reportMarkdown = useResearchSessionStore(
+    (state) => state.stream.reportMarkdown,
+  );
+  const [copyState, setCopyState] = useState<CopyState>("idle");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const copyMarkdown = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(reportMarkdown);
+      setCopyState("copied");
+    } catch {
+      setCopyState("error");
+    }
+
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+    }
+
+    timerRef.current = setTimeout(() => {
+      setCopyState("idle");
+      timerRef.current = null;
+    }, 2_000);
+  }, [reportMarkdown]);
+
+  return { copyState, copyMarkdown };
+}
+
+function getCopyButtonLabel(copyState: CopyState) {
+  if (copyState === "copied") {
+    return "已复制 ✓";
+  }
+
+  if (copyState === "error") {
+    return "复制失败";
+  }
+
+  return "复制 Markdown";
+}
 
 type DownloadFormat = "markdown" | "pdf";
 
@@ -48,6 +90,7 @@ export function DeliveryActions() {
   const canDownloadMarkdown = useResearchSessionStore(selectCanDownloadMarkdown);
   const canDownloadPdf = useResearchSessionStore(selectCanDownloadPdf);
   const refreshDelivery = useDeliveryRefresh();
+  const { copyState, copyMarkdown } = useCopyMarkdown();
 
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
@@ -134,7 +177,17 @@ export function DeliveryActions() {
         </span>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <button
+          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
+          disabled={!canDownloadMarkdown}
+          onClick={() => {
+            void copyMarkdown();
+          }}
+          type="button"
+        >
+          {getCopyButtonLabel(copyState)}
+        </button>
         <button
           className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
           disabled={
