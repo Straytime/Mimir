@@ -196,7 +196,7 @@ export function TaskArtifactImage({
           当前图片链接不可用。请刷新交付链接后重试。
         </p>
         <button
-          className="mt-4 border border-outline-variant/15 bg-transparent px-4 py-2 text-sm font-semibold text-primary transition hover:border-primary disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
+          className="mt-4 border border-outline-variant/15 bg-transparent px-4 py-2 text-sm font-semibold text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
           disabled={refreshingDelivery}
           onClick={() => {
             setRetryNonce((currentNonce) => currentNonce + 1);

@@ -60,7 +60,7 @@ export function FeedbackComposer() {
           <textarea
             aria-describedby="feedback-help feedback-counter"
             aria-invalid={feedbackFieldError !== null}
-            className="min-h-32 w-full border-0 bg-surface-container-lowest px-4 py-4 text-base leading-7 text-primary placeholder:text-tertiary outline-none transition focus:bg-surface-container-high focus:shadow-[inset_2px_0_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:opacity-70"
+            className="min-h-32 w-full border-0 bg-surface-container-lowest px-4 py-4 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint transition focus:bg-surface-container-high focus:shadow-[inset_2px_0_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:opacity-70"
             disabled={isDisabled}
             id="feedback-text"
             maxLength={MAX_FEEDBACK_LENGTH}
@@ -103,7 +103,7 @@ export function FeedbackComposer() {
             仅在交付后的反馈阶段开放，终态事件到达后会自动禁用。
           </p>
           <button
-            className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
+            className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
             disabled={isDisabled || feedbackDraft.trim().length === 0}
             type="submit"
           >

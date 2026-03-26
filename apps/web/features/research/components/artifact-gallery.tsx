@@ -31,7 +31,7 @@ export function ArtifactGallery() {
           <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             Artifact Gallery
           </p>
-          <h3 className="mt-3 text-xl font-semibold text-primary">配图制品</h3>
+          <h3 className="mt-sp-2 text-xl font-semibold text-primary">配图制品</h3>
         </div>
         <span className="bg-surface-container-high px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-secondary">
           {fmt02(artifacts.length)} 张

@@ -110,17 +110,17 @@ export function ResearchWorkspaceShell() {
       : "正在分析需求：";
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-sp-10">
       <SessionStatusBar />
       <TerminalBanner />
 
       {snapshot.phase === "clarifying" ? (
         <>
-          <ClarificationActionPanel compact={false} />
-          <ClarificationDetailPanel compact={false} />
+          <ClarificationActionPanel />
+          <ClarificationDetailPanel />
         </>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-sp-10">
           <div className="bg-surface-container-high px-5 py-5">
             <h3 className="flex items-center gap-3 text-lg font-narrative font-semibold text-primary">
               {snapshot.phase !== "delivered" ? <PulseIndicator /> : null}

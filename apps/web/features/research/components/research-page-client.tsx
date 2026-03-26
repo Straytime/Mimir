@@ -20,7 +20,7 @@ function ResearchPageContent() {
   const isActiveWorkspace = taskId !== null && snapshot !== null;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-6 px-6 py-16">
+    <main className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 px-sp-8 py-16">
       <div className="space-y-4">
         <p className="text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-surface-tint">
           Mimir
@@ -33,7 +33,7 @@ function ResearchPageContent() {
       {isActiveWorkspace ? (
         <ResearchWorkspaceShell />
       ) : (
-        <section className="space-y-6">
+        <section className="space-y-sp-10">
           <ResearchInputPanel />
           <ResearchConfigPanel />
         </section>

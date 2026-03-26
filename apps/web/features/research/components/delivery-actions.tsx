@@ -128,7 +128,7 @@ export function DeliveryActions() {
       <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
         Delivery
       </p>
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+      <div className="mt-sp-2 flex flex-wrap items-center gap-3 text-sm">
         <span className="bg-surface-container-high px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-secondary">
           {fmt02(delivery?.artifact_count ?? 0)} 张配图
         </span>
@@ -136,7 +136,7 @@ export function DeliveryActions() {
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <button
-          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
+          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
           disabled={
             delivery === null ||
             refreshingDelivery ||
@@ -153,7 +153,7 @@ export function DeliveryActions() {
             : "下载 Markdown Zip"}
         </button>
         <button
-          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
+          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
           disabled={
             delivery === null ||
             refreshingDelivery ||

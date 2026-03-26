@@ -21,10 +21,10 @@ export function RequirementSummaryCard({
         </div>
       ) : (
         <>
-          <h3 className="mt-3 text-xl font-narrative font-semibold text-primary">
+          <h3 className="mt-sp-2 text-xl font-narrative font-semibold text-primary">
             {requirementDetail.research_goal}
           </h3>
-          <dl className="mt-4 space-y-3 text-sm leading-6 text-secondary">
+          <dl className="mt-4 space-y-sp-2 text-sm leading-6 text-secondary">
             <div>
               <dt className="font-ui font-medium text-tertiary">领域</dt>
               <dd className="font-narrative">{requirementDetail.domain}</dd>

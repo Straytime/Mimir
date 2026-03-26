@@ -132,7 +132,7 @@ export function ReportCanvas() {
           <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             Report Canvas
           </p>
-          <h3 className="mt-3 text-lg font-narrative font-semibold text-primary">
+          <h3 className="mt-sp-2 text-lg font-narrative font-semibold text-primary">
             第 {fmt02(currentRevision?.revision_number ?? snapshot.active_revision_number)} 轮报告
           </h3>
           <p className="mt-2 text-sm leading-6 text-secondary">
@@ -154,7 +154,7 @@ export function ReportCanvas() {
           <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             Outline
           </p>
-          <h4 className="mt-3 text-lg font-narrative font-semibold text-primary">
+          <h4 className="mt-sp-2 text-lg font-narrative font-semibold text-primary">
             {outline.title}
           </h4>
           <ol className="mt-4 space-y-3">
@@ -220,7 +220,7 @@ export function ReportCanvas() {
 
         {!autoScrollEnabled ? (
           <button
-            className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-lg transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)]"
+            className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
             onClick={scrollToBottom}
             type="button"
           >

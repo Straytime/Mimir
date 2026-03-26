@@ -56,7 +56,7 @@ export function ResearchInputPanel() {
         <textarea
           aria-describedby="initial-query-help initial-query-counter"
           aria-invalid={createTaskUi.initialQueryError !== null}
-          className="min-h-40 w-full border-0 bg-surface-container-lowest px-4 py-4 text-base leading-7 text-primary placeholder:text-tertiary outline-none transition focus:bg-surface-container-high focus:shadow-[inset_2px_0_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:opacity-70"
+          className="min-h-40 w-full border-0 bg-surface-container-lowest px-4 py-4 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint transition focus:bg-surface-container-high focus:shadow-[inset_2px_0_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:opacity-70"
           disabled={isSubmitting}
           id="initial-query"
           maxLength={MAX_QUERY_LENGTH}
@@ -98,7 +98,7 @@ export function ResearchInputPanel() {
           创建成功后将进入工作台，依次完成澄清与需求分析。
         </p>
         <button
-          className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
+          className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
           disabled={isSubmitting || !hasPrompt}
           type="submit"
         >

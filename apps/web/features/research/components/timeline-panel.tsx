@@ -94,7 +94,7 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
                 </div>
 
                 {item.detail ? (
-                  <p className="mt-3 whitespace-pre-line text-sm font-ui leading-6 text-secondary">
+                  <p className="mt-sp-2 whitespace-pre-line text-sm font-ui leading-6 text-secondary">
                     {item.detail}
                   </p>
                 ) : null}
