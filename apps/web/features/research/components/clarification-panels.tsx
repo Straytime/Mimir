@@ -189,7 +189,7 @@ export function ClarificationDetailPanel({
         </p>
       </div>
 
-      <div className="bg-surface-container-low px-4 py-4 text-sm leading-7 text-secondary">
+      <div className="bg-surface-container-low px-4 py-4 font-narrative text-sm leading-7 text-secondary">
         {clarificationText.length > 0
           ? clarificationText
           : "等待澄清追问流式输出。"}
@@ -198,7 +198,7 @@ export function ClarificationDetailPanel({
       {snapshot.clarification_mode === "options" && questionSet !== null ? (
         <div className="space-y-4">
           {remainingSeconds !== null ? (
-            <div className="bg-surface-container-high px-4 py-3 text-sm font-medium text-surface-tint">
+            <div className="bg-surface-container-high px-4 py-3 text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-surface-tint">
               剩余 {remainingSeconds} 秒
             </div>
           ) : null}
@@ -208,7 +208,7 @@ export function ClarificationDetailPanel({
               className="space-y-3 bg-surface-container-low px-4 py-4"
               key={question.question_id}
             >
-              <legend className="px-2 text-sm font-semibold text-primary">
+              <legend className="px-2 font-narrative text-sm font-semibold text-primary">
                 {question.question}
               </legend>
               <div className="space-y-2">
@@ -230,7 +230,7 @@ export function ClarificationDetailPanel({
                       type="radio"
                       value={option.option_id}
                     />
-                    <span className="text-sm text-primary">{option.label}</span>
+                    <span className="font-narrative text-sm text-primary">{option.label}</span>
                   </label>
                 ))}
               </div>
@@ -276,24 +276,24 @@ export function RequirementAnalysisPanel() {
 
       {requirementDetail !== null ? (
         <article className="bg-surface-container-low px-5 py-5">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
+          <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             需求摘要已生成
           </p>
-          <h3 className="mt-3 text-xl font-semibold text-primary">
+          <h3 className="mt-3 text-xl font-narrative font-semibold text-primary">
             {requirementDetail.research_goal}
           </h3>
           <dl className="mt-4 space-y-3 text-sm leading-6 text-secondary">
             <div>
-              <dt className="font-medium text-tertiary">领域</dt>
-              <dd>{requirementDetail.domain}</dd>
+              <dt className="font-ui font-medium text-tertiary">领域</dt>
+              <dd className="font-narrative">{requirementDetail.domain}</dd>
             </div>
             <div>
-              <dt className="font-medium text-tertiary">细化说明</dt>
-              <dd>{requirementDetail.requirement_details}</dd>
+              <dt className="font-ui font-medium text-tertiary">细化说明</dt>
+              <dd className="font-narrative">{requirementDetail.requirement_details}</dd>
             </div>
             <div>
-              <dt className="font-medium text-tertiary">输出格式</dt>
-              <dd>{requirementDetail.output_format}</dd>
+              <dt className="font-ui font-medium text-tertiary">输出格式</dt>
+              <dd className="font-narrative">{requirementDetail.output_format}</dd>
             </div>
           </dl>
         </article>

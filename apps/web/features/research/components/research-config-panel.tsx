@@ -18,7 +18,7 @@ export function ResearchConfigPanel() {
       className="space-y-3 bg-surface-container-low p-6"
       disabled={isDisabled}
     >
-      <legend className="px-2 text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
+      <legend className="px-2 text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
         研究配置
       </legend>
       <p className="text-sm leading-6 text-secondary">

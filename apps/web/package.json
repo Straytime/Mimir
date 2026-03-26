@@ -21,13 +21,14 @@
     "@mimir/contracts": "workspace:*",
     "next": "^15.3.0",
     "react": "^19.0.0",
-    "react-markdown": "^10.1.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
     "rehype-sanitize": "^6.0.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",
+    "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.6.1",

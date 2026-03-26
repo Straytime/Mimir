@@ -52,7 +52,7 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
       className="bg-surface-container-low p-6"
       role="region"
     >
-      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
+      <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
         Live Timeline
       </p>
 
@@ -77,7 +77,7 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
                       {item.label}
                     </p>
                     {item.collectTarget && item.kind !== "collect" ? (
-                      <p className="text-xs uppercase tracking-[0.12em] text-tertiary">
+                      <p className="text-[11px] font-ui uppercase tracking-[0.15em] text-tertiary">
                         Collect Target
                       </p>
                     ) : null}
@@ -88,7 +88,7 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
                     ) : null}
                   </div>
                   <span
-                    className={`px-3 py-1 text-[11px] font-medium uppercase tracking-wider ${getStatusClassName(item.status)}`}
+                    className={`px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] ${getStatusClassName(item.status)}`}
                   >
                     {getStatusLabel(item.status)}
                   </span>

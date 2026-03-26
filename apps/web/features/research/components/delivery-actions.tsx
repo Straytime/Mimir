@@ -8,6 +8,7 @@ import {
   selectCanDownloadMarkdown,
   selectCanDownloadPdf,
 } from "../store/selectors";
+import { fmt02 } from "../utils/format";
 
 type DownloadFormat = "markdown" | "pdf";
 
@@ -124,12 +125,12 @@ export function DeliveryActions() {
       aria-label="交付操作"
       className="bg-surface-container-low p-6"
     >
-      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
+      <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
         Delivery
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-        <span className="bg-surface-container-high px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-secondary">
-          {delivery?.artifact_count ?? 0} 张配图
+        <span className="bg-surface-container-high px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-secondary">
+          {fmt02(delivery?.artifact_count ?? 0)} 张配图
         </span>
       </div>
 

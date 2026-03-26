@@ -11,7 +11,7 @@ export function RequirementSummaryCard({
 }: RequirementSummaryCardProps) {
   return (
     <article className="bg-surface-container-low px-5 py-5">
-      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
+      <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
         {requirementDetail === null ? "Requirement Summary" : "需求摘要已生成"}
       </p>
 
@@ -21,25 +21,25 @@ export function RequirementSummaryCard({
         </div>
       ) : (
         <>
-          <h3 className="mt-3 text-xl font-semibold text-primary">
+          <h3 className="mt-3 text-xl font-narrative font-semibold text-primary">
             {requirementDetail.research_goal}
           </h3>
           <dl className="mt-4 space-y-3 text-sm leading-6 text-secondary">
             <div>
-              <dt className="font-medium text-tertiary">领域</dt>
-              <dd>{requirementDetail.domain}</dd>
+              <dt className="font-ui font-medium text-tertiary">领域</dt>
+              <dd className="font-narrative">{requirementDetail.domain}</dd>
             </div>
             <div>
-              <dt className="font-medium text-tertiary">细化说明</dt>
-              <dd>{requirementDetail.requirement_details}</dd>
+              <dt className="font-ui font-medium text-tertiary">细化说明</dt>
+              <dd className="font-narrative">{requirementDetail.requirement_details}</dd>
             </div>
             <div>
-              <dt className="font-medium text-tertiary">输出格式</dt>
-              <dd>{requirementDetail.output_format}</dd>
+              <dt className="font-ui font-medium text-tertiary">输出格式</dt>
+              <dd className="font-narrative">{requirementDetail.output_format}</dd>
             </div>
             <div>
-              <dt className="font-medium text-tertiary">语言</dt>
-              <dd>{requirementDetail.language}</dd>
+              <dt className="font-ui font-medium text-tertiary">语言</dt>
+              <dd className="font-narrative">{requirementDetail.language}</dd>
             </div>
           </dl>
         </>

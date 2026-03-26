@@ -42,7 +42,7 @@ export function SessionStatusBar() {
   return (
     <section
       aria-label="会话状态"
-      className="sticky top-0 z-50 flex items-center justify-between gap-4 bg-surface/70 px-4 py-3 text-sm backdrop-blur-[20px]"
+      className="sticky top-0 z-50 flex items-center justify-between gap-4 bg-surface/70 px-4 py-3 font-ui text-sm backdrop-blur-[20px]"
       role="region"
     >
       <div className="flex flex-wrap items-center gap-3">

@@ -9,6 +9,7 @@ import type { ArtifactSummary } from "@/lib/contracts";
 
 import { useReportAutoScroll } from "../hooks/use-report-auto-scroll";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
+import { fmt02 } from "../utils/format";
 import { findLatestArtifactBySource } from "../utils/task-artifact";
 import { TaskArtifactImage } from "./task-artifact-image";
 
@@ -128,11 +129,11 @@ export function ReportCanvas() {
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
+          <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             Report Canvas
           </p>
-          <h3 className="mt-3 text-2xl font-semibold text-primary">
-            第 {currentRevision?.revision_number ?? snapshot.active_revision_number} 轮报告
+          <h3 className="mt-3 text-lg font-narrative font-semibold text-primary">
+            第 {fmt02(currentRevision?.revision_number ?? snapshot.active_revision_number)} 轮报告
           </h3>
           <p className="mt-2 text-sm leading-6 text-secondary">
             {getReportPhaseCopy(snapshot.phase)}
@@ -141,8 +142,8 @@ export function ReportCanvas() {
 
         {delivery ? (
           <div className="flex flex-wrap gap-2">
-            <span className="bg-surface-container-high px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-secondary">
-              {delivery.artifact_count} 张配图
+            <span className="bg-surface-container-high px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-secondary">
+              {fmt02(delivery.artifact_count)} 张配图
             </span>
           </div>
         ) : null}
@@ -150,19 +151,19 @@ export function ReportCanvas() {
 
       {outlineReady && outline ? (
         <div className="mt-6 bg-surface-container-low px-5 py-5">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-tertiary">
+          <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             Outline
           </p>
-          <h4 className="mt-3 text-lg font-semibold text-primary">
+          <h4 className="mt-3 text-lg font-narrative font-semibold text-primary">
             {outline.title}
           </h4>
           <ol className="mt-4 space-y-3">
             {outline.sections.map((section) => (
               <li key={section.section_id}>
-                <p className="text-sm font-semibold text-primary">
+                <p className="text-sm font-narrative font-semibold text-primary">
                   {section.title}
                 </p>
-                <p className="mt-1 text-sm leading-6 text-secondary">
+                <p className="mt-1 text-sm font-narrative leading-6 text-secondary">
                   {section.description}
                 </p>
               </li>
@@ -189,7 +190,7 @@ export function ReportCanvas() {
               </p>
             </div>
           ) : (
-            <div className="prose prose-invert max-w-none text-secondary">
+            <div className="prose prose-invert max-w-none font-narrative leading-[1.6] text-secondary">
               <ReactMarkdown
                 components={{
                   a: ({ children, href, ...props }) => (

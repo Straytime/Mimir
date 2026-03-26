@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import type { ArtifactSummary } from "@/lib/contracts";
 
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
+import { fmt02 } from "../utils/format";
 import { mergeArtifactsById } from "../utils/task-artifact";
 import { TaskArtifactImage } from "./task-artifact-image";
 
@@ -27,13 +28,13 @@ export function ArtifactGallery() {
     >
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
+          <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             Artifact Gallery
           </p>
           <h3 className="mt-3 text-xl font-semibold text-primary">配图制品</h3>
         </div>
-        <span className="bg-surface-container-high px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-secondary">
-          {artifacts.length} 张
+        <span className="bg-surface-container-high px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-secondary">
+          {fmt02(artifacts.length)} 张
         </span>
       </div>
 
@@ -59,7 +60,7 @@ export function ArtifactGallery() {
                 <p className="text-sm font-semibold text-primary">
                   {artifact.filename}
                 </p>
-                <p className="mt-1 text-xs uppercase tracking-[0.12em] text-tertiary">
+                <p className="mt-1 text-[11px] font-ui uppercase tracking-[0.15em] text-tertiary">
                   {artifact.mime_type}
                 </p>
               </div>

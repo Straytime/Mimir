@@ -121,7 +121,7 @@ export function ResearchWorkspaceShell() {
       ) : (
         <div className="space-y-5">
           <div className="bg-surface-container-high px-5 py-5">
-            <h3 className="text-xl font-semibold text-primary">
+            <h3 className="text-lg font-narrative font-semibold text-primary">
               {stageStatusCopy.title}
             </h3>
             <p className="mt-3 text-sm leading-7 text-secondary">

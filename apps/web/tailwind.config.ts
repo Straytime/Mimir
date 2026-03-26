@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import typography from "@tailwindcss/typography";
 
 const config: Config = {
   content: [
@@ -37,9 +38,16 @@ const config: Config = {
         "sp-8": "2.75rem",
         "sp-10": "3.5rem",
       },
+      typography: {
+        invert: {
+          css: {
+            fontFamily: "var(--font-narrative), Newsreader, serif",
+          },
+        },
+      },
     },
   },
-  plugins: [],
+  plugins: [typography],
 };
 
 export default config;

@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import { useFeedbackSubmit } from "../hooks/use-feedback-submit";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { selectCanSubmitFeedback } from "../store/selectors";
+import { fmt02 } from "../utils/format";
 
 const MAX_FEEDBACK_LENGTH = 1000;
 
@@ -39,7 +40,7 @@ export function FeedbackComposer() {
       role="region"
     >
       <div className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
+        <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
           Feedback
         </p>
         <h3 className="text-xl font-semibold text-primary">继续迭代当前任务</h3>
@@ -93,7 +94,7 @@ export function FeedbackComposer() {
 
         {revisionTransition.status !== "idle" ? (
           <p className="text-sm leading-6 text-secondary">
-            正在等待第 {revisionTransition.pendingRevisionNumber ?? "?"} 轮研究接管。
+            正在等待第 {fmt02(revisionTransition.pendingRevisionNumber)} 轮研究接管。
           </p>
         ) : null}
 
