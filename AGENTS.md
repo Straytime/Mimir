@@ -2,14 +2,13 @@
 
 ## 当前仓库阶段
 
-Mimir 仓库的 M0 ~ M4 实施阶段已全部完成，R1-001 真实 provider adapter 已接线。当前处于**发布前工程化收尾（Release Engineering）**阶段。
+Mimir 是一个深度研究平台（已上线，部署在 Railway）。M0 ~ M4 实施阶段、Release Engineering 均已完成。当前处于**生产调优与 Bug Fix** 阶段。
 
 在此阶段内：
 
 - 不引入新的业务功能或新的 API 端点
-- 不修改已固化的设计文档结论（Architecture / OpenAPI / IA / TDD Plan）
-- 工作口径限定为：文档收敛、开发体验、静态检查、CI、部署配置、真实 provider 联调验证
-- 任何超出上述口径的工作需要显式提出并经 leader 放行
+- 工作口径：prompt 调优、生产 bug 修复、可观测性增强、PDF 导出质量、provider 适配
+- 任何架构性变更需要显式提出并经 leader 放行
 
 ## 执行纪律
 
@@ -45,14 +44,14 @@ Mimir 仓库的 M0 ~ M4 实施阶段已全部完成，R1-001 真实 provider ada
 - 每个任务包必须包含：目标、输入文档、范围、非目标、实现约束、交付物、验收标准、回报格式
 - 不接受"先把某端做完"或"按文档全部实现这一阶段"这类大而泛的指令
 
-## 项目结构与架构约束
+## 项目结构与架构
 
 ### 仓库布局
 
 - `apps/web/` — Next.js App Router 前端
 - `services/api/` — FastAPI 后端（不是 pnpm workspace 成员，后端工具链用 `uv`）
-- `packages/contracts/` — 共享 JS/TS 契约类型
-- `docs/` — source-of-truth 设计与实施文档
+- `packages/contracts/` — 共享 JS/TS 契约类型（单文件 `src/index.ts`）
+- `docs/` — source-of-truth 设计与实施文档（含 PRD `Mimir_v1.0.0_prd_0.3.md`）
 - `scripts/` — 仓库级自动化
 
 ### 架构约束（不可违背）
@@ -66,35 +65,52 @@ Mimir 仓库的 M0 ~ M4 实施阶段已全部完成，R1-001 真实 provider ada
 - 全局同一时刻只允许一个活动研究任务
 - 保留文档定义的契约名称：`TaskSnapshot`、`EventEnvelope`、`task_token`、`access_token`、`available_actions` 等
 
+### 后端分层架构（`services/api/app/`）
+
+```
+api/            → FastAPI 路由、请求/响应序列化
+application/    → 编排器、服务、DTO、prompt 构建、端口定义
+  dto/          → 不可变 frozen dataclass（InvocationProfile, PromptBundle, WriterDecision 等）
+  ports/        → Protocol 接口（PlannerAgent, WriterAgent, OutlineAgent 等）
+  prompts/      → 各阶段 LLM prompt 构建函数
+  services/     → 业务编排（CollectionOrchestrator, DeliveryOrchestrator）
+domain/         → 领域模型、枚举、状态机
+infrastructure/ → 适配器实现
+  llm/          → ZhipuChatClient（统一 LLM 调用层）
+  research/     → Planner/Collector/Summary 的 Zhipu 适配器
+  delivery/     → Outline/Writer 适配器、E2B 沙箱、PDF 导出
+  streaming/    → SSE broker
+  db/           → SQLAlchemy repository
+core/           → Settings、JSON 工具、ID 生成
+```
+
+### Agent Loop 模式
+
+Planner 和 Writer 都采用 agent loop 模式（与 PRD func_7 / func_13 定义一致）：
+
+- **Planner loop**：`CollectionOrchestrator` 多轮调用 `PlannerAgent.plan()` → 发出 `collect_agent` tool_calls → 执行 collector 子任务 → summary → 将结果作为 transcript 回传下一轮 → 直到 planner 输出完成通知
+- **Writer loop**：`DeliveryOrchestrator._run_writer_loop()` 多轮调用 `WriterAgent.write()` → 如果返回 `python_interpreter` tool_calls → 在 E2B sandbox 执行 → 将 tool result 作为 transcript 回传下一轮 → 直到无 tool_calls（`writer_max_rounds` 上限保护，默认 5）
+
+两者都设置 `thinking=True, clear_thinking=False`（有利于 Zhipu API cache 命中），transcript 通过 `PromptBundle.transcript` 传递完整 agent loop 历史。
+
 ### Provider Mode
 
 - 默认 `MIMIR_PROVIDER_MODE=stub`，所有外部 adapter 使用 deterministic local stub
-- `MIMIR_PROVIDER_MODE=real` 切换到真实 provider（需 `ZHIPU_API_KEY`；`JINA_API_KEY` 可选，为空时 web_fetch 以免费无认证模式运行）
-- 可通过 `MIMIR_LLM_PROVIDER_MODE` / `MIMIR_WEB_SEARCH_PROVIDER_MODE` / `MIMIR_WEB_FETCH_PROVIDER_MODE` 单独覆盖
+- `MIMIR_PROVIDER_MODE=real` 切换到真实 provider
+- 可通过 `MIMIR_LLM_PROVIDER_MODE` / `MIMIR_WEB_SEARCH_PROVIDER_MODE` / `MIMIR_WEB_FETCH_PROVIDER_MODE` / `MIMIR_E2B_PROVIDER_MODE` 单独覆盖
+- 真实 provider：Zhipu LLM SDK、Zhipu web_search HTTP、Jina Reader web_fetch、E2B sandbox
 - stub 是 CI 和日常开发的默认路径；切换到 real 前必须确认环境变量与 API key 已就绪
 - 详见 [`services/api/.env.example`](services/api/.env.example)
 
-### 前后端已实现边界
+### Prompt 与 PRD 对齐原则
 
-**后端（services/api）已完成：**
-- `POST /api/v1/tasks` / `GET /api/v1/tasks/{task_id}` / `GET /api/v1/tasks/{task_id}/events`
-- `POST /api/v1/tasks/{task_id}/heartbeat` / `POST /api/v1/tasks/{task_id}/disconnect`
-- `POST /api/v1/tasks/{task_id}/clarification` / `POST /api/v1/tasks/{task_id}/feedback`
-- `GET /api/v1/tasks/{task_id}/downloads/markdown.zip` / `GET /api/v1/tasks/{task_id}/downloads/report.pdf`
-- `GET /api/v1/tasks/{task_id}/artifacts/{artifact_id}`
-- 完整 Task 生命周期：创建 -> 澄清 -> 需求分析 -> planner -> collector -> summary -> merge -> outline -> writer -> delivery -> feedback revision -> cleanup
-- SSE broker、task_events 持久化、connect deadline、heartbeat timeout、补偿一致性 cleanup
-- 真实 provider adapter：Zhipu LLM SDK、web_search HTTP、web_fetch Jina Reader（E2B 仍为 local stub）
+所有 LLM 调用阶段的 system_prompt 和 user_prompt 必须与 PRD（`docs/Mimir_v1.0.0_prd_0.3.md`）中对应 func 的定义**完全一致**（包括加粗标记、标点、示例文本）。适配器层不得在 user_prompt 末尾追加额外的 JSON 格式指令或改变输出格式要求。
 
-**前端（apps/web）已完成：**
-- 首页空态 -> 研究输入 -> 创建任务 -> 立即建 SSE
-- natural / options 两条澄清路径 + 15s 倒计时
-- timeline 透明度（planner / collector / summary / merge / outline）
-- report canvas + artifact gallery + 安全 markdown 渲染
-- delivery actions（下载按钮、access_token 刷新重试）
-- feedback composer + revision 切换 overlay
-- heartbeat / disconnect / sendBeacon / 终态 banner
-- 移动端分段布局
+### Task 生命周期
+
+创建 → 澄清 → 需求分析 → planner → collector → summary → merge → outline → writer → delivery → feedback revision → cleanup
+
+每个阶段的 prompt 定义见 PRD（`docs/Mimir_v1.0.0_prd_0.3.md`），对应 func_5 ~ func_14。
 
 ## 构建、测试与开发命令
 
@@ -106,6 +122,8 @@ uv sync --group dev                                             # 安装依赖
 uv run --group dev pytest tests/unit                            # 单元测试
 uv run --group dev pytest tests/contract                        # 契约测试
 uv run --group dev pytest tests/integration                     # 集成测试（需本地 PostgreSQL）
+uv run --group dev pytest tests/unit/infrastructure/test_zhipu_writer_agent.py  # 运行单个测试文件
+uv run --group dev pytest tests/unit -k "test_planner_prompt"   # 按名称过滤运行
 uv run --group dev pytest tests/unit tests/contract tests/integration  # 全量
 uv run alembic upgrade head                                     # 数据库迁移
 ```
@@ -154,6 +172,7 @@ pnpm install                # 安装所有 JS workspace 依赖
 
 - 小模块、显式依赖注入、contract-first 变更
 - 避免大而全的 god module
+- DTO 使用 frozen dataclass（`@dataclass(frozen=True, slots=True)`）
 
 ## 测试规范
 
@@ -247,18 +266,9 @@ PR 应当：
 - 下载和 artifact URL 使用短期 `access_token` 签名
 - 所有密钥读取统一收口到 `app/core/config.py`
 - `.env` 文件必须在 `.gitignore` 中
+- PDF 导出使用 allowlist HTML 安全过滤（阻止 script/iframe/事件处理器，只允许 data:image/png base64 图片）
 
-## Release Engineering 阶段工作口径
-
-当前阶段可以做：
-- 仓库级文档更新与规范化
-- 本地开发体验完善（docker-compose / dev script）
-- 静态检查门禁启用（ruff / mypy / ESLint flat config）
-- CI pipeline 搭建
-- 部署配置模板
-- 真实 provider 联调验证
-- E2B 真实 adapter 接线
-- test-only surface 收敛
+## Production 排查
 
 ### Production 只读排查路径
 
@@ -310,10 +320,4 @@ PR 应当：
   - 并明确说明“原始 DB 记录已丢失，当前无法进一步定界到 content/tool/result 级别”
 - 若问题发生在 `delivery` 末段：
   - 优先先区分是 `writer`、`export(zip/pdf)`、`artifact_store.put` 还是 token/download 路径
-  - 不要在尚未区分失败子阶段前笼统归因为“报告生成失败”
-
-当前阶段不应做：
-- 新增 API 端点或业务功能
-- 修改 Architecture / OpenAPI / IA / TDD Plan 的设计结论
-- 引入新的 Agent 编排框架或新的外部依赖
-- 回退或重写已验收的实现基线
+  - 不要在尚未区分失败子阶段前笼统归因为”报告生成失败”
