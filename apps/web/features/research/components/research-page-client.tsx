@@ -20,41 +20,22 @@ function ResearchPageContent() {
   const isActiveWorkspace = taskId !== null && snapshot !== null;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-16">
+    <main className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 px-sp-8 py-16">
       <div className="space-y-4">
-        <p className="text-sm font-medium uppercase tracking-[0.24em] text-sky-700">
+        <p className="text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-surface-tint">
           Mimir
         </p>
-        <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
+        <h1 className="text-[56px] font-ui font-semibold leading-tight tracking-tight text-primary">
           AI 研究工作台
         </h1>
-        <p className="max-w-2xl text-base leading-7 text-slate-700">
-          当前阶段已接上需求分析、搜集透明度、报告正文、图片制品与 delivery
-          刷新；仍保持 v1 不跨刷新恢复，也不持久化 task_token，页内观察流断开会自动重连。
-        </p>
       </div>
 
       {isActiveWorkspace ? (
         <ResearchWorkspaceShell />
       ) : (
-        <section className="grid gap-6 lg:grid-cols-[1.25fr_0.95fr]">
+        <section className="space-y-sp-10">
           <ResearchInputPanel />
-          <div className="space-y-6">
-            <ResearchConfigPanel />
-            <article className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-6 shadow-sm backdrop-blur">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Idle
-              </p>
-              <h2 className="mt-4 text-xl font-semibold text-slate-950">
-                从空态进入研究工作台
-              </h2>
-              <p className="mt-3 text-sm leading-7 text-slate-700">
-                创建成功后，前端会立即把 `task_id`、`task_token`、`urls` 与初始
-                snapshot 写入 store，并在工作台内接管后续 SSE、heartbeat、澄清提交、
-                requirement summary、timeline transparency、报告正文与 delivery 展示。
-              </p>
-            </article>
-          </div>
+          <ResearchConfigPanel />
         </section>
       )}
     </main>

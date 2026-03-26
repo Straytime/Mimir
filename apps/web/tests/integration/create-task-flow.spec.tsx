@@ -88,7 +88,7 @@ test("creates a task, writes session context, and immediately starts the SSE con
 
   deferred.resolve();
 
-  await screen.findByRole("heading", { name: "活跃工作台" });
+  await screen.findByRole("region", { name: "会话状态" });
 
   expect(recordedBodies).toHaveLength(1);
   expect(recordedBodies[0]).toMatchObject({

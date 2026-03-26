@@ -35,12 +35,12 @@ export function ResearchInputPanel() {
 
   return (
     <form
-      className="space-y-4 rounded-[2rem] border border-slate-200/70 bg-white/85 p-6 shadow-sm backdrop-blur"
+      className="space-y-4 bg-surface-container-low p-6"
       onSubmit={submitTask}
     >
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-slate-950">输入研究主题</h2>
-        <p className="text-sm leading-6 text-slate-600">
+        <h2 className="text-lg font-semibold text-primary">输入研究主题</h2>
+        <p className="text-sm leading-6 text-secondary">
           最多 500 字或单词。按 <kbd>Enter</kbd> 提交，<kbd>Shift + Enter</kbd>{" "}
           换行。
         </p>
@@ -48,7 +48,7 @@ export function ResearchInputPanel() {
 
       <div className="space-y-2">
         <label
-          className="text-sm font-medium text-slate-800"
+          className="text-sm font-medium text-primary"
           htmlFor="initial-query"
         >
           研究主题
@@ -56,7 +56,7 @@ export function ResearchInputPanel() {
         <textarea
           aria-describedby="initial-query-help initial-query-counter"
           aria-invalid={createTaskUi.initialQueryError !== null}
-          className="min-h-40 w-full rounded-3xl border border-slate-300 bg-slate-50/80 px-4 py-4 text-base leading-7 text-slate-950 outline-none transition focus:border-sky-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+          className="min-h-40 w-full border-0 bg-surface-container-lowest px-4 py-4 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint transition focus:bg-surface-container-high focus:shadow-[inset_2px_0_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:opacity-70"
           disabled={isSubmitting}
           id="initial-query"
           maxLength={MAX_QUERY_LENGTH}
@@ -65,14 +65,14 @@ export function ResearchInputPanel() {
           placeholder="例如：帮我研究中国 AI 搜索产品的竞争格局、主要玩家和未来机会"
           value={initialPromptDraft}
         />
-        <div className="flex items-center justify-between text-xs text-slate-500">
+        <div className="flex items-center justify-between text-xs text-tertiary">
           <span id="initial-query-help">允许换行，创建中会暂时锁定输入。</span>
           <span id="initial-query-counter">
             {initialPromptDraft.length}/{MAX_QUERY_LENGTH}
           </span>
         </div>
         {createTaskUi.initialQueryError !== null ? (
-          <p className="text-sm text-rose-600" role="alert">
+          <p className="text-sm text-[#FF6B6B]" role="alert">
             {createTaskUi.initialQueryError}
           </p>
         ) : null}
@@ -80,7 +80,7 @@ export function ResearchInputPanel() {
 
       {createTaskUi.submitError !== null ? (
         <div
-          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          className="bg-surface-container-high px-4 py-3 text-sm text-[#FFB86C]"
           role="alert"
         >
           <p>{createTaskUi.submitError}</p>
@@ -94,11 +94,11 @@ export function ResearchInputPanel() {
       ) : null}
 
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-slate-600">
-          创建成功后会切入工作台生命周期，并继续进入澄清提交与最小需求分析交接展示。
+        <p className="text-sm text-secondary">
+          创建成功后将进入工作台，依次完成澄清与需求分析。
         </p>
         <button
-          className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
           disabled={isSubmitting || !hasPrompt}
           type="submit"
         >

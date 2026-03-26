@@ -245,5 +245,5 @@ test("does not render delivery word count chips even when delivery metadata cont
   renderWithStore(<ReportCanvas />, { store });
 
   expect(screen.queryByText("6800 字")).not.toBeInTheDocument();
-  expect(screen.getByText("2 张配图")).toBeInTheDocument();
+  expect(screen.getByText("02 张配图")).toBeInTheDocument();
 });

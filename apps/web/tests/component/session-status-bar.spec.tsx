@@ -10,11 +10,12 @@ import {
 } from "@/tests/fixtures/builders";
 import { renderWithStore } from "@/tests/fixtures/render";
 
-test("shows recent server activity instead of recent heartbeat and updates on any new event", () => {
+test("shows SSE state, phase label, and disconnect button in the status bar", () => {
   const store = createResearchSessionStore(
     makeResearchSessionState({
       session: {
         sseState: "open",
+        taskId: "tsk_stage0",
       },
       remote: {
         snapshot: makeTaskSnapshot({
@@ -27,8 +28,9 @@ test("shows recent server activity instead of recent heartbeat and updates on an
 
   renderWithStore(<SessionStatusBar />, { store });
 
-  expect(screen.getByText(/最近服务端活动：尚未收到/)).toBeInTheDocument();
-  expect(screen.queryByText(/最近心跳/)).not.toBeInTheDocument();
+  expect(screen.getByText("已连接")).toBeInTheDocument();
+  expect(screen.getByText("等待澄清")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "终止任务" })).toBeInTheDocument();
 
   act(() => {
     store.getState().applyEvent(
@@ -44,7 +46,7 @@ test("shows recent server activity instead of recent heartbeat and updates on an
     );
   });
 
-  expect(screen.getByText(/2026-03-23T10:05:00\+08:00/)).toBeInTheDocument();
+  expect(screen.getByText("正在分析需求")).toBeInTheDocument();
 });
 
 test("does not expose revision transition badges in the status bar", () => {

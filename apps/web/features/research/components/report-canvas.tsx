@@ -9,6 +9,7 @@ import type { ArtifactSummary } from "@/lib/contracts";
 
 import { useReportAutoScroll } from "../hooks/use-report-auto-scroll";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
+import { fmt02 } from "../utils/format";
 import { findLatestArtifactBySource } from "../utils/task-artifact";
 import { TaskArtifactImage } from "./task-artifact-image";
 
@@ -52,7 +53,7 @@ function ReportMarkdownImage(props: ComponentPropsWithoutRef<"img">) {
   }
 
   return (
-    <div className="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/80 p-3">
+    <div className="my-6 overflow-hidden bg-surface-container-low p-3">
       <TaskArtifactImage
         alt={props.alt ?? latestArtifact.filename}
         artifactId={latestArtifact.artifact_id}
@@ -124,45 +125,45 @@ export function ReportCanvas() {
   return (
     <section
       aria-label="报告画布"
-      className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur"
+      className="bg-surface-container-low p-6"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             Report Canvas
           </p>
-          <h3 className="mt-3 text-2xl font-semibold text-slate-950">
-            第 {currentRevision?.revision_number ?? snapshot.active_revision_number} 轮报告
+          <h3 className="mt-sp-2 text-lg font-narrative font-semibold text-primary">
+            第 {fmt02(currentRevision?.revision_number ?? snapshot.active_revision_number)} 轮报告
           </h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
+          <p className="mt-2 text-sm leading-6 text-secondary">
             {getReportPhaseCopy(snapshot.phase)}
           </p>
         </div>
 
         {delivery ? (
           <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-800">
-              {delivery.artifact_count} 张配图
+            <span className="bg-surface-container-high px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-secondary">
+              {fmt02(delivery.artifact_count)} 张配图
             </span>
           </div>
         ) : null}
       </div>
 
       {outlineReady && outline ? (
-        <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/80 px-5 py-5">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
+        <div className="mt-6 bg-surface-container-low px-5 py-5">
+          <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             Outline
           </p>
-          <h4 className="mt-3 text-lg font-semibold text-slate-950">
+          <h4 className="mt-sp-2 text-lg font-narrative font-semibold text-primary">
             {outline.title}
           </h4>
           <ol className="mt-4 space-y-3">
             {outline.sections.map((section) => (
               <li key={section.section_id}>
-                <p className="text-sm font-semibold text-slate-950">
+                <p className="text-sm font-narrative font-semibold text-primary">
                   {section.title}
                 </p>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
+                <p className="mt-1 text-sm font-narrative leading-6 text-secondary">
                   {section.description}
                 </p>
               </li>
@@ -174,22 +175,22 @@ export function ReportCanvas() {
       <div className="relative mt-6">
         <div
           aria-label="报告正文"
-          className="max-h-[34rem] overflow-y-auto rounded-3xl border border-slate-200 bg-white/90 px-5 py-5"
+          className="max-h-[34rem] overflow-y-auto bg-surface-container-lowest px-5 py-5"
           onScroll={handleScroll}
           ref={scrollContainerRef}
           role="region"
         >
           {shouldShowSkeleton ? (
             <div className="space-y-3">
-              <div className="h-4 w-2/3 animate-pulse rounded-full bg-slate-200/80" />
-              <div className="h-4 w-full animate-pulse rounded-full bg-slate-200/80" />
-              <div className="h-4 w-5/6 animate-pulse rounded-full bg-slate-200/80" />
-              <p className="pt-3 text-sm leading-6 text-slate-600">
+              <div className="h-4 w-2/3 animate-pulse bg-surface-container-high" />
+              <div className="h-4 w-full animate-pulse bg-surface-container-high" />
+              <div className="h-4 w-5/6 animate-pulse bg-surface-container-high" />
+              <p className="pt-3 text-sm leading-6 text-secondary">
                 报告正文将在 `writer.delta` 到达后逐步追加到这里。
               </p>
             </div>
           ) : (
-            <div className="prose prose-slate max-w-none text-slate-800">
+            <div className="prose prose-invert max-w-none font-narrative leading-[1.6] text-secondary">
               <ReactMarkdown
                 components={{
                   a: ({ children, href, ...props }) => (
@@ -219,7 +220,7 @@ export function ReportCanvas() {
 
         {!autoScrollEnabled ? (
           <button
-            className="absolute bottom-4 right-4 rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-lg"
+            className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
             onClick={scrollToBottom}
             type="button"
           >

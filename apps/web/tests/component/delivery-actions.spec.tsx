@@ -93,7 +93,7 @@ test("does not render delivery word count in the action panel", () => {
   renderWithStore(<DeliveryActions />, { store });
 
   expect(screen.queryByText("6800 字")).not.toBeInTheDocument();
-  expect(screen.getByText("3 张配图")).toBeInTheDocument();
+  expect(screen.getByText("03 张配图")).toBeInTheDocument();
 });
 
 test("disables download buttons while waiting for the next revision after feedback submission", () => {

@@ -3551,3 +3551,75 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 当前 parser 仍是 `Python-Markdown(extra + sane_lists)`；若未来需要 literal 完整 GFM 语义，需单独任务包升级 parser，而不是继续扩张本次安全收口范围
   - 当前图片 allowlist 只接受 `data:image/png;base64,...`，与现有 delivery artifact 契约一致；若后续新增其他图片类型，需要单独审查 sanitize 和导出边界
+
+## TP-D01~D08 Frontend Design System Overhaul — "The Lab Terminal"
+
+- 日期时间: 2026-03-26 17:30:00 CST (+0800)
+- 任务包编号: TP-D01 ~ TP-D08（8 个串行任务包）
+- session 标识: claude-code-20260326-design-system
+- 目标摘要:
+  - 基于 `docs/DESIGN.md` 设计宪法，将前端从"明亮友好 SaaS"美学体系彻底切换到"The Lab Terminal"暗色手术室终端风格
+  - 纯前端视觉层重构，后端零改动，功能逻辑（状态管理、hooks、SSE、API 调用）完全不变
+  - 8 个任务包串行交付：Foundation → Layout → Atomic → Containers → Typography → Timeline → Polish → Test Fix
+- 各任务包摘要:
+  - **TP-D01 Design Foundation**: Tailwind config 扩展（11 色彩 token、spacing 刻度、全局 0px borderRadius）；加载 Space Grotesk + Newsreader 字体（next/font/google）；body 背景 #131313、color-scheme: dark
+  - **TP-D02 Layout Restructure**: 3 列桌面布局 + 移动端 tab 切换 → 单列居中 800px 叙事流；控制栏调试信息精简为用户感知状态（保留 task_id）；session-status-bar 升级为 sticky glassmorphism 顶栏承载终止按钮
+  - **TP-D03 Atomic Components**: 按钮（白底深色字 + 底部青光 hover）、输入框（#0E0E0E 凹陷 + 左侧青色竖线 focus）、状态徽章（0px 暗色）、radio 面板暗色适配；8 个组件文件
+  - **TP-D04 Container Reskin**: 全组件移除 1px border + shadow，改用 Tonal Stacking（surface 色阶背景分层）；terminal-banner 暗色语义色区分；9 个文件
+  - **TP-D05 Typography**: Space Grotesk（UI）+ Newsreader（叙事）双引擎；排版刻度 Display LG 56px / Title MD 18px / Label SM 11px；CJK 1.6x line-height；前导零 fmt02()；安装 @tailwindcss/typography；13 个文件
+  - **TP-D06 Timeline & Live States**: Infinite List 模式（无分割线、2rem 间距）；新建 PulseIndicator 组件（4px 青色方块慢脉冲）；自定义 pulse-slow keyframe；5 个文件
+  - **TP-D07 Integration Polish**: 主区块间距 sp-10（3.5rem）、元数据分组 sp-2（0.7rem）、mobile 横向 sp-8（2.75rem）；focus-visible 无障碍覆盖所有交互元素；compact prop 清理；旧色残留 grep 归零；11 个文件
+  - **TP-D08 Test Regression Fix**: 修复 7 个测试失败（移除的 UI 元素断言、前导零文本、mobile tab 行为）；删除 2 个已废弃的 mobile tab test case；重写 session-status-bar test case
+- 修改文件:
+  - `apps/web/tailwind.config.ts`
+  - `apps/web/app/globals.css`
+  - `apps/web/app/layout.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/features/research/components/research-input-panel.tsx`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `apps/web/features/research/components/report-canvas.tsx`
+  - `apps/web/features/research/components/timeline-panel.tsx`
+  - `apps/web/features/research/components/delivery-actions.tsx`
+  - `apps/web/features/research/components/feedback-composer.tsx`
+  - `apps/web/features/research/components/clarification-panels.tsx`
+  - `apps/web/features/research/components/terminal-banner.tsx`
+  - `apps/web/features/research/components/artifact-gallery.tsx`
+  - `apps/web/features/research/components/requirement-summary-card.tsx`
+  - `apps/web/features/research/components/task-artifact-image.tsx`
+  - `apps/web/features/research/components/pulse-indicator.tsx`（新建）
+  - `apps/web/features/research/utils/format.ts`（新建）
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/component/session-status-bar.spec.tsx`
+  - `apps/web/tests/component/delivery-actions.spec.tsx`
+  - `apps/web/tests/component/report-canvas.spec.tsx`
+  - `apps/web/tests/integration/create-task-flow.spec.tsx`
+- 测试/验证:
+  - 已运行:
+    - `pnpm typecheck` — 0 error
+    - `pnpm lint` — 0 error, 2 pre-existing warnings
+    - `pnpm test:unit` — 50 passed (10 files)
+    - `pnpm test:contract` — 4 passed (4 files)
+    - `pnpm test:component` — 24 passed (8 files)
+    - `pnpm test:integration` — 37 passed (6 files)
+    - 旧色残留 grep（slate-/sky-/emerald-/rose-/amber-/bg-white/shadow-sm/shadow-lg）— 0 matches in components
+  - 未运行: `pnpm test:e2e`（Playwright e2e 需要 Chromium 浏览器和 dev server，属部署验证范畴）
+- 验收结论:
+  - 设计系统完整落地，115 个前端测试全部通过
+  - 后端零改动，前端功能逻辑不变
+  - 布局从 3 列改为单列叙事流（设计规范要求），移动端 tab 切换随之移除
+  - 2 个测试已废弃的移动端 tab 行为的 test case 被删除（行为不再存在）
+  - 1 个 session-status-bar test case 被重写以覆盖新的状态栏行为
+- blocker / 风险:
+  - e2e 测试未跑，若有涉及 CSS selector 或视觉断言的 e2e case 可能需要更新
+  - 设计规范在 production 实际效果需要人工视觉验收（字体渲染、暗色对比度、mobile 间距等）
+  - Tailwind 的 `primary` 颜色 token 覆盖了 Tailwind 默认的 `primary`（如果有第三方插件依赖默认值可能冲突，当前无此风险）
+- TDD 纪律偏差记录:
+  - 本次 TP-D01~D07 采用了 implementation-first 路径，未遵循 docs-first → tests-first → implementation 的项目纪律
+  - TP-D08 作为补救修复了测试回归，但属于事后补课而非 TDD
+  - 后续任务包已确认必须严格遵循 TDD 原则
+- 下一步建议:
+  - 人工视觉验收（本地 `pnpm dev` 或 production 部署后）
+  - 如有视觉偏差，按 bug fix 模式逐项调优
+  - e2e 回归验证

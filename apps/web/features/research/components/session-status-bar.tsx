@@ -1,6 +1,9 @@
 "use client";
 
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
+import { useDisconnectGuard } from "../hooks/use-disconnect-guard";
+import { selectCanDisconnectTask } from "../store/selectors";
+import { PulseIndicator } from "./pulse-indicator";
 
 const SSE_STATE_LABELS = {
   idle: "未连接",
@@ -10,7 +13,7 @@ const SSE_STATE_LABELS = {
   failed: "连接失败",
 } as const;
 
-const PHASE_LABELS = {
+const PHASE_LABELS: Record<string, string> = {
   clarifying: "等待澄清",
   analyzing_requirement: "正在分析需求",
   planning_collection: "正在规划研究路径",
@@ -21,32 +24,53 @@ const PHASE_LABELS = {
   writing_report: "正在撰写报告",
   delivered: "已进入交付阶段",
   processing_feedback: "正在处理反馈",
-} as const;
+};
 
 export function SessionStatusBar() {
   const sseState = useResearchSessionStore((state) => state.session.sseState);
-  const lastServerActivityAt = useResearchSessionStore(
-    (state) => state.session.lastServerActivityAt,
-  );
+  const taskId = useResearchSessionStore((state) => state.session.taskId);
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
+  const pendingAction = useResearchSessionStore(
+    (state) => state.ui.pendingAction,
+  );
+  const canDisconnectTask = useResearchSessionStore(selectCanDisconnectTask);
+  const disconnectTask = useDisconnectGuard();
+
+  const phaseLabel = snapshot
+    ? (PHASE_LABELS[snapshot.phase] ?? snapshot.phase)
+    : "未开始";
 
   return (
     <section
       aria-label="会话状态"
-      className="flex flex-wrap items-center gap-3 rounded-full border border-slate-200/80 bg-white/88 px-4 py-3 text-sm text-slate-700 shadow-sm backdrop-blur"
+      className="sticky top-0 z-50 flex items-center justify-between gap-4 bg-surface/70 px-4 py-3 font-ui text-sm backdrop-blur-[20px]"
       role="region"
     >
-      <span className="font-semibold text-slate-950">连接状态</span>
-      <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-900">
-        {SSE_STATE_LABELS[sseState]}
-      </span>
-      <span className="text-slate-500">当前阶段</span>
-      <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-sky-900">
-        {snapshot ? PHASE_LABELS[snapshot.phase] : "未开始"}
-      </span>
-      <span className="text-slate-500">
-        最近服务端活动：{lastServerActivityAt ?? "尚未收到"}
-      </span>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex items-center gap-2 font-medium text-secondary">
+          {sseState === "open" ? <PulseIndicator /> : null}
+          {SSE_STATE_LABELS[sseState]}
+        </span>
+        <span className="text-tertiary">·</span>
+        <span className="font-medium text-primary">{phaseLabel}</span>
+        {taskId ? (
+          <>
+            <span className="text-tertiary">·</span>
+            <span className="font-mono text-xs text-tertiary">{taskId}</span>
+          </>
+        ) : null}
+      </div>
+
+      <button
+        className="border border-outline-variant px-4 py-1.5 text-sm font-medium text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:text-tertiary disabled:border-tertiary"
+        disabled={!canDisconnectTask}
+        onClick={() => {
+          void disconnectTask();
+        }}
+        type="button"
+      >
+        {pendingAction === "disconnecting" ? "正在终止..." : "终止任务"}
+      </button>
     </section>
   );
 }
