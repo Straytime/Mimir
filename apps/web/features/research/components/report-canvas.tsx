@@ -124,7 +124,7 @@ export function ReportCanvas() {
   return (
     <section
       aria-label="报告画布"
-      className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur"
+      className="bg-surface-container-low p-6"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>

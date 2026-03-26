@@ -184,19 +184,19 @@ export function TaskArtifactImage({
 
   if (status === "loading") {
     return (
-      <div className="aspect-[16/10] animate-pulse rounded-3xl bg-slate-200/80" />
+      <div className="aspect-[16/10] animate-pulse bg-surface-container-high" />
     );
   }
 
   if (status === "error" || blobUrl === null) {
     return (
-      <div className="rounded-3xl border border-amber-200 bg-amber-50/80 p-4">
-        <p className="text-sm font-medium text-amber-900">交付链接已失效</p>
-        <p className="mt-2 text-sm leading-6 text-amber-800">
+      <div className="bg-surface-container-high p-4">
+        <p className="text-sm font-medium text-[#FFB86C]">交付链接已失效</p>
+        <p className="mt-2 text-sm leading-6 text-secondary">
           当前图片链接不可用。请刷新交付链接后重试。
         </p>
         <button
-          className="mt-4 rounded-full border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900 disabled:cursor-not-allowed disabled:border-amber-200 disabled:text-amber-500"
+          className="mt-4 border border-outline-variant/15 bg-transparent px-4 py-2 text-sm font-semibold text-primary transition hover:border-primary disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
           disabled={refreshingDelivery}
           onClick={() => {
             setRetryNonce((currentNonce) => currentNonce + 1);
@@ -213,7 +213,7 @@ export function TaskArtifactImage({
     // eslint-disable-next-line @next/next/no-img-element
     <img
       alt={alt}
-      className="h-full w-full rounded-3xl object-cover"
+      className="h-full w-full object-cover"
       src={blobUrl!}
     />
   );

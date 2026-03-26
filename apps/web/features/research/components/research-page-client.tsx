@@ -22,10 +22,10 @@ function ResearchPageContent() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-6 px-6 py-16">
       <div className="space-y-4">
-        <p className="text-sm font-medium uppercase tracking-[0.24em] text-sky-700">
+        <p className="text-sm font-medium uppercase tracking-[0.24em] text-surface-tint">
           Mimir
         </p>
-        <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
+        <h1 className="text-4xl font-semibold tracking-tight text-primary">
           AI 研究工作台
         </h1>
       </div>

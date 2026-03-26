@@ -35,7 +35,7 @@ export function FeedbackComposer() {
   return (
     <section
       aria-label="反馈输入"
-      className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur"
+      className="bg-surface-container-low p-6"
       role="region"
     >
       <div className="space-y-2">

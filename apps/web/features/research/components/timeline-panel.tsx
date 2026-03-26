@@ -49,7 +49,7 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
   return (
     <section
       aria-label="时间线"
-      className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur"
+      className="bg-surface-container-low p-6"
       role="region"
     >
       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">

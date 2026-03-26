@@ -35,7 +35,7 @@ export function ResearchInputPanel() {
 
   return (
     <form
-      className="space-y-4 rounded-[2rem] border border-slate-200/70 bg-white/85 p-6 shadow-sm backdrop-blur"
+      className="space-y-4 bg-surface-container-low p-6"
       onSubmit={submitTask}
     >
       <div className="space-y-2">
