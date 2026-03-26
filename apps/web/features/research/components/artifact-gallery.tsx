@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import type { ArtifactSummary } from "@/lib/contracts";
 
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { fmt02 } from "../utils/format";
 import { mergeArtifactsById } from "../utils/task-artifact";
+import { ArtifactLightbox } from "./artifact-lightbox";
 import { TaskArtifactImage } from "./task-artifact-image";
 
 const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
@@ -15,11 +16,16 @@ export function ArtifactGallery() {
   const streamArtifacts = useResearchSessionStore((state) => state.stream.artifacts);
   const delivery = useResearchSessionStore((state) => state.remote.delivery);
   const deliveryArtifacts = delivery?.artifacts ?? EMPTY_ARTIFACTS;
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
 
   const artifacts = useMemo(
     () => mergeArtifactsById(streamArtifacts, deliveryArtifacts),
     [deliveryArtifacts, streamArtifacts],
   );
+
+  const selectedArtifact = selectedArtifactId
+    ? artifacts.find((a) => a.artifact_id === selectedArtifactId) ?? null
+    : null;
 
   return (
     <section
@@ -46,8 +52,9 @@ export function ArtifactGallery() {
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           {artifacts.map((artifact) => (
             <article
-              className="overflow-hidden bg-surface-container-lowest"
+              className="cursor-pointer overflow-hidden bg-surface-container-lowest transition hover:bg-surface-container-low"
               key={artifact.artifact_id}
+              onClick={() => setSelectedArtifactId(artifact.artifact_id)}
             >
               <div className="aspect-[16/10] bg-surface-container-high p-3">
                 <TaskArtifactImage
@@ -68,6 +75,13 @@ export function ArtifactGallery() {
           ))}
         </div>
       )}
+
+      {selectedArtifact !== null ? (
+        <ArtifactLightbox
+          artifact={selectedArtifact}
+          onClose={() => setSelectedArtifactId(null)}
+        />
+      ) : null}
     </section>
   );
 }
