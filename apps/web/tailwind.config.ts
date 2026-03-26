@@ -46,6 +46,7 @@ const config: Config = {
       },
       animation: {
         "pulse-slow": "pulse-slow 2s ease-in-out infinite",
+        "pulse-fast": "pulse-slow 0.8s ease-in-out infinite",
       },
       typography: {
         invert: {

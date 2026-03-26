@@ -186,7 +186,14 @@ export function ClarificationDetailPanel() {
       {snapshot.clarification_mode === "options" && questionSet !== null ? (
         <div className="space-y-4">
           {remainingSeconds !== null ? (
-            <div className="bg-surface-container-high px-4 py-3 text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-surface-tint">
+            <div
+              className={`bg-surface-container-high px-4 py-3 text-[11px] font-ui font-medium uppercase tracking-[0.15em] ${
+                remainingSeconds <= 10
+                  ? "text-[#FF6B6B] animate-pulse-fast"
+                  : "text-surface-tint"
+              }`}
+            >
+              {remainingSeconds <= 10 ? "即将自动提交 — " : null}
               剩余 {remainingSeconds} 秒
             </div>
           ) : null}

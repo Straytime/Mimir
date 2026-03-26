@@ -282,7 +282,7 @@ describe("Stage 4 clarification flow", () => {
       await flushAsyncWork();
     });
 
-    expect(screen.getByText("剩余 10 秒")).toBeInTheDocument();
+    expect(screen.getByText(/剩余 10 秒/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: "行业现状与趋势" }));
 
