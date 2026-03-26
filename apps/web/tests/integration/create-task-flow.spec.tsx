@@ -174,7 +174,7 @@ test("shows the contract message for 409 resource_busy", async () => {
   await user.type(screen.getByLabelText("研究主题"), "研究另一个主题");
   await user.click(screen.getByRole("button", { name: "开始研究" }));
 
-  await screen.findByText("当前系统正处理另一项研究，请稍后重试。");
+  await screen.findByText("当前已有一个研究任务正在进行中。请等待其完成或终止后再创建新任务。");
 
   expect(store.getState().ui.pendingAction).toBeNull();
 });
