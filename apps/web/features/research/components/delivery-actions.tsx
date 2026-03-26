@@ -124,18 +124,18 @@ export function DeliveryActions() {
       aria-label="交付操作"
       className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur"
     >
-      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
         Delivery
       </p>
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-700">
-        <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-900">
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+        <span className="bg-surface-container-high px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-secondary">
           {delivery?.artifact_count ?? 0} 张配图
         </span>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <button
-          className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-950 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
           disabled={
             delivery === null ||
             refreshingDelivery ||
@@ -152,7 +152,7 @@ export function DeliveryActions() {
             : "下载 Markdown Zip"}
         </button>
         <button
-          className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-950 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
           disabled={
             delivery === null ||
             refreshingDelivery ||
@@ -169,15 +169,15 @@ export function DeliveryActions() {
       </div>
 
       {!canDownloadMarkdown || !canDownloadPdf ? (
-        <p className="mt-4 text-sm leading-6 text-slate-600">
+        <p className="mt-4 text-sm leading-6 text-secondary">
           {revisionTransition.status !== "idle"
-            ? "新 revision 正在接管工作台，当前交付链接已锁定，待新一轮研究稳定后再恢复。"
-            : "报告已生成，但下载能力需要等待任务进入 `task.awaiting_feedback` 后开放。"}
+            ? "新一轮研究正在接管，当前交付链接已锁定。"
+            : "报告已生成，下载将在反馈阶段开放。"}
         </p>
       ) : null}
 
       {deliveryError ? (
-        <p className="mt-4 text-sm leading-6 text-rose-700">{deliveryError}</p>
+        <p className="mt-4 text-sm leading-6 text-[#FF6B6B]">{deliveryError}</p>
       ) : null}
     </section>
   );

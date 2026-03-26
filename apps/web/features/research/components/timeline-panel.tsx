@@ -22,14 +22,14 @@ function getStatusLabel(status: TimelineItem["status"]) {
 
 function getStatusClassName(status: TimelineItem["status"]) {
   if (status === "completed") {
-    return "bg-emerald-100 text-emerald-900";
+    return "bg-surface-container-high text-surface-tint";
   }
 
   if (status === "failed") {
-    return "bg-rose-100 text-rose-900";
+    return "bg-surface-container-high text-[#FF6B6B]";
   }
 
-  return "bg-sky-100 text-sky-900";
+  return "bg-surface-container-high text-surface-tint";
 }
 
 export function TimelinePanel({ items }: TimelinePanelProps) {
@@ -52,7 +52,7 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
       className="rounded-[2rem] border border-slate-200/70 bg-white/82 p-6 shadow-sm backdrop-blur"
       role="region"
     >
-      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
         Live Timeline
       </p>
 
@@ -61,41 +61,41 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
         className="mt-4 max-h-[34rem] overflow-y-auto pr-1"
       >
         {items.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 px-5 py-5 text-sm leading-7 text-slate-600">
+          <div className="bg-surface-container-low px-5 py-5 text-sm leading-7 text-secondary">
             等待研究透明度事件进入时间线。
           </div>
         ) : (
           <ol className="space-y-4">
             {items.map((item) => (
               <li
-                className="rounded-3xl border border-slate-200 bg-white/90 px-4 py-4"
+                className="bg-surface-container-lowest px-4 py-4"
                 key={item.id}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-slate-950">
+                    <p className="text-sm font-semibold text-primary">
                       {item.label}
                     </p>
                     {item.collectTarget && item.kind !== "collect" ? (
-                      <p className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                      <p className="text-xs uppercase tracking-[0.12em] text-tertiary">
                         Collect Target
                       </p>
                     ) : null}
                     {item.collectTarget && item.kind !== "collect" ? (
-                      <p className="text-sm leading-6 text-slate-700">
+                      <p className="text-sm leading-6 text-secondary">
                         {item.collectTarget}
                       </p>
                     ) : null}
                   </div>
                   <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClassName(item.status)}`}
+                    className={`px-3 py-1 text-[11px] font-medium uppercase tracking-wider ${getStatusClassName(item.status)}`}
                   >
                     {getStatusLabel(item.status)}
                   </span>
                 </div>
 
                 {item.detail ? (
-                  <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-700">
+                  <p className="mt-3 whitespace-pre-line text-sm leading-6 text-secondary">
                     {item.detail}
                   </p>
                 ) : null}

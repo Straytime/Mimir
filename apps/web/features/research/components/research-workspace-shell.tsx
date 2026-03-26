@@ -120,15 +120,15 @@ export function ResearchWorkspaceShell() {
         </>
       ) : (
         <div className="space-y-5">
-          <div className="rounded border border-sky-200 bg-sky-50 px-5 py-5">
-            <h3 className="text-xl font-semibold text-slate-950">
+          <div className="bg-surface-container-high px-5 py-5">
+            <h3 className="text-xl font-semibold text-primary">
               {stageStatusCopy.title}
             </h3>
-            <p className="mt-3 text-sm leading-7 text-slate-700">
+            <p className="mt-3 text-sm leading-7 text-secondary">
               {stageStatusCopy.description}
             </p>
             {analysisText.length > 0 ? (
-              <p className="mt-4 whitespace-pre-line text-sm leading-7 text-sky-900">
+              <p className="mt-4 whitespace-pre-line text-sm leading-7 text-surface-tint">
                 {analysisPrefix}
                 {analysisText}
               </p>

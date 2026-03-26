@@ -39,19 +39,19 @@ export function FeedbackComposer() {
       role="region"
     >
       <div className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary">
           Feedback
         </p>
-        <h3 className="text-xl font-semibold text-slate-950">继续迭代当前任务</h3>
-        <p className="text-sm leading-6 text-slate-600">
-          提交后会保留旧报告，直到下一轮 revision 的首个 SSE 事件到达并接管工作台。
+        <h3 className="text-xl font-semibold text-primary">继续迭代当前任务</h3>
+        <p className="text-sm leading-6 text-secondary">
+          提交后将保留旧报告，直到新一轮研究就绪后接管。
         </p>
       </div>
 
       <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <label
-            className="text-sm font-medium text-slate-800"
+            className="text-sm font-medium text-primary"
             htmlFor="feedback-text"
           >
             反馈意见
@@ -59,7 +59,7 @@ export function FeedbackComposer() {
           <textarea
             aria-describedby="feedback-help feedback-counter"
             aria-invalid={feedbackFieldError !== null}
-            className="min-h-32 w-full rounded-3xl border border-slate-300 bg-slate-50/80 px-4 py-4 text-base leading-7 text-slate-950 outline-none transition focus:border-sky-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+            className="min-h-32 w-full border-0 bg-surface-container-lowest px-4 py-4 text-base leading-7 text-primary placeholder:text-tertiary outline-none transition focus:bg-surface-container-high focus:shadow-[inset_2px_0_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:opacity-70"
             disabled={isDisabled}
             id="feedback-text"
             maxLength={MAX_FEEDBACK_LENGTH}
@@ -67,16 +67,16 @@ export function FeedbackComposer() {
             placeholder="例如：请强化竞品对比、补充商业化分析，并解释结论背后的证据。"
             value={feedbackDraft}
           />
-          <div className="flex items-center justify-between text-xs text-slate-500">
+          <div className="flex items-center justify-between text-xs text-tertiary">
             <span id="feedback-help">
-              最多 1000 字。进入下一 revision 等待态后会锁定当前输入区。
+              最多 1000 字。进入下一轮修订后会锁定当前输入。
             </span>
             <span id="feedback-counter">
               {feedbackDraft.length}/{MAX_FEEDBACK_LENGTH}
             </span>
           </div>
           {feedbackFieldError !== null ? (
-            <p className="text-sm text-rose-600" role="alert">
+            <p className="text-sm text-[#FF6B6B]" role="alert">
               {feedbackFieldError}
             </p>
           ) : null}
@@ -84,7 +84,7 @@ export function FeedbackComposer() {
 
         {feedbackSubmitError !== null ? (
           <div
-            className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            className="bg-surface-container-high px-4 py-3 text-sm text-[#FFB86C]"
             role="alert"
           >
             {feedbackSubmitError}
@@ -92,17 +92,17 @@ export function FeedbackComposer() {
         ) : null}
 
         {revisionTransition.status !== "idle" ? (
-          <p className="text-sm leading-6 text-slate-600">
+          <p className="text-sm leading-6 text-secondary">
             正在等待第 {revisionTransition.pendingRevisionNumber ?? "?"} 轮研究接管。
           </p>
         ) : null}
 
         <div className="flex items-center justify-between gap-4">
-          <p className="text-sm text-slate-600">
-            仅在 `task.awaiting_feedback` 阶段开放；终态事件一旦到达，旧动作会立即禁用。
+          <p className="text-sm text-secondary">
+            仅在交付后的反馈阶段开放，终态事件到达后会自动禁用。
           </p>
           <button
-            className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
             disabled={isDisabled || feedbackDraft.trim().length === 0}
             type="submit"
           >
