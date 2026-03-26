@@ -3,6 +3,7 @@
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { useDisconnectGuard } from "../hooks/use-disconnect-guard";
 import { selectCanDisconnectTask } from "../store/selectors";
+import { PulseIndicator } from "./pulse-indicator";
 
 const SSE_STATE_LABELS = {
   idle: "未连接",
@@ -46,7 +47,8 @@ export function SessionStatusBar() {
       role="region"
     >
       <div className="flex flex-wrap items-center gap-3">
-        <span className="font-medium text-secondary">
+        <span className="flex items-center gap-2 font-medium text-secondary">
+          {sseState === "open" ? <PulseIndicator /> : null}
           {SSE_STATE_LABELS[sseState]}
         </span>
         <span className="text-tertiary">·</span>

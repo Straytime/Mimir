@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import type { TimelineItem } from "../store/research-session-store.types";
+import { PulseIndicator } from "./pulse-indicator";
 
 type TimelinePanelProps = {
   items: TimelineItem[];
@@ -61,19 +62,16 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
         className="mt-4 max-h-[34rem] overflow-y-auto pr-1"
       >
         {items.length === 0 ? (
-          <div className="bg-surface-container-low px-5 py-5 text-sm leading-7 text-secondary">
+          <div className="bg-surface-container-lowest px-5 py-5 text-sm leading-7 text-tertiary">
             等待研究透明度事件进入时间线。
           </div>
         ) : (
-          <ol className="space-y-4">
+          <ol className="space-y-sp-6">
             {items.map((item) => (
-              <li
-                className="bg-surface-container-lowest px-4 py-4"
-                key={item.id}
-              >
+              <li key={item.id}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-primary">
+                    <p className="text-sm font-ui font-semibold text-primary">
                       {item.label}
                     </p>
                     {item.collectTarget && item.kind !== "collect" ? (
@@ -88,14 +86,15 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
                     ) : null}
                   </div>
                   <span
-                    className={`px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] ${getStatusClassName(item.status)}`}
+                    className={`flex items-center gap-2 px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] ${getStatusClassName(item.status)}`}
                   >
+                    {item.status === "running" ? <PulseIndicator /> : null}
                     {getStatusLabel(item.status)}
                   </span>
                 </div>
 
                 {item.detail ? (
-                  <p className="mt-3 whitespace-pre-line text-sm leading-6 text-secondary">
+                  <p className="mt-3 whitespace-pre-line text-sm font-ui leading-6 text-secondary">
                     {item.detail}
                   </p>
                 ) : null}

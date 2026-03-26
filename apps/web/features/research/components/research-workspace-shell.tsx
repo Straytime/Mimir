@@ -12,6 +12,7 @@ import { useClarificationCountdown } from "../hooks/use-clarification-countdown"
 import { useHeartbeatLoop } from "../hooks/use-heartbeat-loop";
 import { useTaskStream } from "../hooks/use-task-stream";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
+import { PulseIndicator } from "./pulse-indicator";
 import { SessionStatusBar } from "./session-status-bar";
 import { TerminalBanner } from "./terminal-banner";
 import { TimelinePanel } from "./timeline-panel";
@@ -121,7 +122,8 @@ export function ResearchWorkspaceShell() {
       ) : (
         <div className="space-y-5">
           <div className="bg-surface-container-high px-5 py-5">
-            <h3 className="text-lg font-narrative font-semibold text-primary">
+            <h3 className="flex items-center gap-3 text-lg font-narrative font-semibold text-primary">
+              {snapshot.phase !== "delivered" ? <PulseIndicator /> : null}
               {stageStatusCopy.title}
             </h3>
             <p className="mt-3 text-sm leading-7 text-secondary">
