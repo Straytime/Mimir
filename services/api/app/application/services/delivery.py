@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -436,6 +437,7 @@ class DeliveryOrchestrator:
                     await self._destroy_sandbox(runtime=runtime)
                     return None
                 final_markdown = _assemble_writer_markdown(round_texts)
+                final_markdown = _strip_markdown_preamble(final_markdown)
                 if not final_markdown.strip():
                     logger.error(
                         "writer assembled blank markdown",
@@ -1110,6 +1112,13 @@ def _assemble_writer_markdown(round_texts: tuple[str, ...] | list[str]) -> str:
         return original_segments[0]
     segments = [segment.strip() for segment in original_segments]
     return "\n\n".join(segments)
+
+
+def _strip_markdown_preamble(markdown: str) -> str:
+    match = re.search(r"^# ", markdown, re.MULTILINE)
+    if match is None:
+        return markdown
+    return markdown[match.start():]
 
 
 def _normalize_python_success_summary(stdout: str) -> str:
