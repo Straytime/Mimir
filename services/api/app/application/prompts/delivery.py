@@ -100,7 +100,6 @@ def build_writer_prompt(*, invocation: WriterInvocation) -> PromptBundle:
 - 如果 `artifacts[]` 为空，仍可基于 `summary` 继续撰写，不要把“没有出图”输出成错误
 
 ## 输出
-请在思考环节快速构思好撰写思路，并准备好数据与图表，然后在最终输出中一次性给出完整研究内容。
 使用 GitHub Flavored Markdown 标准语法撰写。不要在最终输出中添加任何无关解释，例如“研究输出如下”、“以下是我的研究内容”等等。
 """.strip(),
         user_prompt=f"""
