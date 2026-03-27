@@ -69,6 +69,32 @@ export function selectCanDownloadPdf(state: ResearchSessionState) {
   return hasAvailableAction(state, "download_pdf");
 }
 
+export type CollectProgress = {
+  total: number;
+  finished: number;
+} | null;
+
+const COLLECT_PROGRESS_PHASES = new Set(["collecting", "summarizing_collection"]);
+
+export function selectCollectProgress(
+  state: ResearchSessionState,
+): CollectProgress {
+  const phase = state.remote.snapshot?.phase;
+
+  if (phase === undefined || !COLLECT_PROGRESS_PHASES.has(phase)) {
+    return null;
+  }
+
+  const collectItems = state.stream.timeline.filter(
+    (item) => item.kind === "collect",
+  );
+
+  return {
+    total: collectItems.length,
+    finished: collectItems.filter((item) => item.status !== "running").length,
+  };
+}
+
 export function selectCanDisconnectTask(state: ResearchSessionState) {
   return (
     state.remote.snapshot !== null &&
