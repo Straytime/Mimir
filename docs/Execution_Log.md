@@ -3723,3 +3723,49 @@ Copy the template below for each completed session:
   - 生产部署后人工视觉验收交互优化效果
   - 补充 artifact-lightbox 下载按钮测试
   - Frontend_IA.md 布局章节对齐（独立任务包）
+
+## TP-I06 澄清文本换行保持 + 选单去重
+
+- 日期时间: 2026-03-27 12:01:30 CST (+0800)
+- 任务包编号: TP-I06
+- 目标摘要: 修复需求澄清环节两个 UI 问题：(1) 自然语言和选单模式下 clarificationText 丢失换行，文字堆叠无样式；(2) 选单模式下原始文本与结构化选单卡片重复显示问题
+- 修改文件:
+  - `apps/web/features/research/components/clarification-panels.tsx` — 添加 `whitespace-pre-line`；选单模式下用 `extractClarificationIntro` 只显示 intro 文本
+  - `apps/web/features/research/utils/clarification-text.ts`（新建）— `extractClarificationIntro` 工具函数，用首个 question text 作 anchor 定位切分点
+  - `apps/web/tests/unit/extract-clarification-intro.spec.ts`（新建）— 4 个单元测试覆盖 intro 提取逻辑
+  - `apps/web/tests/component/clarification-detail-display.spec.tsx`（新建）— 3 个组件测试覆盖换行样式、去重、空 intro 隐藏
+- 测试/验证:
+  - 已运行:
+    - `pnpm test:unit` — 59 passed (12 files)
+    - `pnpm test:component` — 54 passed (16 files)
+    - `pnpm test:integration` — 37 passed
+    - `pnpm typecheck` — 0 error
+  - 未运行: `pnpm test:e2e`（需 Chromium + dev server）
+- TDD 纪律: tests-first → implementation，先写 4 unit + 3 component 测试再实现
+- 验收结论: accepted — 两个问题均修复，测试全绿，无回归
+- blocker / 风险:
+  - anchor 匹配依赖后端 `ClarificationQuestionSet.questions[0].question` 文本与 `clarificationText` 内容一致，若后端 parser 对问题文本做了截断或修饰可能匹配失败，fallback 行为是显示全文（安全降级）
+- 下一步建议:
+  - 生产部署后人工验收两种澄清模式的显示效果
+
+## TP-I07 Writer Preamble Strip
+
+- 日期时间: 2026-03-27 14:30:00 CST (+0800)
+- 任务包编号: TP-I07
+- 目标摘要: 在 writer 输出后、交付前加一层代码处理，从首个 markdown 一级标题（`# `）开始截取最终输出内容，丢弃 LLM 可能先吐出的解释/声明前缀。插入点在 `_assemble_writer_markdown` 之后、空白检查之前，同时影响 SSE 流和 ZIP/PDF 导出
+- 修改文件:
+  - `services/api/app/application/services/delivery.py` — 新增 `_strip_markdown_preamble()` 函数 + 在 `_run_writer_loop` 中调用
+  - `services/api/tests/unit/application/test_strip_markdown_preamble.py`（新建）— 6 个单元测试
+- 测试/验证:
+  - 已运行:
+    - `uv run pytest tests/unit/application/test_strip_markdown_preamble.py -v` — 6 passed
+    - `uv run pytest tests/unit` — 209 passed
+  - 未运行: 集成测试（需本地 PostgreSQL）
+- TDD 纪律: tests-first → implementation
+- 验收结论: accepted — 正则 `^# ` (MULTILINE) 准确匹配一级标题行首，6 个测试覆盖正常剥离、无前缀、无 H1、多 H1、空字符串、H2 在 H1 前等边界场景
+- blocker / 风险:
+  - 若 LLM 输出完全不含 `# ` 一级标题，函数原样返回（安全降级，不截断）
+  - 只影响 `_run_writer_loop` 返回的 `final_markdown`，SSE delta 流仍按原始 round_texts 分段发送（preamble strip 只作用于最终交付物）
+- 下一步建议:
+  - 生产部署后观察 writer 输出是否仍有前缀泄漏
+  - 如需 SSE 流也实时剥离前缀，需额外在 delta 分发层加处理（当前不做）
