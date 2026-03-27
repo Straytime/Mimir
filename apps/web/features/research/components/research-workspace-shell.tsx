@@ -12,6 +12,8 @@ import { useClarificationCountdown } from "../hooks/use-clarification-countdown"
 import { useHeartbeatLoop } from "../hooks/use-heartbeat-loop";
 import { useTaskStream } from "../hooks/use-task-stream";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
+import { selectCollectProgress } from "../store/selectors";
+import { fmt02 } from "../utils/format";
 import { PulseIndicator } from "./pulse-indicator";
 import { SessionStatusBar } from "./session-status-bar";
 import { TerminalBanner } from "./terminal-banner";
@@ -98,6 +100,12 @@ export function ResearchWorkspaceShell() {
   const requirementDetail = useResearchSessionStore(
     (state) => state.remote.currentRevision?.requirement_detail ?? null,
   );
+  const collectProgressTotal = useResearchSessionStore(
+    (state) => selectCollectProgress(state)?.total ?? null,
+  );
+  const collectProgressFinished = useResearchSessionStore(
+    (state) => selectCollectProgress(state)?.finished ?? null,
+  );
 
   if (snapshot === null) {
     return null;
@@ -129,6 +137,14 @@ export function ResearchWorkspaceShell() {
             <p className="mt-3 text-sm leading-7 text-secondary">
               {stageStatusCopy.description}
             </p>
+            {collectProgressTotal !== null && collectProgressFinished !== null ? (
+              <p className="mt-4 text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-surface-tint">
+                搜集进度：{fmt02(collectProgressFinished)}/{fmt02(collectProgressTotal)} 子任务完成
+                {collectProgressTotal > 0 && collectProgressFinished === collectProgressTotal
+                  ? " ✓"
+                  : null}
+              </p>
+            ) : null}
             {analysisText.length > 0 ? (
               <p className="mt-4 whitespace-pre-line text-sm leading-7 text-surface-tint">
                 {analysisPrefix}
