@@ -100,7 +100,7 @@ export function FeedbackComposer() {
 
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm text-secondary">
-            仅在交付后的反馈阶段开放，终态事件到达后会自动禁用。
+            报告完成后可在此提交反馈，系统将据此修订报告。
           </p>
           <button
             className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"

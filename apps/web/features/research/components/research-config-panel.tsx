@@ -58,7 +58,7 @@ export function ResearchConfigPanel() {
             选单澄清
           </span>
           <span className="block text-sm text-secondary">
-            由后端生成结构化问题集，前端默认把每题初始化为 `o_auto` 并维护 15 秒倒计时。
+            系统生成结构化问题并预选默认答案，15 秒倒计时后自动提交。
           </span>
         </span>
       </label>

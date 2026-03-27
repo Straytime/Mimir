@@ -80,9 +80,9 @@ export function ClarificationActionPanel() {
         <p className="text-sm leading-6 text-secondary">
           {isClarifying
             ? isNaturalMode
-              ? "自然语言澄清在 ready 事件到达后开放输入。"
-              : "选单澄清默认将每题初始化为 o_auto，可直接提交或先修改选项。"
-            : "澄清已交接给需求分析阶段，旧操作不会继续保留。"}
+              ? "系统正在生成追问，就绪后可在下方输入补充说明。"
+              : "下方问题已自动选择默认选项，你可以修改后提交或直接提交。"
+            : "澄清已完成，系统正在进入下一阶段。"}
         </p>
       </div>
 
@@ -121,7 +121,7 @@ export function ClarificationActionPanel() {
 
       {isClarifying && !isNaturalMode ? (
         <div className="bg-surface-container-low px-4 py-4 text-sm leading-7 text-secondary">
-          当前处于选单澄清。问题与倒计时显示在{"\u201C"}澄清详情{"\u201D"}区域，操作区只保留提交入口。
+          请在下方的问题列表中选择选项，倒计时结束后将自动提交。
         </div>
       ) : null}
 
@@ -173,14 +173,14 @@ export function ClarificationDetailPanel() {
       <div className="space-y-2">
         <h3 className="text-lg font-semibold text-primary">澄清详情</h3>
         <p className="text-sm leading-6 text-secondary">
-          只消费后端返回的结构化 question_set，不解析原始 markdown。
+          系统根据你的研究主题生成了以下追问，帮助进一步明确需求。
         </p>
       </div>
 
       <div className="bg-surface-container-low px-4 py-4 font-narrative text-sm leading-7 text-secondary">
         {clarificationText.length > 0
           ? clarificationText
-          : "等待澄清追问流式输出。"}
+          : "正在生成追问..."}
       </div>
 
       {snapshot.clarification_mode === "options" && questionSet !== null ? (
