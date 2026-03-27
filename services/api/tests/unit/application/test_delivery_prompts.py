@@ -121,8 +121,8 @@ def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() ->
     assert "避免输出过长" in prompt.system_prompt
     assert "python_interpreter" in prompt.system_prompt
     assert "canonical_path" in prompt.system_prompt
-    assert "一次性给出完整研究内容" in prompt.system_prompt
     assert "GitHub Flavored Markdown 标准语法" in prompt.system_prompt
+    assert "不要在最终输出中添加任何无关解释" in prompt.system_prompt
     assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
     assert "<参考信息>" in prompt.user_prompt
     assert "ref_1" in prompt.user_prompt

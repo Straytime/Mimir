@@ -161,6 +161,7 @@ def test_summary_prompt_semantic_lock_keeps_schema_and_runtime_inputs() -> None:
     assert "关键信息总结助手" in prompt.system_prompt
     assert "提取不超过10条关键发现" in prompt.system_prompt
     assert "严禁给出高度抽象的一句话总结" in prompt.system_prompt
+    assert "严禁给出任何结论或建议" in prompt.system_prompt
     assert "markdown 格式直接输出" in prompt.system_prompt
     assert "<信息获取目标>" in prompt.user_prompt
     assert "收集目标 1" in prompt.user_prompt
