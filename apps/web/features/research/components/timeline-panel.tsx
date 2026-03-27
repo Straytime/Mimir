@@ -63,7 +63,7 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
       >
         {items.length === 0 ? (
           <div className="bg-surface-container-lowest px-5 py-5 text-sm leading-7 text-tertiary">
-            等待研究透明度事件进入时间线。
+            研究进展将在这里实时显示。
           </div>
         ) : (
           <ol className="space-y-sp-6">

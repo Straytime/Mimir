@@ -5,6 +5,7 @@ import type { StoreApi } from "zustand";
 import { ResearchWorkspaceProviders, type ResearchRuntime } from "../providers/research-workspace-providers";
 import type { ResearchSessionStore } from "../store/research-session-store.types";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
+import { ExamplePrompts } from "./example-prompts";
 import { ResearchConfigPanel } from "./research-config-panel";
 import { ResearchInputPanel } from "./research-input-panel";
 import { ResearchWorkspaceShell } from "./research-workspace-shell";
@@ -36,6 +37,7 @@ function ResearchPageContent() {
         <section className="space-y-sp-10">
           <ResearchInputPanel />
           <ResearchConfigPanel />
+          <ExamplePrompts />
         </section>
       )}
     </main>

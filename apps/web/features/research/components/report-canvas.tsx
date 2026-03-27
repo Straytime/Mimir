@@ -186,7 +186,7 @@ export function ReportCanvas() {
               <div className="h-4 w-full animate-pulse bg-surface-container-high" />
               <div className="h-4 w-5/6 animate-pulse bg-surface-container-high" />
               <p className="pt-3 text-sm leading-6 text-secondary">
-                报告正文将在 `writer.delta` 到达后逐步追加到这里。
+                报告正文将在撰写开始后逐步显示。
               </p>
             </div>
           ) : (
