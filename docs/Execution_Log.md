@@ -3623,3 +3623,103 @@ Copy the template below for each completed session:
   - 人工视觉验收（本地 `pnpm dev` 或 production 部署后）
   - 如有视觉偏差，按 bug fix 模式逐项调优
   - e2e 回归验证
+
+## TP-I01~I05 前端交互优化
+
+- 日期时间: 2026-03-27 ~11:00 CST (+0800)
+- 任务包编号: TP-I01 / TP-I02 / TP-I03 / TP-I04 / TP-I05
+- session 标识: interaction-optimization-batch
+- 目标摘要: 基于前端交互分析（生产站点 + 后端 API 能力交叉对比），系统性优化前端用户体验。共 5 个任务包，覆盖终态引导、错误特化、倒计时视觉、报告复制、Artifact 放大/下载、搜集进度量化、首屏引导和开发者文案清理。排除反馈修订链路相关优化项。
+- 前置分析:
+  - 对 11 个后端 API 端点、37 种 SSE 事件类型、available_actions 门控机制做了完整梳理
+  - 交叉对比前端所有组件的交互实现，识别出 3 个 P0、5 个 P1、3 个 P2 问题
+  - 排除反馈修订相关项（P2-11 diff 高亮等），按优先级拆分为 5 个任务包
+- 各包明细:
+
+  ### TP-I01: 终态引导与错误特化
+  - 变更: terminal-banner.tsx（三种终态增加"开始新研究"按钮，复用 store.reset()）、research-input-panel.tsx（resource_busy 特化文案）
+  - 测试: terminal-banner.spec.tsx（5 cases）、research-input-panel.spec.tsx（2 cases）
+  - 关联回归: create-task-flow.spec.tsx 更新 409 断言文案
+  - PR: #83
+
+  ### TP-I02: 澄清倒计时视觉加强
+  - 变更: tailwind.config.ts（新增 pulse-fast 动画 0.8s 周期）、clarification-panels.tsx（≤10s 红色文字 + 脉冲 + "即将自动提交"前缀）
+  - 测试: clarification-countdown.spec.tsx（4 cases）
+  - 关联回归: clarification-flow.spec.tsx "剩余 10 秒" exact match → regex
+  - PR: #84
+
+  ### TP-I03: 报告复制 + Artifact Gallery 增强
+  - 变更: delivery-actions.tsx（新增"复制 Markdown"按钮 + useCopyMarkdown hook + grid 改 3 列）、artifact-lightbox.tsx（新建全屏 lightbox）、artifact-gallery.tsx（selectedArtifactId 状态 + onClick 打开 lightbox）
+  - 测试: delivery-copy.spec.tsx（4 cases）、artifact-lightbox.spec.tsx（4 cases）、artifact-gallery.spec.tsx（2 cases 新增）
+  - PR: #85
+
+  ### TP-I04: Collecting 阶段进度量化
+  - 变更: store/selectors.ts（新增 selectCollectProgress selector）、research-workspace-shell.tsx（阶段状态卡片渲染进度行）
+  - 测试: collect-progress.spec.ts（5 unit cases）、collect-progress-display.spec.tsx（2 component cases）
+  - 实现注意: selectCollectProgress 返回对象导致 zustand 引用不等无限 re-render → 拆为两个 primitive selector
+  - PR: #86
+
+  ### TP-I05: 首屏引导与文案优化
+  - 变更: example-prompts.tsx（新建 3 个示例研究问题卡片）、research-page-client.tsx（集成 ExamplePrompts）、10 处开发者文案替换（clarification-panels / report-canvas / feedback-composer / timeline-panel / research-config-panel）
+  - 测试: example-prompts.spec.tsx（2 cases）、copy-cleanup.spec.tsx（2 cases）
+  - 额外发现: research-config-panel.tsx 中 o_auto 残留（映射表外），一并清理
+  - PR: #87
+
+- 修改文件（新建 / 变更 / 测试）:
+  - `apps/web/features/research/components/terminal-banner.tsx`
+  - `apps/web/features/research/components/research-input-panel.tsx`
+  - `apps/web/features/research/components/clarification-panels.tsx`
+  - `apps/web/features/research/components/delivery-actions.tsx`
+  - `apps/web/features/research/components/artifact-lightbox.tsx`（新建）
+  - `apps/web/features/research/components/artifact-gallery.tsx`
+  - `apps/web/features/research/components/example-prompts.tsx`（新建）
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/report-canvas.tsx`
+  - `apps/web/features/research/components/feedback-composer.tsx`
+  - `apps/web/features/research/components/timeline-panel.tsx`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/store/selectors.ts`
+  - `apps/web/tailwind.config.ts`
+  - `apps/web/tests/component/terminal-banner.spec.tsx`（新建）
+  - `apps/web/tests/component/research-input-panel.spec.tsx`
+  - `apps/web/tests/component/clarification-countdown.spec.tsx`（新建）
+  - `apps/web/tests/component/delivery-copy.spec.tsx`（新建）
+  - `apps/web/tests/component/artifact-lightbox.spec.tsx`（新建）
+  - `apps/web/tests/component/artifact-gallery.spec.tsx`
+  - `apps/web/tests/component/example-prompts.spec.tsx`（新建）
+  - `apps/web/tests/component/copy-cleanup.spec.tsx`（新建）
+  - `apps/web/tests/component/collect-progress-display.spec.tsx`（新建）
+  - `apps/web/tests/unit/collect-progress.spec.ts`（新建）
+  - `apps/web/tests/integration/create-task-flow.spec.tsx`
+  - `apps/web/tests/integration/clarification-flow.spec.tsx`
+- 测试/验证:
+  - 已运行:
+    - `pnpm typecheck` — 0 error
+    - `pnpm test:unit` — 55 passed (12 files)
+    - `pnpm test:component` — 51 passed (15 files)
+    - `pnpm test:integration` — 37 passed (6 files)
+    - `pnpm test:contract` — 4 passed (4 files)
+    - 开发者术语 grep（ready 事件 / o_auto / question_set / writer.delta / 终态事件 / 透明度事件 / 流式输出）— 0 residual matches in components
+  - 未运行: `pnpm test:e2e`（需 Chromium + dev server）
+- TDD 纪律:
+  - 本次 TP-I01~I05 均遵循 tests-first → implementation 顺序
+  - 每个任务包的测试用例在任务包规范中明确定义，执行 agent 先写测试再实现
+  - TDD Review 发现 1 个测试缺口：artifact-lightbox.tsx 的下载按钮点击行为（fetch → blob → anchor download）未测试，属 P2 补充项
+- 验收结论:
+  - 5 个交互优化包全部实现并合入 main（PR #83~#87）
+  - 测试从 115 增长到 143（+28 新增测试），无回归
+  - 后端零改动，纯前端变更
+  - 所有开发者向文案已清理（10 处替换，0 残留）
+- 文档影响评估:
+  - DESIGN.md: 无需更新（设计宪法层面未引入新视觉规范）
+  - Frontend_IA.md: §4.2/4.3 三栏布局描述与现状（单列叙事流）不符，但该差异源于 TP-D01~D08 设计重构，不属于本次交互优化范围。建议作为独立文档对齐任务处理
+  - CLAUDE.md: 无需更新
+- blocker / 风险:
+  - artifact-lightbox 下载按钮缺少点击测试（P2，不阻塞）
+  - e2e 未跑，涉及 CSS selector 的 e2e case 可能需要更新
+  - Frontend_IA.md 与实现的布局差异需后续对齐
+- 下一步建议:
+  - 生产部署后人工视觉验收交互优化效果
+  - 补充 artifact-lightbox 下载按钮测试
+  - Frontend_IA.md 布局章节对齐（独立任务包）
