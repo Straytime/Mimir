@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useClarificationSubmit } from "../hooks/use-clarification-submit";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { selectCanSubmitClarification } from "../store/selectors";
+import { extractClarificationIntro } from "../utils/clarification-text";
 
 const MAX_CLARIFICATION_LENGTH = 500;
 
@@ -177,11 +178,22 @@ export function ClarificationDetailPanel() {
         </p>
       </div>
 
-      <div className="bg-surface-container-low px-4 py-4 font-narrative text-sm leading-7 text-secondary">
-        {clarificationText.length > 0
-          ? clarificationText
-          : "正在生成追问..."}
-      </div>
+      {questionSet !== null ? (
+        (() => {
+          const introText = extractClarificationIntro(clarificationText, questionSet);
+          return introText.length > 0 ? (
+            <div className="whitespace-pre-line bg-surface-container-low px-4 py-4 font-narrative text-sm leading-7 text-secondary">
+              {introText}
+            </div>
+          ) : null;
+        })()
+      ) : (
+        <div className="whitespace-pre-line bg-surface-container-low px-4 py-4 font-narrative text-sm leading-7 text-secondary">
+          {clarificationText.length > 0
+            ? clarificationText
+            : "正在生成追问..."}
+        </div>
+      )}
 
       {snapshot.clarification_mode === "options" && questionSet !== null ? (
         <div className="space-y-4">
