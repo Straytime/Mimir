@@ -62,7 +62,7 @@ export function SessionStatusBar() {
       </div>
 
       <button
-        className="border border-outline-variant px-4 py-1.5 text-sm font-medium text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:text-tertiary disabled:border-tertiary"
+        className="bg-transparent px-4 py-1.5 text-sm font-medium text-primary shadow-ghost transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:text-tertiary disabled:shadow-none"
         disabled={!canDisconnectTask}
         onClick={() => {
           void disconnectTask();

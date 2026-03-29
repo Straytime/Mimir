@@ -190,7 +190,7 @@ export function ReportCanvas() {
               </p>
             </div>
           ) : (
-            <div className="prose prose-invert max-w-none font-narrative leading-[1.6] text-secondary">
+            <div className="prose prose-lab max-w-none font-narrative leading-[1.6] text-secondary">
               <ReactMarkdown
                 components={{
                   a: ({ children, href, ...props }) => (
@@ -220,7 +220,7 @@ export function ReportCanvas() {
 
         {!autoScrollEnabled ? (
           <button
-            className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+            className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
             onClick={scrollToBottom}
             type="button"
           >

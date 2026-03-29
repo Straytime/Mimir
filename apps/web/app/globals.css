@@ -21,3 +21,92 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* ── Grain texture overlay ── */
+@layer utilities {
+  .grain-overlay::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+  }
+}
+
+/* ── Stagger animation delay utilities ── */
+@layer utilities {
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.1s; }
+  .stagger-3 { animation-delay: 0.15s; }
+  .stagger-4 { animation-delay: 0.2s; }
+  .stagger-5 { animation-delay: 0.25s; }
+  .stagger-6 { animation-delay: 0.3s; }
+}
+
+/* ── Prose (report canvas) theme: The Lab Terminal ── */
+.prose-lab {
+  --tw-prose-body: #C6C6C7;
+  --tw-prose-headings: #FFFFFF;
+  --tw-prose-links: #00DCE5;
+  --tw-prose-bold: #FFFFFF;
+  --tw-prose-code: #31EAF3;
+  --tw-prose-quotes: #C6C6C7;
+  --tw-prose-quote-borders: #00DCE5;
+  --tw-prose-counters: #454747;
+  --tw-prose-bullets: #454747;
+  --tw-prose-hr: #2A2A2A;
+  --tw-prose-th-borders: #2A2A2A;
+  --tw-prose-td-borders: #1B1B1B;
+  --tw-prose-captions: #454747;
+  --tw-prose-pre-bg: #0E0E0E;
+  --tw-prose-pre-code: #C6C6C7;
+}
+
+.prose-lab :where(a):not(:where([class~="not-prose"] *)) {
+  text-decoration-color: rgba(0, 220, 229, 0.3);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.2s;
+}
+.prose-lab :where(a:hover):not(:where([class~="not-prose"] *)) {
+  text-decoration-color: #00DCE5;
+}
+
+.prose-lab :where(blockquote):not(:where([class~="not-prose"] *)) {
+  border-left-width: 2px;
+  font-style: normal;
+  font-family: var(--font-narrative), Newsreader, serif;
+}
+
+.prose-lab :where(code):not(:where([class~="not-prose"] *)):not(pre code) {
+  background: #1B1B1B;
+  padding: 0.15em 0.4em;
+  font-size: 0.875em;
+}
+
+.prose-lab :where(pre):not(:where([class~="not-prose"] *)) {
+  border: none;
+}
+
+.prose-lab :where(table):not(:where([class~="not-prose"] *)) {
+  font-size: 0.875rem;
+}
+
+.prose-lab :where(th):not(:where([class~="not-prose"] *)) {
+  font-family: var(--font-ui), "Space Grotesk", sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.6875rem;
+  letter-spacing: 0.15em;
+}
+
+.prose-lab :where(img):not(:where([class~="not-prose"] *)) {
+  border-radius: 0px;
+}
+
+.prose-lab :where(hr):not(:where([class~="not-prose"] *)) {
+  border-style: solid;
+}

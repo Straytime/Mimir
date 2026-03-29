@@ -34,7 +34,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
       lang="zh-CN"
       className={`${spaceGrotesk.variable} ${newsreader.variable}`}
     >
-      <body>{children}</body>
+      <body className="grain-overlay">{children}</body>
     </html>
   );
 }
