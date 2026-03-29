@@ -576,7 +576,8 @@ a.footnote-backref {{
 }}
 
 .footnote ol {{
-  padding-left: 1.2em;
+  list-style-type: none;
+  padding-left: 0;
 }}
 
 .footnote li {{
