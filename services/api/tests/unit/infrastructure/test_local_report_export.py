@@ -338,3 +338,30 @@ async def test_build_pdf_logs_real_exception_before_wrapping(
     assert matching_logs
     assert matching_logs[-1].exception_type == "ValueError"
     assert matching_logs[-1].exception_message == "bad pdf story"
+
+
+def _build_twelve_footnote_markdown() -> str:
+    body_refs = " ".join(f"观点{i}[^{i}]" for i in range(1, 13))
+    footnote_defs = "\n".join(
+        f"[^{i}]: [来源{i}](https://example.com/src-{i})" for i in range(1, 13)
+    )
+    return f"# 两位数脚注验证\n\n{body_refs}\n\n{footnote_defs}\n"
+
+
+def test_footnote_ol_css_hides_native_list_markers() -> None:
+    """CSS for .footnote ol must suppress native OL numbering."""
+    assert "list-style-type: none" in LOCAL_REPORT_EXPORT_SOURCE
+
+
+@pytest.mark.asyncio
+async def test_build_pdf_renders_double_digit_footnote_labels_completely() -> None:
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown=_build_twelve_footnote_markdown(),
+        artifacts=(),
+    )
+
+    pdf_text = _extract_pdf_text(pdf_bytes)
+
+    assert "两位数脚注验证" in pdf_text
+    for n in range(10, 13):
+        assert f"[{n}]" in pdf_text, f"footnote label [{n}] missing from PDF text"
