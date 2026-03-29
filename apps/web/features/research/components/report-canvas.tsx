@@ -182,9 +182,15 @@ export function ReportCanvas() {
         >
           {shouldShowSkeleton ? (
             <div className="space-y-3">
-              <div className="h-4 w-2/3 animate-pulse bg-surface-container-high" />
-              <div className="h-4 w-full animate-pulse bg-surface-container-high" />
-              <div className="h-4 w-5/6 animate-pulse bg-surface-container-high" />
+              <div className="relative h-4 w-2/3 overflow-hidden bg-surface-container-high">
+                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-surface-tint/10 to-transparent" />
+              </div>
+              <div className="relative h-4 w-full overflow-hidden bg-surface-container-high">
+                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-surface-tint/10 to-transparent" />
+              </div>
+              <div className="relative h-4 w-5/6 overflow-hidden bg-surface-container-high">
+                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-surface-tint/10 to-transparent" />
+              </div>
               <p className="pt-3 text-sm leading-6 text-secondary">
                 报告正文将在撰写开始后逐步显示。
               </p>
