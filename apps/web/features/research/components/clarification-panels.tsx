@@ -98,7 +98,7 @@ export function ClarificationActionPanel() {
           <textarea
             aria-describedby="clarification-counter"
             aria-invalid={clarificationFieldError !== null}
-            className="min-h-32 w-full border-0 bg-surface-container-lowest px-4 py-4 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint transition focus:bg-surface-container-high focus:shadow-[inset_2px_0_0_0_theme(colors.surface-tint)] disabled:cursor-not-allowed disabled:opacity-70"
+            className="min-h-32 w-full border-0 bg-surface-container-lowest px-4 py-4 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint transition focus:bg-surface-container-high focus:shadow-inset-caret disabled:cursor-not-allowed disabled:opacity-70"
             disabled={isTextareaDisabled}
             id="clarification-draft"
             maxLength={MAX_CLARIFICATION_LENGTH}
@@ -136,7 +136,7 @@ export function ClarificationActionPanel() {
       ) : null}
 
       <button
-        className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
+        className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
         disabled={!isClarifying || !canSubmitClarification || isSubmitting}
         onClick={() => {
           void submitClarification();

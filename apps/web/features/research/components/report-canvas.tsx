@@ -182,15 +182,21 @@ export function ReportCanvas() {
         >
           {shouldShowSkeleton ? (
             <div className="space-y-3">
-              <div className="h-4 w-2/3 animate-pulse bg-surface-container-high" />
-              <div className="h-4 w-full animate-pulse bg-surface-container-high" />
-              <div className="h-4 w-5/6 animate-pulse bg-surface-container-high" />
+              <div className="relative h-4 w-2/3 overflow-hidden bg-surface-container-high">
+                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-surface-tint/10 to-transparent" />
+              </div>
+              <div className="relative h-4 w-full overflow-hidden bg-surface-container-high">
+                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-surface-tint/10 to-transparent" />
+              </div>
+              <div className="relative h-4 w-5/6 overflow-hidden bg-surface-container-high">
+                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-surface-tint/10 to-transparent" />
+              </div>
               <p className="pt-3 text-sm leading-6 text-secondary">
                 报告正文将在撰写开始后逐步显示。
               </p>
             </div>
           ) : (
-            <div className="prose prose-invert max-w-none font-narrative leading-[1.6] text-secondary">
+            <div className="prose prose-lab max-w-none font-narrative leading-[1.6] text-secondary">
               <ReactMarkdown
                 components={{
                   a: ({ children, href, ...props }) => (
@@ -220,7 +226,7 @@ export function ReportCanvas() {
 
         {!autoScrollEnabled ? (
           <button
-            className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:shadow-[0_2px_0_0_theme(colors.surface-tint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+            className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
             onClick={scrollToBottom}
             type="button"
           >

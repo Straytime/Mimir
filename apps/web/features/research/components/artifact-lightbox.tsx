@@ -87,7 +87,7 @@ export function ArtifactLightbox({ artifact, onClose }: ArtifactLightboxProps) {
         </div>
 
         <button
-          className="mt-4 border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+          className="mt-4 bg-transparent px-4 py-3 text-sm font-semibold text-primary shadow-ghost transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
           onClick={() => {
             void downloadArtifact(artifact);
           }}

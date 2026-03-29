@@ -21,7 +21,7 @@ export function ExamplePrompts() {
       <div className="grid gap-3 sm:grid-cols-3">
         {EXAMPLES.map((example) => (
           <button
-            className="bg-surface-container-lowest px-4 py-4 text-left text-sm leading-6 text-secondary transition hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+            className="bg-surface-container-lowest px-4 py-4 text-left text-sm leading-6 text-secondary shadow-ghost transition hover:bg-surface-container-high hover:shadow-glow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
             key={example}
             onClick={() => setInitialPromptDraft(example)}
             type="button"

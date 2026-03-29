@@ -21,8 +21,8 @@ function ResearchPageContent() {
   const isActiveWorkspace = taskId !== null && snapshot !== null;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 px-sp-8 py-16">
-      <div className="space-y-4">
+    <main className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 bg-radial-glow px-sp-8 py-16">
+      <div className="animate-fade-in-up space-y-4">
         <p className="text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-surface-tint">
           Mimir
         </p>
@@ -35,9 +35,15 @@ function ResearchPageContent() {
         <ResearchWorkspaceShell />
       ) : (
         <section className="space-y-sp-10">
-          <ResearchInputPanel />
-          <ResearchConfigPanel />
-          <ExamplePrompts />
+          <div className="animate-fade-in-up stagger-1">
+            <ResearchInputPanel />
+          </div>
+          <div className="animate-fade-in-up stagger-2">
+            <ResearchConfigPanel />
+          </div>
+          <div className="animate-fade-in-up stagger-3">
+            <ExamplePrompts />
+          </div>
         </section>
       )}
     </main>

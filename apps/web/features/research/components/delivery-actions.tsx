@@ -179,7 +179,7 @@ export function DeliveryActions() {
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <button
-          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
+          className="bg-transparent px-4 py-3 text-sm font-semibold text-primary shadow-ghost transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:text-tertiary disabled:shadow-none"
           disabled={!canDownloadMarkdown}
           onClick={() => {
             void copyMarkdown();
@@ -189,7 +189,7 @@ export function DeliveryActions() {
           {getCopyButtonLabel(copyState)}
         </button>
         <button
-          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
+          className="bg-transparent px-4 py-3 text-sm font-semibold text-primary shadow-ghost transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:text-tertiary disabled:shadow-none"
           disabled={
             delivery === null ||
             refreshingDelivery ||
@@ -206,7 +206,7 @@ export function DeliveryActions() {
             : "下载 Markdown Zip"}
         </button>
         <button
-          className="border border-outline-variant/15 bg-transparent px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:border-tertiary disabled:text-tertiary"
+          className="bg-transparent px-4 py-3 text-sm font-semibold text-primary shadow-ghost transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:text-tertiary disabled:shadow-none"
           disabled={
             delivery === null ||
             refreshingDelivery ||

@@ -124,13 +124,20 @@ export function ResearchWorkspaceShell() {
 
       {snapshot.phase === "clarifying" ? (
         <>
-          <ClarificationActionPanel />
-          <ClarificationDetailPanel />
+          <div className="animate-fade-in-up">
+            <ClarificationActionPanel />
+          </div>
+          <div className="animate-fade-in-up stagger-1">
+            <ClarificationDetailPanel />
+          </div>
         </>
       ) : (
         <div className="space-y-sp-10">
-          <div className="bg-surface-container-high px-5 py-5">
-            <h3 className="flex items-center gap-3 text-lg font-narrative font-semibold text-primary">
+          <div className="animate-fade-in-up bg-surface-container-high px-5 py-5">
+            <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
+              {stageStatusCopy.eyebrow}
+            </p>
+            <h3 className="mt-sp-2 flex items-center gap-3 text-lg font-narrative font-semibold text-primary">
               {snapshot.phase !== "delivered" ? <PulseIndicator /> : null}
               {stageStatusCopy.title}
             </h3>
@@ -153,14 +160,24 @@ export function ResearchWorkspaceShell() {
             ) : null}
           </div>
 
-          <RequirementSummaryCard requirementDetail={requirementDetail} />
-          <ReportCanvas />
-          <ArtifactGallery />
-          <DeliveryActions />
+          <div className="animate-fade-in-up stagger-1">
+            <RequirementSummaryCard requirementDetail={requirementDetail} />
+          </div>
+          <div className="animate-fade-in-up stagger-2">
+            <ReportCanvas />
+          </div>
+          <div className="animate-fade-in-up stagger-3">
+            <ArtifactGallery />
+          </div>
+          <div className="animate-fade-in-up stagger-4">
+            <DeliveryActions />
+          </div>
         </div>
       )}
 
-      <TimelinePanel items={timelineItems} />
+      <div className="animate-fade-in-up stagger-5">
+        <TimelinePanel items={timelineItems} />
+      </div>
     </section>
   );
 }
