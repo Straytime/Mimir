@@ -3769,3 +3769,64 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 生产部署后观察 writer 输出是否仍有前缀泄漏
   - 如需 SSE 流也实时剥离前缀，需额外在 delta 分发层加处理（当前不做）
+
+## TP-D01~D05 前端 Lab Terminal 设计系统全面升级
+
+- 日期时间: 2026-03-29 14:05:00 CST (+0800)
+- 任务包编号: TP-D01 ~ TP-D05（合并执行）
+- session 标识: design-visual-foundation
+- 目标摘要: 基于 DESIGN.md "The Lab Terminal" 设计宪法，对前端进行全面视觉升级。建立设计基础设施（tokens、动画、纹理），将所有组件迁移到合规状态（No-Line Rule、Ghost Border、glow tokens），增加阶段转场动画和氛围效果。纯前端变更，后端零改动。
+- 修改文件:
+  - `apps/web/tailwind.config.ts` — 新增 boxShadow tokens（glow-sm/glow-md/inset-caret/ghost）、backgroundImage（cta-gradient/radial-glow）、keyframes（fade-in-up/scan/glow-pulse）、animations
+  - `apps/web/app/globals.css` — 新增 grain-overlay 纹理层、stagger delay utilities、prose-lab 完整主题（16 个 prose 变量 + 8 个元素级样式覆盖）
+  - `apps/web/app/layout.tsx` — body 添加 grain-overlay class
+  - `apps/web/features/research/components/delivery-actions.tsx` — 3 处 secondary 按钮 border → shadow-ghost + hover:shadow-glow-sm
+  - `apps/web/features/research/components/session-status-bar.tsx` — 终止按钮 border → shadow-ghost
+  - `apps/web/features/research/components/artifact-lightbox.tsx` — 下载按钮 border → shadow-ghost
+  - `apps/web/features/research/components/task-artifact-image.tsx` — 重试按钮 border → shadow-ghost
+  - `apps/web/features/research/components/terminal-banner.tsx` — primary 按钮 hover → shadow-glow-sm
+  - `apps/web/features/research/components/clarification-panels.tsx` — primary 按钮 hover → shadow-glow-sm；textarea focus → shadow-inset-caret
+  - `apps/web/features/research/components/feedback-composer.tsx` — 同上
+  - `apps/web/features/research/components/research-input-panel.tsx` — 同上
+  - `apps/web/features/research/components/report-canvas.tsx` — prose-invert → prose-lab；skeleton animate-pulse → scan-line；回到底部按钮 hover → shadow-glow-sm
+  - `apps/web/features/research/components/research-page-client.tsx` — 主容器 bg-radial-glow；hero + idle section fade-in-up stagger
+  - `apps/web/features/research/components/research-workspace-shell.tsx` — stage status card 新增 eyebrow label；所有 workspace section 添加 fade-in-up stagger；clarification panels 添加 stagger
+  - `apps/web/features/research/components/example-prompts.tsx` — 示例卡片 shadow-ghost + hover:shadow-glow-md
+- 测试/验证:
+  - 已运行:
+    - `pnpm typecheck` — 0 error
+    - `pnpm test:unit` — 59 passed (12 files)
+    - `pnpm test:component` — 54 passed (16 files)
+    - `pnpm test:integration` — 37 passed (6 files)
+    - border 残留 grep — 0 matches in components
+    - inline shadow 残留 grep — 0 matches in components
+  - 未运行: `pnpm test:e2e`（需 Chromium + dev server）
+- 设计宪法合规审查:
+  - 0px border-radius: ✅ tailwind.config DEFAULT = 0px
+  - No-Line Rule: ✅ 全部 border 已迁移为 shadow-ghost
+  - Ghost Border (15% opacity): ✅ shadow-ghost = inset 0 0 0 1px rgba(71,71,71,0.15)
+  - Button glow (2px bottom-glow): ✅ shadow-glow-sm = 0 2px 0 0 #00DCE5
+  - Input caret (surface-tint left edge): ✅ shadow-inset-caret = inset 2px 0 0 0 #00DCE5
+  - Tonal Stacking depth: ✅ surface → low → high 三级
+  - Glassmorphism header: ✅ backdrop-blur-[20px] bg-surface/70
+  - Grain texture: ✅ SVG noise 3% opacity fixed overlay
+  - Radial glow atmosphere: ✅ 页面顶部 cyan 辉光渐变
+  - Prose theme: ✅ prose-lab 16 变量 + 元素样式全覆盖
+  - Stagger reveal: ✅ 着陆页 + 工作台 + 澄清面板全面覆盖
+  - Scan-line skeleton: ✅ 报告骨架屏 cyan 扫描线效果
+  - Eyebrow labels: ✅ stage status card 已添加
+  - CTA gradient: ✅ token 已定义（bg-cta-gradient），待组件按需使用
+  - Pulse indicator 4px: ✅ h-1 w-1
+- 文档影响评估:
+  - DESIGN.md: 无需更新（是对齐目标，非变更对象）
+  - Frontend_IA.md: skeleton 描述仍准确，无需更新
+  - CLAUDE.md: 无涉及具体 CSS 类名，无需更新
+- 验收结论: accepted — 15 个文件变更，+184/-34 行，150 测试全绿零回归。设计宪法 14 条规则全部合规。后端零改动。
+- blocker / 风险:
+  - e2e 未跑，涉及 CSS class selector 的 e2e case 可能需更新（如有匹配 border class 的断言）
+  - grain overlay z-index=9999 理论上可能覆盖某些绝对定位元素，但 pointer-events:none 保证不影响交互
+  - stagger 动画是一次性的（animation-fill-mode: both），页面内动态出现的组件只在首次挂载时 fade-in
+- 下一步建议:
+  - 生产部署后人工视觉验收全流程（着陆页 → 澄清 → 工作台 → 报告 → 交付）
+  - 按需在 CTA 级按钮上应用 bg-cta-gradient（当前 token 已就绪但未使用）
+  - 考虑对 e2e 测试做一轮 selector 检查
