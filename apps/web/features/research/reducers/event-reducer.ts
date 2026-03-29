@@ -79,6 +79,8 @@ function applyTerminalEvent(
     ui: {
       ...state.ui,
       terminalReason,
+      terminationDetail:
+        event.event === "task.terminated" ? event.payload.reason : null,
       pendingAction: null,
       revisionTransition: {
         status: "idle",

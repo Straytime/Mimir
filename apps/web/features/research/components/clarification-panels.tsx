@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type KeyboardEvent, useEffect, useState } from "react";
 
 import { useClarificationSubmit } from "../hooks/use-clarification-submit";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
@@ -74,6 +74,20 @@ export function ClarificationActionPanel() {
   const isTextareaDisabled =
     !isClarifying || !isNaturalMode || !canSubmitClarification || isSubmitting;
 
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      canSubmitClarification &&
+      !isSubmitting &&
+      isClarifying &&
+      isNaturalMode
+    ) {
+      event.preventDefault();
+      void submitClarification();
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="space-y-2">
@@ -103,6 +117,7 @@ export function ClarificationActionPanel() {
             id="clarification-draft"
             maxLength={MAX_CLARIFICATION_LENGTH}
             onChange={(event) => setClarificationDraft(event.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="例如：重点看中国市场，偏商业分析，覆盖近两年变化。"
             value={clarificationDraft}
           />

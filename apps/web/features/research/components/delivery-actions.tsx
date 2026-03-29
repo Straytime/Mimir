@@ -71,6 +71,9 @@ function createDownloadFilename(format: DownloadFormat) {
 }
 
 export function DeliveryActions() {
+  const phase = useResearchSessionStore(
+    (state) => state.remote.snapshot?.phase ?? null,
+  );
   const delivery = useResearchSessionStore((state) => state.remote.delivery);
   const refreshingDelivery = useResearchSessionStore(
     (state) => state.deliveryUi.refreshingDelivery,
@@ -89,10 +92,15 @@ export function DeliveryActions() {
   );
   const canDownloadMarkdown = useResearchSessionStore(selectCanDownloadMarkdown);
   const canDownloadPdf = useResearchSessionStore(selectCanDownloadPdf);
+  const reset = useResearchSessionStore((state) => state.reset);
   const refreshDelivery = useDeliveryRefresh();
   const { copyState, copyMarkdown } = useCopyMarkdown();
 
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
+
+  if (phase !== "delivered") {
+    return null;
+  }
 
   async function downloadDelivery(
     format: DownloadFormat,
@@ -233,6 +241,16 @@ export function DeliveryActions() {
       {deliveryError ? (
         <p className="mt-4 text-sm leading-6 text-[#FF6B6B]">{deliveryError}</p>
       ) : null}
+
+      <div className="mt-6 border-t border-outline-variant pt-6">
+        <button
+          className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+          onClick={reset}
+          type="button"
+        >
+          开始新研究
+        </button>
+      </div>
     </section>
   );
 }
