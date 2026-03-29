@@ -9,6 +9,7 @@ import type {
   RevisionSummary,
   TaskDetailResponse,
   TaskSnapshot,
+  TerminationReason,
 } from "@/lib/contracts";
 
 export type SseState = "idle" | "connecting" | "open" | "closed" | "failed";
@@ -104,6 +105,7 @@ export type ResearchSessionState = {
     revisionTransition: RevisionTransitionState;
     reportAutoScrollEnabled: boolean;
     terminalReason: TerminalReason;
+    terminationDetail: TerminationReason | null;
   };
   deliveryUi: {
     refreshingDelivery: boolean;
@@ -226,6 +228,7 @@ export function createResearchSessionState(): ResearchSessionState {
       },
       reportAutoScrollEnabled: true,
       terminalReason: null,
+      terminationDetail: null,
     },
     deliveryUi: {
       refreshingDelivery: false,

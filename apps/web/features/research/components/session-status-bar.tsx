@@ -26,6 +26,12 @@ const PHASE_LABELS: Record<string, string> = {
   processing_feedback: "正在处理反馈",
 };
 
+const TERMINAL_LABELS: Record<string, string> = {
+  failed: "任务已失败",
+  terminated: "任务已终止",
+  expired: "任务已过期",
+};
+
 export function SessionStatusBar() {
   const sseState = useResearchSessionStore((state) => state.session.sseState);
   const taskId = useResearchSessionStore((state) => state.session.taskId);
@@ -33,12 +39,17 @@ export function SessionStatusBar() {
   const pendingAction = useResearchSessionStore(
     (state) => state.ui.pendingAction,
   );
+  const terminalReason = useResearchSessionStore(
+    (state) => state.ui.terminalReason,
+  );
   const canDisconnectTask = useResearchSessionStore(selectCanDisconnectTask);
   const disconnectTask = useDisconnectGuard();
 
-  const phaseLabel = snapshot
-    ? (PHASE_LABELS[snapshot.phase] ?? snapshot.phase)
-    : "未开始";
+  const phaseLabel = terminalReason
+    ? (TERMINAL_LABELS[terminalReason] ?? terminalReason)
+    : snapshot
+      ? (PHASE_LABELS[snapshot.phase] ?? snapshot.phase)
+      : "未开始";
 
   return (
     <section
