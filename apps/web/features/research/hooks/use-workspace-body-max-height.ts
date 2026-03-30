@@ -26,7 +26,10 @@ function measureWorkspaceBodyMaxHeight(root: HTMLElement) {
   );
 }
 
-export function useWorkspaceBodyMaxHeight(rootRef: RefObject<HTMLElement | null>) {
+export function useWorkspaceBodyMaxHeight(
+  rootRef: RefObject<HTMLElement | null>,
+  isActiveWorkspace: boolean,
+) {
   useLayoutEffect(() => {
     const root = rootRef.current;
 
@@ -69,5 +72,5 @@ export function useWorkspaceBodyMaxHeight(rootRef: RefObject<HTMLElement | null>
       resizeObserver?.disconnect();
       root.style.removeProperty(RESEARCH_CARD_MAX_HEIGHT_CSS_VAR);
     };
-  }, [rootRef]);
+  }, [isActiveWorkspace, rootRef]);
 }

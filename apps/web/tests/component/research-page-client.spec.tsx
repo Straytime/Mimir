@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 
 import { ResearchPageClient } from "@/features/research/components/research-page-client";
@@ -109,7 +109,7 @@ test("renders stage-gated workspace cards once their content is ready", () => {
   expect(screen.queryByLabelText("交付操作")).not.toBeInTheDocument();
 });
 
-test("writes a shared body-height token for collection trace and report canvas", () => {
+test("recomputes the shared card-height token when the workspace becomes active", () => {
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
 
   const statusBarRect = {
@@ -159,20 +159,38 @@ test("writes a shared body-height token for collection trace and report canvas",
     const store = createResearchSessionStore(
       makeResearchSessionState({
         session: {
-          taskId: "tsk_stage0",
-          taskToken: "secret_stage0",
-          sseState: "open",
+          taskId: null,
+          taskToken: null,
+          sseState: "idle",
         },
         remote: {
-          snapshot: makeTaskSnapshot({
-            phase: "collecting",
-            status: "running",
-          }),
+          snapshot: null,
         },
       }),
     );
 
     render(<ResearchPageClient store={store} />);
+
+    expect(screen.getByRole("main").style.getPropertyValue("--research-card-max-h")).toBe("");
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        session: {
+          ...state.session,
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          ...state.remote,
+          snapshot: makeTaskSnapshot({
+            phase: "collecting",
+            status: "running",
+          }),
+        },
+      }));
+    });
 
     expect(screen.getByRole("main")).toHaveStyle({
       "--research-card-max-h": "600px",
