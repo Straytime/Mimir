@@ -285,9 +285,9 @@ apps/web/
 
 高度约束：
 
-1. 长内容卡片 body 不再使用固定 `34rem`。
-2. `Collection Trace` 与 `ReportBody` 共享同一动态 max-height token，该 token 由工作台可视内容区高度推导，必须扣除顶栏与底部输入区占位。
-3. 该约束优先作用于卡片内部滚动容器，不改变外层卡片的布局节奏。
+1. 长内容卡片不再使用固定 `34rem`。
+2. `Collection Trace` 与 `Report Canvas` 共享同一动态卡片级 max-height token，该 token 由工作台可视内容区高度推导，必须扣除顶栏与底部输入区占位。
+3. 该约束作用于卡片容器本身；卡片头部保持固定可见，内部 body 才是滚动区。
 
 ### 5.6 `DeliveryActions`
 

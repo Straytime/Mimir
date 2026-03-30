@@ -4062,3 +4062,25 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## TP-COLLECTION-TRACE-CARD-HEIGHT-03 Collection Trace and Report Canvas Card-Level Height Cap
+
+- 日期: 2026-03-30
+- 分支: `codex/card-level-height-cap`
+- 目标: 将 `Collection Trace` 与 `Report Canvas` 的高度约束从 body 级纠正为 card 级，确保卡片本身限高、内部内容滚动
+
+### 变更内容
+- 更新 [docs/Frontend_IA.md](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/docs/Frontend_IA.md)，明确长内容卡片的动态上限作用于卡片容器本身，卡片头部固定可见，内部 body 负责滚动
+- 调整 [apps/web/features/research/components/timeline-panel.tsx](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/apps/web/features/research/components/timeline-panel.tsx) 与 [apps/web/features/research/components/report-canvas.tsx](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/apps/web/features/research/components/report-canvas.tsx)，将共享动态高度 token 挂到外层卡片容器，并让内部 body 变成 flex 滚动区
+- 将共享 token 重命名为 card-level 语义，更新 [apps/web/features/research/utils/layout-vars.ts](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/apps/web/features/research/utils/layout-vars.ts) 与 [apps/web/features/research/hooks/use-workspace-body-max-height.ts](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/apps/web/features/research/hooks/use-workspace-body-max-height.ts)
+- 更新 [apps/web/tests/component/timeline-panel.spec.tsx](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/apps/web/tests/component/timeline-panel.spec.tsx)、[apps/web/tests/component/report-canvas.spec.tsx](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/apps/web/tests/component/report-canvas.spec.tsx)、[apps/web/tests/component/research-page-client.spec.tsx](/Users/aminer/Library/CloudStorage/OneDrive-个人/projects/Mimir/apps/web/tests/component/research-page-client.spec.tsx) 以覆盖 card-level 限高与内部滚动行为
+
+### 验证
+- `cd apps/web && pnpm typecheck` - 0 error
+- `cd apps/web && pnpm test:component` - 88 passed
+- `cd apps/web && pnpm test:integration` - 37 passed
+
+### 验收结论
+- accepted

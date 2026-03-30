@@ -155,7 +155,7 @@ test("pauses auto-scroll on manual upward scroll and resumes on click", () => {
   });
 });
 
-test("uses the shared workspace body height token for report scrolling", () => {
+test("uses the shared workspace card height token for report scrolling", () => {
   const store = createStage6Store();
 
   store.setState((state) => ({
@@ -168,9 +168,15 @@ test("uses the shared workspace body height token for report scrolling", () => {
 
   renderWithStore(<ReportCanvas />, { store });
 
-  expect(screen.getByRole("region", { name: "报告正文" })).toHaveStyle({
-    maxHeight: "var(--research-scroll-body-max-h)",
+  expect(screen.getByRole("region", { name: "报告画布" })).toHaveStyle({
+    maxHeight: "var(--research-card-max-h)",
   });
+
+  expect(screen.getByRole("region", { name: "报告正文" })).toHaveClass(
+    "flex-1",
+    "min-h-0",
+    "overflow-y-auto",
+  );
 });
 
 test("only renders markdown images from current task artifact urls", async () => {

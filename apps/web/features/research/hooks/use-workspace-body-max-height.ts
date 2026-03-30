@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, type RefObject } from "react";
 
-import { RESEARCH_SCROLL_BODY_MAX_HEIGHT_CSS_VAR } from "../utils/layout-vars";
+import { RESEARCH_CARD_MAX_HEIGHT_CSS_VAR } from "../utils/layout-vars";
 
 function measureWorkspaceBodyMaxHeight(root: HTMLElement) {
   const statusBar = root.querySelector<HTMLElement>(
@@ -13,7 +13,7 @@ function measureWorkspaceBodyMaxHeight(root: HTMLElement) {
   );
 
   if (statusBar === null || inputBar === null) {
-    root.style.removeProperty(RESEARCH_SCROLL_BODY_MAX_HEIGHT_CSS_VAR);
+    root.style.removeProperty(RESEARCH_CARD_MAX_HEIGHT_CSS_VAR);
     return;
   }
 
@@ -21,7 +21,7 @@ function measureWorkspaceBodyMaxHeight(root: HTMLElement) {
     inputBar.getBoundingClientRect().top - statusBar.getBoundingClientRect().bottom;
 
   root.style.setProperty(
-    RESEARCH_SCROLL_BODY_MAX_HEIGHT_CSS_VAR,
+    RESEARCH_CARD_MAX_HEIGHT_CSS_VAR,
     `${Math.max(0, Math.floor(availableHeight))}px`,
   );
 }
@@ -67,7 +67,7 @@ export function useWorkspaceBodyMaxHeight(rootRef: RefObject<HTMLElement | null>
     return () => {
       window.removeEventListener("resize", update);
       resizeObserver?.disconnect();
-      root.style.removeProperty(RESEARCH_SCROLL_BODY_MAX_HEIGHT_CSS_VAR);
+      root.style.removeProperty(RESEARCH_CARD_MAX_HEIGHT_CSS_VAR);
     };
   }, [rootRef]);
 }
