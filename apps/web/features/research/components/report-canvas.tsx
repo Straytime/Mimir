@@ -94,6 +94,27 @@ function ReportParagraph(props: ComponentPropsWithoutRef<"p">) {
   return <p>{props.children}</p>;
 }
 
+function ReportMarkdownLink(props: ComponentPropsWithoutRef<"a">) {
+  const linkProps = props as ComponentPropsWithoutRef<"a"> & Record<string, unknown>;
+
+  if (Object.prototype.hasOwnProperty.call(linkProps, "data-footnote-backref")) {
+    return null;
+  }
+
+  const { children, href, ...rest } = props;
+
+  return (
+    <a
+      href={href}
+      rel="noreferrer noopener"
+      target="_blank"
+      {...rest}
+    >
+      {children}
+    </a>
+  );
+}
+
 export function ReportCanvas() {
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
   const currentRevision = useResearchSessionStore(
@@ -177,16 +198,7 @@ export function ReportCanvas() {
             <div className="prose prose-lab max-w-none font-narrative leading-[1.6] text-secondary">
               <ReactMarkdown
                 components={{
-                  a: ({ children, href, ...props }) => (
-                    <a
-                      href={href}
-                      rel="noreferrer noopener"
-                      target="_blank"
-                      {...props}
-                    >
-                      {children}
-                    </a>
-                  ),
+                  a: ReportMarkdownLink,
                   img: ReportMarkdownImage,
                   p: ReportParagraph,
                 }}
