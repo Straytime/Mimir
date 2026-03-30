@@ -175,7 +175,7 @@ test("writes a shared body-height token for collection trace and report canvas",
     render(<ResearchPageClient store={store} />);
 
     expect(screen.getByRole("main")).toHaveStyle({
-      "--research-scroll-body-max-h": "600px",
+      "--research-card-max-h": "600px",
     });
   } finally {
     Object.defineProperty(Element.prototype, "getBoundingClientRect", {

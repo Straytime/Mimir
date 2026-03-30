@@ -11,7 +11,7 @@ import type { ArtifactSummary } from "@/lib/contracts";
 import { useReportAutoScroll } from "../hooks/use-report-auto-scroll";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { fmt02 } from "../utils/format";
-import { RESEARCH_SCROLL_BODY_MAX_HEIGHT_STYLE_VALUE } from "../utils/layout-vars";
+import { RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE } from "../utils/layout-vars";
 import { findLatestArtifactBySource } from "../utils/task-artifact";
 import { TaskArtifactImage } from "./task-artifact-image";
 
@@ -148,7 +148,8 @@ export function ReportCanvas() {
   return (
     <section
       aria-label="报告画布"
-      className="bg-surface-container-low p-6"
+      className="flex max-h-full flex-col overflow-hidden bg-surface-container-low p-6"
+      style={{ maxHeight: RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE }}
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -172,14 +173,13 @@ export function ReportCanvas() {
         ) : null}
       </div>
 
-      <div className="relative mt-6">
+      <div className="relative mt-6 flex min-h-0 flex-1">
         <div
           aria-label="报告正文"
-          className="overflow-y-auto bg-surface-container-lowest px-5 py-5"
+          className="flex-1 min-h-0 overflow-y-auto bg-surface-container-lowest px-5 py-5"
           onScroll={handleScroll}
           ref={scrollContainerRef}
           role="region"
-          style={{ maxHeight: RESEARCH_SCROLL_BODY_MAX_HEIGHT_STYLE_VALUE }}
         >
           {shouldShowSkeleton ? (
             <div className="space-y-3">

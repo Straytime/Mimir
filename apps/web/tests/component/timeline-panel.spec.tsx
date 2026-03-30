@@ -46,7 +46,15 @@ test("renders collection trace items with collect_target labels", () => {
     screen.getByText("收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展"),
   ).toBeInTheDocument();
   expect(screen.getByText("搜索： 中国 AI 搜索 产品 2025")).toBeInTheDocument();
-  expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("region", { name: "Collection Trace" }),
+  ).toHaveStyle({ maxHeight: "var(--research-card-max-h)" });
+
+  const body = screen.getByRole("region", { name: "Collection Trace" }).querySelector(
+    "[aria-live='polite']",
+  );
+
+  expect(body).toHaveClass("flex-1", "min-h-0", "overflow-y-auto");
 });
 
 test("auto-scrolls to the latest collection trace item by default", () => {

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import type { TimelineItem } from "../store/research-session-store.types";
-import { RESEARCH_SCROLL_BODY_MAX_HEIGHT_STYLE_VALUE } from "../utils/layout-vars";
+import { RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE } from "../utils/layout-vars";
 import { PulseIndicator } from "./pulse-indicator";
 
 type TimelinePanelProps = {
@@ -51,8 +51,9 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
   return (
     <section
       aria-label="Collection Trace"
-      className="bg-surface-container-low p-6"
+      className="flex max-h-full flex-col overflow-hidden bg-surface-container-low p-6"
       role="region"
+      style={{ maxHeight: RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE }}
     >
       <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
         Collection Trace
@@ -60,8 +61,7 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
 
       <div
         aria-live="polite"
-        className="mt-4 overflow-y-auto pr-1"
-        style={{ maxHeight: RESEARCH_SCROLL_BODY_MAX_HEIGHT_STYLE_VALUE }}
+        className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1"
       >
         {items.length === 0 ? (
           <div className="bg-surface-container-lowest px-5 py-5 text-sm leading-7 text-tertiary">
