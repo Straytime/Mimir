@@ -3964,3 +3964,23 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## TP-WEB-FOOTNOTE-01 Hide Footnote Backrefs
+
+- 日期: 2026-03-30
+- 分支: `codex/hide-web-footnote-backrefs`
+- 目标: 仅在 Web 端 `ReportCanvas` 中隐藏 `remark-gfm` 生成的 footnote backref 可见符号与编号，保留正文 superscript 引用、脚注编号列表和来源链接
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，补充 Web 预览可以隐藏 footnote backref，但不得改写脚注正文或 definition
+- 在 `apps/web/features/research/components/report-canvas.tsx` 中增加局部 `a` renderer，屏蔽 `data-footnote-backref` 链接
+- 新增 `apps/web/tests/component/report-canvas.spec.tsx` 回归测试，覆盖 backref 隐藏、正文 superscript 保留与来源链接保留
+
+### 验证
+- `pnpm typecheck` — 0 error
+- `pnpm test:component` — 87 passed (21 files)
+
+### 验收结论
+- accepted

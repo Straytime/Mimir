@@ -298,6 +298,35 @@ test("renders footnote references and definitions from [^ref_n] syntax", () => {
   expect(screen.getByRole("link", { name: "来源二" })).toBeInTheDocument();
 });
 
+test("omits visible footnote backref symbols while keeping sources and superscripts", () => {
+  const store = createStage6Store();
+
+  const markdown = [
+    "核心结论[^ref_1]与扩展[^ref_2]以及补充[^ref_3]",
+    "",
+    "[^ref_1]: [来源一](https://example.com/1)",
+    "[^ref_2]: [来源二](https://example.com/2)",
+    "[^ref_3]: [来源三](https://example.com/3)",
+  ].join("\n");
+
+  store.setState((state) => ({
+    ...state,
+    stream: {
+      ...state.stream,
+      reportMarkdown: markdown,
+    },
+  }));
+
+  renderWithStore(<ReportCanvas />, { store });
+
+  expect(document.querySelectorAll("sup a")).toHaveLength(3);
+  expect(document.querySelectorAll("a[data-footnote-backref]")).toHaveLength(0);
+  expect(document.querySelector("section[data-footnotes]")).not.toHaveTextContent("↩");
+  expect(screen.getByRole("link", { name: "来源一" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "来源二" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "来源三" })).toBeInTheDocument();
+});
+
 test("keeps distinct footnote keys separate when ref_1 and ref1 both exist", () => {
   const store = createStage6Store();
 
