@@ -51,81 +51,99 @@ test("creates a task, writes session context, and immediately starts the SSE con
   const createTaskResponse = makeCreateTaskResponse();
   const recordedBodies: unknown[] = [];
   let getTaskCalls = 0;
+  const scrollIntoViewSpy = vi.fn();
+  const originalScrollIntoView = Element.prototype.scrollIntoView;
 
-  mswServer.use(
-    http.post(TASKS_API_URL, async ({ request }) => {
-      recordedBodies.push(await request.json());
-      await deferred.promise;
-
-      return HttpResponse.json(createTaskResponse, {
-        status: 201,
-        headers: {
-          "x-request-id": "req_stage2",
-          "x-trace-id": createTaskResponse.trace_id,
-        },
-      });
-    }),
-    http.get(TASK_DETAILS_API_URL, () => {
-      getTaskCalls += 1;
-      return HttpResponse.json({}, { status: 500 });
-    }),
-  );
-
-  render(
-    <ResearchPageClient
-      runtime={createIntegrationRuntime({ connect })}
-      store={store}
-    />,
-  );
-
-  await user.type(screen.getByPlaceholderText("输入你的研究主题..."), "研究中国 AI 搜索产品竞争格局");
-  await user.click(screen.getByRole("button", { name: "提交" }));
-
-  expect(store.getState().ui.pendingAction).toBe("creating_task");
-  expect(screen.getByPlaceholderText("输入你的研究主题...")).toBeDisabled();
-  expect(screen.getByRole("radio", { name: /自然澄清/i })).toBeDisabled();
-  expect(screen.getByRole("radio", { name: /选单澄清/i })).toBeDisabled();
-
-  deferred.resolve();
-
-  await screen.findByRole("region", { name: "会话状态" });
-
-  expect(recordedBodies).toHaveLength(1);
-  expect(recordedBodies[0]).toMatchObject({
-    initial_query: "研究中国 AI 搜索产品竞争格局",
-    config: {
-      clarification_mode: "natural",
-    },
+  Object.defineProperty(Element.prototype, "scrollIntoView", {
+    configurable: true,
+    value: scrollIntoViewSpy,
   });
-  expect(store.getState().session).toMatchObject({
-    taskId: createTaskResponse.task_id,
-    taskToken: createTaskResponse.task_token,
-    traceId: createTaskResponse.trace_id,
-    requestId: "req_stage2",
-    eventsUrl: new URL(createTaskResponse.urls.events, window.location.origin).toString(),
-    heartbeatUrl: new URL(
-      createTaskResponse.urls.heartbeat,
-      window.location.origin,
-    ).toString(),
-    disconnectUrl: new URL(
-      createTaskResponse.urls.disconnect,
-      window.location.origin,
-    ).toString(),
-    connectDeadlineAt: createTaskResponse.connect_deadline_at,
-    sseState: "connecting",
-  });
-  expect(store.getState().remote.snapshot).toEqual(createTaskResponse.snapshot);
-  expect(store.getState().ui.pendingAction).toBeNull();
-  expect(connect).toHaveBeenCalledTimes(1);
-  expect(connect).toHaveBeenCalledWith({
-    url: new URL(createTaskResponse.urls.events, window.location.origin).toString(),
-    token: createTaskResponse.task_token,
-    onOpen: expect.any(Function),
-    onEvent: expect.any(Function),
-    onError: expect.any(Function),
-    onClose: expect.any(Function),
-  });
-  expect(getTaskCalls).toBe(0);
+
+  try {
+    mswServer.use(
+      http.post(TASKS_API_URL, async ({ request }) => {
+        recordedBodies.push(await request.json());
+        await deferred.promise;
+
+        return HttpResponse.json(createTaskResponse, {
+          status: 201,
+          headers: {
+            "x-request-id": "req_stage2",
+            "x-trace-id": createTaskResponse.trace_id,
+          },
+        });
+      }),
+      http.get(TASK_DETAILS_API_URL, () => {
+        getTaskCalls += 1;
+        return HttpResponse.json({}, { status: 500 });
+      }),
+    );
+
+    render(
+      <ResearchPageClient
+        runtime={createIntegrationRuntime({ connect })}
+        store={store}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("输入你的研究主题..."), "研究中国 AI 搜索产品竞争格局");
+    await user.click(screen.getByRole("button", { name: "提交" }));
+
+    expect(store.getState().ui.pendingAction).toBe("creating_task");
+    expect(screen.getByPlaceholderText("输入你的研究主题...")).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /自然澄清/i })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /选单澄清/i })).toBeDisabled();
+
+    deferred.resolve();
+
+    await screen.findByText("在开始之前，有一些问题需要你的反馈");
+
+    expect(scrollIntoViewSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
+    expect(recordedBodies).toHaveLength(1);
+    expect(recordedBodies[0]).toMatchObject({
+      initial_query: "研究中国 AI 搜索产品竞争格局",
+      config: {
+        clarification_mode: "natural",
+      },
+    });
+    expect(store.getState().session).toMatchObject({
+      taskId: createTaskResponse.task_id,
+      taskToken: createTaskResponse.task_token,
+      traceId: createTaskResponse.trace_id,
+      requestId: "req_stage2",
+      eventsUrl: new URL(createTaskResponse.urls.events, window.location.origin).toString(),
+      heartbeatUrl: new URL(
+        createTaskResponse.urls.heartbeat,
+        window.location.origin,
+      ).toString(),
+      disconnectUrl: new URL(
+        createTaskResponse.urls.disconnect,
+        window.location.origin,
+      ).toString(),
+      connectDeadlineAt: createTaskResponse.connect_deadline_at,
+      sseState: "connecting",
+    });
+    expect(store.getState().remote.snapshot).toEqual(createTaskResponse.snapshot);
+    expect(store.getState().ui.pendingAction).toBeNull();
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledWith({
+      url: new URL(createTaskResponse.urls.events, window.location.origin).toString(),
+      token: createTaskResponse.task_token,
+      onOpen: expect.any(Function),
+      onEvent: expect.any(Function),
+      onError: expect.any(Function),
+      onClose: expect.any(Function),
+    });
+    expect(getTaskCalls).toBe(0);
+  } finally {
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: originalScrollIntoView,
+    });
+  }
 });
 
 test("shows an inline validation error for 422 responses and keeps the draft", async () => {

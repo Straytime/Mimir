@@ -90,6 +90,7 @@ apps/web/
 2. `ActiveWorkspace`
    - 已创建任务，正在澄清 / 分析 / 搜集 / 撰写 / 等待反馈
    - 展示工作台三栏布局
+   - 工作台卡片按阶段和内容准备情况渲染，未开始的卡片不提前出现
 3. `Terminal`
    - 任务 `terminated` / `failed` / `expired`
    - 展示终态说明、清理提示、重新开始入口
@@ -109,6 +110,7 @@ apps/web/
 - `Mimir` 标识
 - 当前连接状态
 - 当前 phase / status
+- 当前 `taskId`
 - 终止任务按钮
 
 ### 4.3 Tablet / Mobile 布局
@@ -188,6 +190,8 @@ apps/web/
 1. 不解析原始 markdown 选单。
 2. 倒计时仅为 UI 定时器；每次改选任意题目后重新开始 15 秒。
 3. 发生 `clarification.fallback_to_natural` 后，应清空选单状态并切到自然语言模式。
+4. 澄清详情卡片文案固定为“在开始之前，有一些问题需要你的反馈”。
+5. 提交初始需求后，页面必须显式滚动并锚定到澄清详情容器，不依赖其他卡片的布局位置。
 
 ### 5.4 `ReportCanvas`
 
@@ -216,6 +220,7 @@ apps/web/
 - `outline.delta` 不直接渲染为正文
 - Web 预览必须保留原始 footnote 语义，不得重编号、不得删除 definition、不得合成占位来源；如需修复 `ref` / `def` 别名，仅允许保守修复确认为同一来源的 alias，不得改写已正常匹配的正文或文末列表
 - Web 预览可以隐藏 footnote backref 的可见符号与编号，但必须保留脚注编号列表、来源链接，以及正文中的 superscript 引用
+- 工作台内的卡片采用阶段驱动渲染，未开始的卡片不提前渲染为空占位卡片；仅在对应阶段或内容准备好后才出现。
 
 ### 5.4.1 Markdown 图片渲染策略
 
@@ -321,6 +326,7 @@ v1 前端不开放 `FeedbackComposer`。
 2. 澄清 LLM 正在生成时，`ClarificationPanel` 显示文本行 skeleton。
 3. 进入 `writing_report` 前，`ReportCanvas` 显示段落 skeleton，而不是空白区。
 4. 时间线收到 phase 切换但尚无后续细节时，插入一条轻量 skeleton row。
+5. 除以上明确的 skeleton 场景外，未开始的卡片不应以空卡片或占位文案提前占据版面。
 
 ### 5.9 `TerminalBanner`
 
@@ -335,6 +341,18 @@ v1 前端不开放 `FeedbackComposer`。
 - `terminated`: 明确告知因用户显式终止或确认离开页面导致任务结束
 - `failed`: 明确显示错误摘要
 - `expired`: 明确告知报告已过期并被清理
+
+### 5.10 `SessionStatusBar`
+
+职责：
+
+- 承接会话连接状态、当前阶段标题与任务标识
+- 作为工作台顶栏的轻量状态条
+
+展示规则：
+
+1. 顶栏下半部只展示 `taskId`，不展示阶段补充小字、`analysisText` 或搜集进度。
+2. 顶栏摘要的默认信息以当前阶段标题为准，`taskId` 作为唯一附加标识。
 
 ## 6. 客户端状态模型
 
