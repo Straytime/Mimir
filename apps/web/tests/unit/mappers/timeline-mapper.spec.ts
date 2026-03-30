@@ -21,8 +21,6 @@ import {
   makeSourcesMergedEvent,
   makeSummaryCompletedEvent,
   makeWriterReasoningDeltaEvent,
-  makeWriterToolCallCompletedEvent,
-  makeWriterToolCallRequestedEvent,
 } from "@/tests/fixtures/builders";
 
 function reduceEvents(
@@ -38,7 +36,7 @@ function reduceEvents(
 }
 
 describe("reduceTimelineStream", () => {
-  test("tracks analysis progress, requirement handoff, and outline drafting without leaking raw outline delta", () => {
+  test("ignores non-collection events and only keeps the collection start marker", () => {
     const result = reduceEvents([
       makeAnalysisDeltaEvent(),
       makeAnalysisCompletedEvent(),
@@ -47,28 +45,55 @@ describe("reduceTimelineStream", () => {
           delta: '{ "outline": "raw debug delta" }',
         },
       }),
+      makeWriterReasoningDeltaEvent(),
+      makeArtifactReadyEvent(),
+      makeReportCompletedEvent(),
+      makePhaseChangedEvent({
+        seq: 60,
+        revision_id: "rev_stage1",
+        phase: "processing_feedback",
+        payload: {
+          from_phase: "delivered",
+          to_phase: "processing_feedback",
+          status: "running",
+        },
+      }),
+      makePhaseChangedEvent({
+        seq: 61,
+        revision_id: "rev_stage1",
+        phase: "planning_collection",
+        payload: {
+          from_phase: "analyzing_requirement",
+          to_phase: "planning_collection",
+          status: "running",
+        },
+      }),
     ]);
 
     expect(result.timeline).toEqual([
       expect.objectContaining({
-        id: "analysis:rev_stage0",
-        kind: "system",
-        label: "需求摘要已生成",
-        status: "completed",
-      }),
-      expect.objectContaining({
-        id: "outline:rev_stage0",
-        kind: "system",
-        label: "正在构思报告结构",
+        id: "phase:61",
+        kind: "phase",
+        revisionId: "rev_stage1",
+        label: "新一轮研究已进入规划阶段",
         status: "running",
       }),
     ]);
-    expect(result.timeline[1]?.detail).toBeUndefined();
     expect(result.outlineReady).toBe(false);
   });
 
-  test("maps planning, collection, summary, and merged-source events into user-readable timeline items", () => {
+  test("maps planning, collection, summary, and merged-source events into collection trace items", () => {
     const result = reduceEvents([
+      makePhaseChangedEvent({
+        seq: 29,
+        revision_id: "rev_stage0",
+        phase: "planning_collection",
+        payload: {
+          from_phase: "analyzing_requirement",
+          to_phase: "planning_collection",
+          status: "running",
+        },
+      }),
       makePlannerReasoningDeltaEvent(),
       makePlannerToolCallRequestedEvent(),
       makeCollectorReasoningDeltaEvent(),
@@ -82,6 +107,12 @@ describe("reduceTimelineStream", () => {
     ]);
 
     expect(result.timeline).toEqual([
+      expect.objectContaining({
+        id: "phase:29",
+        kind: "phase",
+        label: "新一轮研究已进入规划阶段",
+        status: "running",
+      }),
       expect.objectContaining({
         id: "planning:rev_stage0",
         kind: "reasoning",
@@ -115,14 +146,15 @@ describe("reduceTimelineStream", () => {
       }),
     ]);
 
-    expect(result.timeline[1]?.detail).toContain("先做高时效搜索，再读取官方来源。");
-    expect(result.timeline[1]?.detail).toContain("搜索： 中国 AI 搜索 产品 2025");
-    expect(result.timeline[1]?.detail).toContain("搜索完成：10 条结果");
-    expect(result.timeline[1]?.detail).toContain("读取资料：https://example.com/article");
-    expect(result.timeline[1]?.detail).toContain("读取完成：某公司发布会回顾");
-    expect(result.timeline[1]?.detail).toContain("搜集完成：4 条资料");
-    expect(result.timeline[2]?.detail).toContain("官方披露更多集中在 2025 年后。");
-    expect(result.timeline[3]?.detail).toContain("18 -> 11");
+    expect(result.timeline[1]?.detail).toContain("当前还缺少代表性玩家与市场趋势信息。");
+    expect(result.timeline[2]?.detail).toContain("先做高时效搜索，再读取官方来源。");
+    expect(result.timeline[2]?.detail).toContain("搜索： 中国 AI 搜索 产品 2025");
+    expect(result.timeline[2]?.detail).toContain("搜索完成：10 条结果");
+    expect(result.timeline[2]?.detail).toContain("读取资料：https://example.com/article");
+    expect(result.timeline[2]?.detail).toContain("读取完成：某公司发布会回顾");
+    expect(result.timeline[2]?.detail).toContain("搜集完成：4 条资料");
+    expect(result.timeline[3]?.detail).toContain("官方披露更多集中在 2025 年后。");
+    expect(result.timeline[4]?.detail).toContain("18 -> 11");
   });
 
   test("keeps interleaved sub-agent events attached to the correct collect target", () => {
@@ -187,93 +219,16 @@ describe("reduceTimelineStream", () => {
     expect(result.timeline[1]?.detail).not.toContain("AI 搜索 厂商 2025");
   });
 
-  test("maps outline completion, writer progress, artifact generation, and report completion into readable timeline items", () => {
+  test("does not map outline, writer, artifact, or report events into the collection trace", () => {
     const result = reduceEvents([
       makeOutlineDeltaEvent(),
       makeOutlineCompletedEvent(),
       makeWriterReasoningDeltaEvent(),
-      makeWriterToolCallRequestedEvent(),
-      makeWriterToolCallCompletedEvent(),
       makeArtifactReadyEvent(),
       makeReportCompletedEvent(),
     ]);
 
     expect(result.outlineReady).toBe(true);
-    expect(result.timeline).toEqual([
-      expect.objectContaining({
-        id: "outline:rev_stage0",
-        kind: "system",
-        label: "章节概览已生成",
-        status: "completed",
-      }),
-      expect.objectContaining({
-        id: "writer:rev_stage0",
-        kind: "reasoning",
-        label: "正在撰写报告",
-        detail: "先完成市场格局章节，再决定是否需要图表支撑。",
-        status: "running",
-      }),
-      expect.objectContaining({
-        id: "writer-tool:call_writer_figure",
-        kind: "tool_call",
-        label: "正在生成配图",
-        toolCallId: "call_writer_figure",
-        status: "completed",
-      }),
-      expect.objectContaining({
-        id: "artifact:art_stage0_chart",
-        kind: "system",
-        label: "已生成配图",
-        status: "completed",
-      }),
-      expect.objectContaining({
-        id: "report:rev_stage0",
-        kind: "system",
-        label: "报告已完成",
-        status: "completed",
-      }),
-    ]);
-  });
-
-  test("maps feedback-processing and new-round phase changes into explicit timeline items", () => {
-    const result = reduceEvents([
-      makePhaseChangedEvent({
-        seq: 60,
-        revision_id: "rev_stage1",
-        phase: "processing_feedback",
-        payload: {
-          from_phase: "delivered",
-          to_phase: "processing_feedback",
-          status: "running",
-        },
-      }),
-      makePhaseChangedEvent({
-        seq: 61,
-        revision_id: "rev_stage1",
-        phase: "planning_collection",
-        payload: {
-          from_phase: "processing_feedback",
-          to_phase: "planning_collection",
-          status: "running",
-        },
-      }),
-    ]);
-
-    expect(result.timeline).toEqual([
-      expect.objectContaining({
-        id: "phase:60",
-        kind: "phase",
-        revisionId: "rev_stage1",
-        label: "正在处理反馈",
-        status: "running",
-      }),
-      expect.objectContaining({
-        id: "phase:61",
-        kind: "phase",
-        revisionId: "rev_stage1",
-        label: "新一轮研究已进入规划阶段",
-        status: "running",
-      }),
-    ]);
+    expect(result.timeline).toEqual([]);
   });
 });

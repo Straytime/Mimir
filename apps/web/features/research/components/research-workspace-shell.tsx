@@ -58,10 +58,9 @@ export function ResearchWorkspaceShell() {
     snapshot.phase,
     "analyzing_requirement",
   );
-  const shouldShowTimeline = isPhaseAtOrAfter(
-    snapshot.phase,
-    "analyzing_requirement",
-  );
+  const shouldShowCollectionTrace =
+    isPhaseAtOrAfter(snapshot.phase, "planning_collection") &&
+    !isPhaseAtOrAfter(snapshot.phase, "preparing_outline");
   const shouldShowOutline =
     isPhaseAtOrAfter(snapshot.phase, "preparing_outline") &&
     outlineReady &&
@@ -86,7 +85,7 @@ export function ResearchWorkspaceShell() {
             <RequirementSummaryCard requirementDetail={requirementDetail} />
           </div>
         ) : null}
-        {shouldShowTimeline ? (
+        {shouldShowCollectionTrace ? (
           <div className="animate-fade-in-up stagger-2">
             <TimelinePanel items={timelineItems} />
           </div>

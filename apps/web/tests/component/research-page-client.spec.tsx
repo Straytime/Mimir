@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import { ResearchPageClient } from "@/features/research/components/research-page-client";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
@@ -20,7 +20,7 @@ test("renders the idle workspace shell before a task is created", () => {
   expect(screen.getByPlaceholderText("输入你的研究主题...")).toBeInTheDocument();
 });
 
-test("renders the clarification copy and keeps unstarted cards hidden", () => {
+test("renders the clarification copy and keeps the collection trace hidden before collection starts", () => {
   const store = createResearchSessionStore(
     makeResearchSessionState({
       session: {
@@ -47,7 +47,7 @@ test("renders the clarification copy and keeps unstarted cards hidden", () => {
   ).toBeInTheDocument();
   expect(screen.getByText("澄清详情")).toBeInTheDocument();
   expect(screen.queryByText("Requirement Summary")).not.toBeInTheDocument();
-  expect(screen.queryByRole("region", { name: "时间线" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Collection Trace" })).not.toBeInTheDocument();
   expect(screen.queryByLabelText("报告大纲")).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "报告画布" })).not.toBeInTheDocument();
   expect(screen.queryByLabelText("图库")).not.toBeInTheDocument();
@@ -102,11 +102,88 @@ test("renders stage-gated workspace cards once their content is ready", () => {
   render(<ResearchPageClient store={store} />);
 
   expect(screen.getByText("需求摘要已生成")).toBeInTheDocument();
-  expect(screen.getByRole("region", { name: "时间线" })).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Collection Trace" })).not.toBeInTheDocument();
   expect(screen.getByLabelText("报告大纲")).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "报告画布" })).toBeInTheDocument();
   expect(screen.getByLabelText("图库")).toBeInTheDocument();
   expect(screen.queryByLabelText("交付操作")).not.toBeInTheDocument();
+});
+
+test("writes a shared body-height token for collection trace and report canvas", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 112,
+    width: 800,
+    height: 112,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const inputBarRect = {
+    x: 0,
+    y: 712,
+    top: 712,
+    left: 0,
+    right: 800,
+    bottom: 792,
+    width: 800,
+    height: 80,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-input-bar") === "true") {
+        return inputBarRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "collecting",
+            status: "running",
+          }),
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    expect(screen.getByRole("main")).toHaveStyle({
+      "--research-scroll-body-max-h": "600px",
+    });
+  } finally {
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
 });
 
 test("does not render the feedback composer even during task.awaiting_feedback", () => {

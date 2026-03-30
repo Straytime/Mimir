@@ -154,14 +154,14 @@ describe("Stage 5 timeline and transparency", () => {
     });
 
     expect(screen.getByText("正在分析你的研究需求")).toBeInTheDocument();
-    expect(screen.getAllByText("需求摘要已生成")).toHaveLength(2);
+    expect(screen.getByText("需求摘要已生成")).toBeInTheDocument();
     expect(
       screen.getByText("分析中国 AI 搜索产品竞争格局"),
     ).toBeInTheDocument();
     expect(screen.queryByText("等待研究透明度事件进入时间线。")).not.toBeInTheDocument();
   });
 
-  test("renders interleaved collection transparency, auto-scrolls to the bottom, and never leaks raw outline delta", async () => {
+  test("renders collection trace during retrieval and hides it once outlining begins", async () => {
     const scrollIntoViewSpy = vi.fn();
 
     Object.defineProperty(Element.prototype, "scrollIntoView", {
@@ -323,6 +323,22 @@ describe("Stage 5 timeline and transparency", () => {
         }),
       );
       taskEventSource.emit(makeSourcesMergedEvent({ seq: 44 }));
+      await flushAsyncWork();
+    });
+
+    const collectionTrace = screen.getByRole("region", { name: "Collection Trace" });
+    expect(
+      within(collectionTrace).getByText("阶段结论已整理"),
+    ).toBeInTheDocument();
+    expect(
+      within(collectionTrace).getByText("来源已去重并整理引用"),
+    ).toBeInTheDocument();
+    expect(
+      within(collectionTrace).queryByText('{ "outline": "raw debug delta" }'),
+    ).not.toBeInTheDocument();
+    expect(scrollIntoViewSpy).toHaveBeenCalled();
+
+    await act(async () => {
       taskEventSource.emit(
         makePhaseChangedEvent({
           seq: 45,
@@ -351,62 +367,7 @@ describe("Stage 5 timeline and transparency", () => {
     expect(
       within(statusBar).getByText("正在构思报告结构"),
     ).toBeInTheDocument();
-    expect(screen.getByText("阶段结论已整理")).toBeInTheDocument();
-    expect(screen.getByText("来源已去重并整理引用")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Collection Trace" })).not.toBeInTheDocument();
     expect(screen.queryByText('{ "outline": "raw debug delta" }')).not.toBeInTheDocument();
-    expect(scrollIntoViewSpy).toHaveBeenCalled();
-
-    const collectAiItem = screen
-      .getByText(
-        (_, node) =>
-          node instanceof HTMLElement &&
-          node.tagName.toLowerCase() === "p" &&
-          node.textContent?.includes("搜索： AI 搜索 厂商 2025") === true,
-      )
-      .closest("li");
-    const collectRevenueItem = screen
-      .getByText(
-        (_, node) =>
-          node instanceof HTMLElement &&
-          node.tagName.toLowerCase() === "p" &&
-          node.textContent?.includes("搜索： AI 搜索 商业化 收入 2025") === true,
-      )
-      .closest("li");
-
-    expect(collectAiItem).not.toBeNull();
-    expect(collectRevenueItem).not.toBeNull();
-
-    const collectAiScope = within(collectAiItem as HTMLElement);
-    const collectRevenueScope = within(collectRevenueItem as HTMLElement);
-    const collectAiDetail = collectAiScope.getByText(
-      (_, node) =>
-        node instanceof HTMLElement &&
-        node.tagName.toLowerCase() === "p" &&
-        node.textContent?.includes("搜索： AI 搜索 厂商 2025") === true,
-    );
-    const collectRevenueDetail = collectRevenueScope.getByText(
-      (_, node) =>
-        node instanceof HTMLElement &&
-        node.tagName.toLowerCase() === "p" &&
-        node.textContent?.includes("搜索： AI 搜索 商业化 收入 2025") === true,
-    );
-
-    expect(collectAiScope.getByText("收集 AI 搜索厂商")).toBeInTheDocument();
-    expect(collectAiDetail).toHaveTextContent("搜索： AI 搜索 厂商 2025");
-    expect(collectAiDetail).toHaveTextContent("读取完成：AI 搜索厂商观察");
-    expect(
-      collectAiScope.queryByText("AI 搜索 商业化 收入 2025"),
-    ).not.toBeInTheDocument();
-
-    expect(
-      collectRevenueScope.getByText("收集商业化与收入线索"),
-    ).toBeInTheDocument();
-    expect(collectRevenueDetail).toHaveTextContent("先查财报与业绩会。");
-    expect(collectRevenueDetail).toHaveTextContent(
-      "搜索： AI 搜索 商业化 收入 2025",
-    );
-    expect(
-      collectRevenueScope.queryByText("AI 搜索 厂商 2025"),
-    ).not.toBeInTheDocument();
   });
 });
