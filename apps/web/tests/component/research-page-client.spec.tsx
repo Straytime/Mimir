@@ -13,7 +13,7 @@ test("renders the idle workspace shell before a task is created", () => {
   render(<ResearchPageClient />);
 
   expect(screen.getByRole("heading", { name: "AI 研究工作台" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "输入研究主题" })).toBeInTheDocument();
+  expect(screen.getByPlaceholderText("输入你的研究主题...")).toBeInTheDocument();
 });
 
 test("does not render the feedback composer even during task.awaiting_feedback", () => {

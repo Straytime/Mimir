@@ -1,13 +1,11 @@
 "use client";
 
-import { type KeyboardEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useClarificationSubmit } from "../hooks/use-clarification-submit";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { selectCanSubmitClarification } from "../store/selectors";
 import { extractClarificationIntro } from "../utils/clarification-text";
-
-const MAX_CLARIFICATION_LENGTH = 500;
 
 function getRemainingCountdownSeconds(deadlineAt: string | null) {
   if (deadlineAt === null) {
@@ -44,126 +42,6 @@ function useCountdownSeconds(deadlineAt: string | null) {
   return remainingSeconds;
 }
 
-export function ClarificationActionPanel() {
-  const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
-  const clarificationDraft = useResearchSessionStore(
-    (state) => state.ui.clarificationDraft,
-  );
-  const clarificationFieldError = useResearchSessionStore(
-    (state) => state.ui.clarificationFieldError,
-  );
-  const clarificationSubmitError = useResearchSessionStore(
-    (state) => state.ui.clarificationSubmitError,
-  );
-  const pendingAction = useResearchSessionStore((state) => state.ui.pendingAction);
-  const setClarificationDraft = useResearchSessionStore(
-    (state) => state.setClarificationDraft,
-  );
-  const canSubmitClarification = useResearchSessionStore(
-    selectCanSubmitClarification,
-  );
-  const submitClarification = useClarificationSubmit();
-
-  if (snapshot === null) {
-    return null;
-  }
-
-  const isClarifying = snapshot.phase === "clarifying";
-  const isNaturalMode = snapshot.clarification_mode === "natural";
-  const isSubmitting = pendingAction === "submitting_clarification";
-  const isTextareaDisabled =
-    !isClarifying || !isNaturalMode || !canSubmitClarification || isSubmitting;
-
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      canSubmitClarification &&
-      !isSubmitting &&
-      isClarifying &&
-      isNaturalMode
-    ) {
-      event.preventDefault();
-      void submitClarification();
-    }
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-primary">澄清提交</h3>
-        <p className="text-sm leading-6 text-secondary">
-          {isClarifying
-            ? isNaturalMode
-              ? "系统正在生成追问，就绪后可在下方输入补充说明。"
-              : "下方问题已自动选择默认选项，你可以修改后提交或直接提交。"
-            : "澄清已完成，系统正在进入下一阶段。"}
-        </p>
-      </div>
-
-      {isClarifying && isNaturalMode ? (
-        <div className="space-y-2">
-          <label
-            className="text-sm font-medium text-primary"
-            htmlFor="clarification-draft"
-          >
-            澄清补充说明
-          </label>
-          <textarea
-            aria-describedby="clarification-counter"
-            aria-invalid={clarificationFieldError !== null}
-            className="min-h-32 w-full border-0 bg-surface-container-lowest px-4 py-4 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint transition focus:bg-surface-container-high focus:shadow-inset-caret disabled:cursor-not-allowed disabled:opacity-70"
-            disabled={isTextareaDisabled}
-            id="clarification-draft"
-            maxLength={MAX_CLARIFICATION_LENGTH}
-            onChange={(event) => setClarificationDraft(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="例如：重点看中国市场，偏商业分析，覆盖近两年变化。"
-            value={clarificationDraft}
-          />
-          <div className="flex items-center justify-between text-xs text-tertiary">
-            <span>提交后将进入需求分析阶段。</span>
-            <span id="clarification-counter">
-              {clarificationDraft.length}/{MAX_CLARIFICATION_LENGTH}
-            </span>
-          </div>
-          {clarificationFieldError !== null ? (
-            <p className="text-sm text-[#FF6B6B]" role="alert">
-              {clarificationFieldError}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {isClarifying && !isNaturalMode ? (
-        <div className="bg-surface-container-low px-4 py-4 text-sm leading-7 text-secondary">
-          请在下方的问题列表中选择选项，倒计时结束后将自动提交。
-        </div>
-      ) : null}
-
-      {clarificationSubmitError !== null ? (
-        <div
-          className="bg-surface-container-high px-4 py-3 text-sm text-[#FFB86C]"
-          role="alert"
-        >
-          {clarificationSubmitError}
-        </div>
-      ) : null}
-
-      <button
-        className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
-        disabled={!isClarifying || !canSubmitClarification || isSubmitting}
-        onClick={() => {
-          void submitClarification();
-        }}
-        type="button"
-      >
-        {isSubmitting ? "正在提交..." : "提交澄清"}
-      </button>
-    </div>
-  );
-}
-
 export function ClarificationDetailPanel() {
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
   const clarificationText = useResearchSessionStore(
@@ -177,8 +55,12 @@ export function ClarificationDetailPanel() {
   const clarificationFieldError = useResearchSessionStore(
     (state) => state.ui.clarificationFieldError,
   );
+  const pendingAction = useResearchSessionStore((state) => state.ui.pendingAction);
+  const canSubmitClarification = useResearchSessionStore(selectCanSubmitClarification);
   const setOptionAnswer = useResearchSessionStore((state) => state.setOptionAnswer);
+  const submitClarification = useClarificationSubmit();
   const remainingSeconds = useCountdownSeconds(countdownDeadlineAt);
+  const isSubmitting = pendingAction === "submitting_clarification";
 
   if (snapshot === null || snapshot.phase !== "clarifying") {
     return null;
@@ -264,6 +146,17 @@ export function ClarificationDetailPanel() {
               {clarificationFieldError}
             </p>
           ) : null}
+
+          <button
+            className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
+            disabled={!canSubmitClarification || isSubmitting}
+            onClick={() => {
+              void submitClarification();
+            }}
+            type="button"
+          >
+            {isSubmitting ? "正在提交..." : "提交澄清"}
+          </button>
         </div>
       ) : null}
     </div>

@@ -40,7 +40,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test("shows outline overview, renders streamed markdown, and blocks raw HTML", () => {
+test("does not render outline section even when outline is ready", () => {
   const store = createStage6Store();
 
   store.setState((state) => ({
@@ -56,8 +56,25 @@ test("shows outline overview, renders streamed markdown, and blocks raw HTML", (
 
   renderWithStore(<ReportCanvas />, { store });
 
-  expect(screen.getByText("中国 AI 搜索产品竞争格局研究")).toBeInTheDocument();
-  expect(screen.getByText("研究背景与问题定义")).toBeInTheDocument();
+  expect(screen.queryByText("中国 AI 搜索产品竞争格局研究")).not.toBeInTheDocument();
+  expect(screen.queryByText("研究背景与问题定义")).not.toBeInTheDocument();
+  expect(screen.queryByText("Outline")).not.toBeInTheDocument();
+});
+
+test("renders streamed markdown and blocks raw HTML", () => {
+  const store = createStage6Store();
+
+  store.setState((state) => ({
+    ...state,
+    stream: {
+      ...state.stream,
+      reportMarkdown:
+        "# 报告标题\n\n## 第一章\n\n市场概览\n\n<div>危险原始 HTML</div>",
+    },
+  }));
+
+  renderWithStore(<ReportCanvas />, { store });
+
   expect(
     screen.getByRole("heading", { level: 1, name: "报告标题" }),
   ).toBeInTheDocument();

@@ -267,12 +267,12 @@ describe("Stage 6 report canvas and delivery flow", () => {
       await flushAsyncWork();
     });
 
+    const outlineCard = screen.getByRole("region", { name: "报告大纲" });
     const reportCanvas = screen.getByRole("region", { name: "报告画布" });
     const timelinePanel = screen.getByRole("region", { name: "时间线" });
-    const deliveryPanel = screen.getByRole("region", { name: "交付操作" });
 
     expect(
-      within(reportCanvas).getByText("中国 AI 搜索产品竞争格局研究"),
+      within(outlineCard).getByText("中国 AI 搜索产品竞争格局研究"),
     ).toBeInTheDocument();
     expect(
       within(reportCanvas).getByRole("heading", { level: 1, name: "执行摘要" }),
@@ -286,10 +286,6 @@ describe("Stage 6 report canvas and delivery flow", () => {
     ).toBeInTheDocument();
     expect(within(timelinePanel).getByText("正在生成配图")).toBeInTheDocument();
     expect(within(timelinePanel).getAllByText("已完成").length).toBeGreaterThan(0);
-    expect(within(deliveryPanel).queryByText("6800 字")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "下载 Markdown Zip" }),
-    ).toBeDisabled();
     expect(screen.queryByRole("button", { name: "提交反馈" })).not.toBeInTheDocument();
 
     await waitFor(() => {
@@ -314,6 +310,9 @@ describe("Stage 6 report canvas and delivery flow", () => {
       await flushAsyncWork();
     });
 
+    const deliveryPanel = screen.getByRole("region", { name: "交付操作" });
+
+    expect(within(deliveryPanel).queryByText("6800 字")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "下载 Markdown Zip" }),
     ).toBeEnabled();

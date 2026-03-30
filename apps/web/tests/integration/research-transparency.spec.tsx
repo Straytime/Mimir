@@ -347,8 +347,9 @@ describe("Stage 5 timeline and transparency", () => {
       await flushAsyncWork();
     });
 
+    const statusBar = screen.getByRole("region", { name: "会话状态" });
     expect(
-      screen.getByRole("heading", { name: "正在构思报告结构" }),
+      within(statusBar).getByText("正在构思报告结构"),
     ).toBeInTheDocument();
     expect(screen.getByText("阶段结论已整理")).toBeInTheDocument();
     expect(screen.getByText("来源已去重并整理引用")).toBeInTheDocument();

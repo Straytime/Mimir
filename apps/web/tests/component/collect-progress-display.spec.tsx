@@ -49,8 +49,8 @@ test("shows collect progress during collecting phase", () => {
 
   renderWithStore(<ResearchWorkspaceShell />, { store });
 
-  expect(screen.getByText(/搜集进度/)).toBeInTheDocument();
-  expect(screen.getByText(/01\/03 子任务完成/)).toBeInTheDocument();
+  expect(screen.getAllByText(/搜集进度/).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText(/01\/03/)).toBeInTheDocument();
 });
 
 test("does not show collect progress during non-collecting phase", () => {

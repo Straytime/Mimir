@@ -168,7 +168,7 @@ describe("Stage 4 clarification flow", () => {
       />,
     );
 
-    const textarea = screen.getByLabelText("澄清补充说明");
+    const textarea = screen.getByPlaceholderText("输入澄清补充说明...");
     expect(textarea).toBeDisabled();
 
     await act(async () => {
@@ -429,12 +429,12 @@ describe("Stage 4 clarification flow", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("澄清补充说明"), {
+    fireEvent.change(screen.getByPlaceholderText("输入澄清补充说明..."), {
       target: {
         value: "请重点关注产品能力和商业模式。",
       },
     });
-    fireEvent.click(screen.getByRole("button", { name: "提交澄清" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
 
     await act(async () => {
       await flushAsyncWork();
@@ -491,10 +491,10 @@ describe("Stage 4 clarification flow", () => {
       await flushAsyncWork();
     });
 
-    const textarea = screen.getByLabelText("澄清补充说明");
+    const textarea = screen.getByPlaceholderText("输入澄清补充说明...");
 
     await user.type(textarea, "保留这段澄清输入");
-    await user.click(screen.getByRole("button", { name: "提交澄清" }));
+    await user.click(screen.getByRole("button", { name: "提交" }));
 
     await screen.findByText("回答内容不能为空。");
 
@@ -554,7 +554,7 @@ describe("Stage 4 clarification flow", () => {
     expect(
       screen.queryByText("这次研究更偏向哪个方向？"),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("澄清补充说明")).toBeEnabled();
+    expect(screen.getByPlaceholderText("输入澄清补充说明...")).toBeEnabled();
     expect(submitClarification).not.toHaveBeenCalled();
   });
 
