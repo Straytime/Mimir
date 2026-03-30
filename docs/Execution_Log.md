@@ -3891,3 +3891,45 @@ Copy the template below for each completed session:
 - 验证: 83 component tests passed, typecheck 0 error
 
 - 验收结论: accepted — 三个修复全部通过
+
+---
+
+## TP-FIX04: Markdown 脚注预处理 — 顺序编号归一化
+
+- 日期: 2026-03-30
+- 分支: main（追加提交）
+- 目标: 解决 Web 端 markdown 预览中脚注编号异常（显示 49、162、1112 等原始 ref key）和末尾来源缺失的问题
+
+### 根因分析
+- remark-gfm 要求 footnote ref 和 definition 的 key 完全匹配才渲染为脚注
+- LLM 使用的 `[^ref_N]` key 中 N 来自 collector 的大编号池（可达 200+），非顺序
+- LLM 可能存在 ref/def key 拼写不一致（`ref_49` vs `ref49`）或漏写 definition
+- 无匹配 definition 的 ref 被 remark-gfm 原样输出为文本 `[^ref_49]`
+- 经 6 组边界测试验证：remark-gfm 在 ref-def 匹配时渲染完全正确（始终顺序编号 1,2,3）
+
+### 修复方案
+新增纯函数 `normalizeFootnotes(md)` 在 ReactMarkdown 渲染前预处理 markdown：
+1. 扫描正文中所有 `[^ref_N]` inline ref（按首次出现顺序），分配顺序编号
+2. key 归一化：去下划线+小写，使 `ref_49` 与 `ref49` 匹配
+3. 替换 inline ref 为 `[^1]`, `[^2]`, ...
+4. 移除原始 definition 行，按顺序追加新的 definition
+5. 丢弃无 inline ref 的孤立 definition，为无 def 的 ref 生成占位 `(来源缺失)`
+
+### 变更文件
+- 新建: `features/research/utils/normalize-footnotes.ts`
+- 新建: `tests/unit/normalize-footnotes.spec.ts`（9 test cases）
+- 修改: `features/research/components/report-canvas.tsx`（import + 调用 normalizeFootnotes）
+
+### 验证
+- `pnpm test:unit` — 68 passed (13 files)
+- `pnpm test:component` — 83 passed (21 files)
+- `pnpm typecheck` — 0 error
+
+### 边界 case 处理
+- 无脚注 / 空字符串 → 原样返回（快速路径）
+- 重复 inline ref（同一 key 多次引用）→ 共享同一编号
+- 孤立 definition → 丢弃
+- 孤立 ref → 占位 def `(来源缺失)`
+- 非脚注内容（加粗、链接、代码块）→ 原样保留
+
+- 验收结论: accepted
