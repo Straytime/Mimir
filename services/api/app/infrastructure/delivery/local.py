@@ -387,11 +387,6 @@ def _build_data_uri(content: bytes, mime_type: str) -> str:
 
 
 def _extract_footnote_label(item: Tag, *, fallback_index: int) -> str:
-    item_id = item.get("id")
-    if item_id and item_id.startswith("fn:"):
-        suffix = item_id.split("fn:", 1)[1].strip()
-        if suffix:
-            return suffix
     return str(fallback_index)
 
 

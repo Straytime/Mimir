@@ -264,3 +264,36 @@ test("does not render delivery word count chips even when delivery metadata cont
   expect(screen.queryByText("6800 字")).not.toBeInTheDocument();
   expect(screen.getByText("02 张配图")).toBeInTheDocument();
 });
+
+test("renders footnote references and definitions from [^ref_n] syntax", () => {
+  const store = createStage6Store();
+
+  const markdown = [
+    "核心结论[^ref_1]与扩展[^ref_2]",
+    "",
+    "[^ref_1]: [来源一](https://example.com/1)",
+    "[^ref_2]: [来源二](https://example.com/2)",
+  ].join("\n");
+
+  store.setState((state) => ({
+    ...state,
+    stream: {
+      ...state.stream,
+      reportMarkdown: markdown,
+    },
+  }));
+
+  renderWithStore(<ReportCanvas />, { store });
+
+  // 1. Footnote section exists
+  const footnoteSection = document.querySelector("section[data-footnotes]");
+  expect(footnoteSection).toBeInTheDocument();
+
+  // 2. Inline references rendered as superscript links
+  const supElements = document.querySelectorAll("sup a");
+  expect(supElements.length).toBe(2);
+
+  // 3. Footnote definitions contain source text with links
+  expect(screen.getByRole("link", { name: "来源一" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "来源二" })).toBeInTheDocument();
+});

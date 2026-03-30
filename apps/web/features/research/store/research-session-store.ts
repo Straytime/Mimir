@@ -252,6 +252,7 @@ function bootstrapCreateTaskIntoState(
     },
     ui: {
       ...state.ui,
+      initialPromptDraft: "",
       createTask: clearCreateTaskUiStateInState(state),
     },
   };

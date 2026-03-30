@@ -5,6 +5,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { UnifiedInputBar } from "@/features/research/components/unified-input-bar";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
 import {
+  makeCreateTaskResponse,
   makeResearchSessionState,
   makeTaskSnapshot,
 } from "@/tests/fixtures/builders";
@@ -246,4 +247,21 @@ test("Enter key triggers submit, Shift+Enter does not", async () => {
   // Enter should submit
   await user.keyboard("{Enter}");
   expect(mockCreateTask).toHaveBeenCalledTimes(1);
+});
+
+test("bootstrapCreateTask clears initialPromptDraft", () => {
+  const store = createResearchSessionStore();
+
+  // Simulate user typing a draft before task creation
+  store.getState().setInitialPromptDraft("旧的研究主题");
+  expect(store.getState().ui.initialPromptDraft).toBe("旧的研究主题");
+
+  // Simulate successful task creation response
+  store.getState().bootstrapCreateTask({
+    response: makeCreateTaskResponse(),
+    requestId: "req_test",
+  });
+
+  // After bootstrapping, the draft should be cleared
+  expect(store.getState().ui.initialPromptDraft).toBe("");
 });
