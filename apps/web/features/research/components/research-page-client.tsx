@@ -7,8 +7,8 @@ import type { ResearchSessionStore } from "../store/research-session-store.types
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { ExamplePrompts } from "./example-prompts";
 import { ResearchConfigPanel } from "./research-config-panel";
-import { ResearchInputPanel } from "./research-input-panel";
 import { ResearchWorkspaceShell } from "./research-workspace-shell";
+import { UnifiedInputBar } from "./unified-input-bar";
 
 export type ResearchPageClientProps = {
   runtime?: Partial<ResearchRuntime>;
@@ -21,7 +21,7 @@ function ResearchPageContent() {
   const isActiveWorkspace = taskId !== null && snapshot !== null;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 bg-radial-glow px-sp-8 py-16">
+    <main className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 bg-radial-glow px-sp-8 pb-32 py-16">
       <div className="animate-fade-in-up space-y-4">
         <p className="text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-surface-tint">
           Mimir
@@ -36,16 +36,15 @@ function ResearchPageContent() {
       ) : (
         <section className="space-y-sp-10">
           <div className="animate-fade-in-up stagger-1">
-            <ResearchInputPanel />
-          </div>
-          <div className="animate-fade-in-up stagger-2">
             <ResearchConfigPanel />
           </div>
-          <div className="animate-fade-in-up stagger-3">
+          <div className="animate-fade-in-up stagger-2">
             <ExamplePrompts />
           </div>
         </section>
       )}
+
+      <UnifiedInputBar />
     </main>
   );
 }

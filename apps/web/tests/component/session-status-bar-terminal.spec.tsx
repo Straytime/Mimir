@@ -85,7 +85,7 @@ test('displays "任务已终止" when terminalReason is "terminated"', () => {
   renderWithStore(<SessionStatusBar />, { store });
 
   expect(screen.getByText("任务已终止")).toBeInTheDocument();
-  expect(screen.queryByText("正在撰写报告")).not.toBeInTheDocument();
+  expect(screen.queryByText("正在撰写报告与生成配图")).not.toBeInTheDocument();
 });
 
 test('displays "任务已过期" when terminalReason is "expired"', () => {
@@ -112,5 +112,5 @@ test('displays "任务已过期" when terminalReason is "expired"', () => {
   renderWithStore(<SessionStatusBar />, { store });
 
   expect(screen.getByText("任务已过期")).toBeInTheDocument();
-  expect(screen.queryByText("已进入交付阶段")).not.toBeInTheDocument();
+  expect(screen.queryByText("报告已完成并进入交付阶段")).not.toBeInTheDocument();
 });

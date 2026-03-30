@@ -149,29 +149,6 @@ export function ReportCanvas() {
         ) : null}
       </div>
 
-      {outlineReady && outline ? (
-        <div className="mt-6 bg-surface-container-low px-5 py-5">
-          <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
-            Outline
-          </p>
-          <h4 className="mt-sp-2 text-lg font-narrative font-semibold text-primary">
-            {outline.title}
-          </h4>
-          <ol className="mt-4 space-y-3">
-            {outline.sections.map((section) => (
-              <li key={section.section_id}>
-                <p className="text-sm font-narrative font-semibold text-primary">
-                  {section.title}
-                </p>
-                <p className="mt-1 text-sm font-narrative leading-6 text-secondary">
-                  {section.description}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : null}
-
       <div className="relative mt-6">
         <div
           aria-label="报告正文"
