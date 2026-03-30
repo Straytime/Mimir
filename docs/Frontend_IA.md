@@ -214,6 +214,7 @@ apps/web/
 - 禁止原始 HTML
 - 只允许后端返回的 artifact URL
 - `outline.delta` 不直接渲染为正文
+- Web 预览必须保留原始 footnote 语义，不得重编号、不得删除 definition、不得合成占位来源；如需修复 `ref` / `def` 别名，仅允许保守修复确认为同一来源的 alias，不得改写已正常匹配的正文或文末列表
 
 ### 5.4.1 Markdown 图片渲染策略
 
