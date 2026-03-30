@@ -58,9 +58,10 @@ export function ResearchWorkspaceShell() {
     snapshot.phase,
     "analyzing_requirement",
   );
-  const shouldShowCollectionTrace =
-    isPhaseAtOrAfter(snapshot.phase, "planning_collection") &&
-    !isPhaseAtOrAfter(snapshot.phase, "preparing_outline");
+  const shouldShowCollectionTrace = isPhaseAtOrAfter(
+    snapshot.phase,
+    "planning_collection",
+  );
   const shouldShowOutline =
     isPhaseAtOrAfter(snapshot.phase, "preparing_outline") &&
     outlineReady &&

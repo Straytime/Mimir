@@ -279,7 +279,7 @@ describe("Stage 6 report canvas and delivery flow", () => {
     expect(
       within(reportCanvas).queryByText("先完成市场格局章节，再决定是否需要图表支撑。"),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Collection Trace" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "提交反馈" })).not.toBeInTheDocument();
 
     await waitFor(() => {

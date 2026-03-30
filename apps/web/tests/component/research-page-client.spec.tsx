@@ -102,7 +102,7 @@ test("renders stage-gated workspace cards once their content is ready", () => {
   render(<ResearchPageClient store={store} />);
 
   expect(screen.getByText("需求摘要已生成")).toBeInTheDocument();
-  expect(screen.queryByRole("region", { name: "Collection Trace" })).not.toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
   expect(screen.getByLabelText("报告大纲")).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "报告画布" })).toBeInTheDocument();
   expect(screen.getByLabelText("图库")).toBeInTheDocument();

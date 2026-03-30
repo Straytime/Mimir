@@ -161,7 +161,7 @@ describe("Stage 5 timeline and transparency", () => {
     expect(screen.queryByText("等待研究透明度事件进入时间线。")).not.toBeInTheDocument();
   });
 
-  test("renders collection trace during retrieval and hides it once outlining begins", async () => {
+  test("renders collection trace during retrieval and keeps it visible after outlining begins", async () => {
     const scrollIntoViewSpy = vi.fn();
 
     Object.defineProperty(Element.prototype, "scrollIntoView", {
@@ -367,7 +367,7 @@ describe("Stage 5 timeline and transparency", () => {
     expect(
       within(statusBar).getByText("正在构思报告结构"),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Collection Trace" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
     expect(screen.queryByText('{ "outline": "raw debug delta" }')).not.toBeInTheDocument();
   });
 });

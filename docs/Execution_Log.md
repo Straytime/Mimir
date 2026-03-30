@@ -4041,3 +4041,24 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## TP-COLLECTION-TRACE-LIFECYCLE-02 Collection Trace Lifetime Correction
+
+- 日期: 2026-03-30
+- 分支: `codex/collection-trace-height-cap`
+- 目标: 修正 `Collection Trace` 的可见生命周期，确保其在 collection 阶段之后继续作为历史卡片保留并上推显示
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，明确 `Collection Trace` 自进入 `planning_collection` 起出现，并在后续 `preparing_outline` / `writing_report` / `delivered` 阶段继续保留
+- 调整 `apps/web/features/research/components/research-workspace-shell.tsx`，移除 `Collection Trace` 在 `preparing_outline` 之后隐藏的限制
+- 更新 `apps/web/tests/component/collect-progress-display.spec.tsx`、`apps/web/tests/component/research-page-client.spec.tsx`、`apps/web/tests/integration/research-transparency.spec.tsx`、`apps/web/tests/integration/report-delivery-flow.spec.tsx` 中与生命周期相关的断言
+
+### 验证
+- `pnpm typecheck` - 0 error
+- `pnpm test:component` - 88 passed
+- `pnpm test:integration` - 37 passed
+
+### 验收结论
+- accepted

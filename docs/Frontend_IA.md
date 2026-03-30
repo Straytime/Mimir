@@ -281,7 +281,7 @@ apps/web/
 3. 后续 `collector.*` / `summary.completed` / `collector.completed` 事件，若携带 `subtask_id` 或 `tool_call_id`，都挂接到对应父级 item 下或显示统一标签。
 4. `TimelineItem` 必须保留 `revisionId`、`subtaskId`、`toolCallId`、`collectTarget` 字段，为未来分组渲染留出余地。
 5. 时间线默认始终自动滚动到最新事件，不提供手动暂停。
-6. `Collection Trace` 卡片只在 `planning_collection` 到 `merging_sources` 之间可见，进入 `preparing_outline` 及之后阶段隐藏。
+6. `Collection Trace` 卡片自进入 `planning_collection` 起出现，并在后续 `preparing_outline` / `writing_report` / `delivered` 阶段继续保留，作为历史卡片被上推显示。
 
 高度约束：
 

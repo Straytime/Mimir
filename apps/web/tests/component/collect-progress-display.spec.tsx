@@ -54,7 +54,7 @@ test("shows the collection trace card once collection begins", () => {
   expect(screen.queryByText(/搜集进度/)).not.toBeInTheDocument();
 });
 
-test("does not show the collection trace during non-collection phases", () => {
+test("keeps the collection trace visible during later phases", () => {
   const store = createResearchSessionStore(
     makeResearchSessionState({
       session: {
@@ -78,5 +78,5 @@ test("does not show the collection trace during non-collection phases", () => {
 
   renderWithStore(<ResearchWorkspaceShell />, { store });
 
-  expect(screen.queryByRole("region", { name: "Collection Trace" })).not.toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
 });
