@@ -11,6 +11,7 @@ import type { ArtifactSummary } from "@/lib/contracts";
 import { useReportAutoScroll } from "../hooks/use-report-auto-scroll";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { fmt02 } from "../utils/format";
+import { normalizeFootnotes } from "../utils/normalize-footnotes";
 import { findLatestArtifactBySource } from "../utils/task-artifact";
 import { TaskArtifactImage } from "./task-artifact-image";
 
@@ -195,7 +196,7 @@ export function ReportCanvas() {
                 skipHtml
                 urlTransform={allowCanonicalArtifactPath}
               >
-                {deferredReportMarkdown}
+                {normalizeFootnotes(deferredReportMarkdown)}
               </ReactMarkdown>
             </div>
           )}
