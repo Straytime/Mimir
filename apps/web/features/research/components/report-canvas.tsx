@@ -4,6 +4,7 @@ import { Children, isValidElement, useDeferredValue } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import remarkGfm from "remark-gfm";
 
 import type { ArtifactSummary } from "@/lib/contracts";
 
@@ -190,6 +191,7 @@ export function ReportCanvas() {
                   p: ReportParagraph,
                 }}
                 rehypePlugins={[[rehypeSanitize, REPORT_MARKDOWN_SANITIZE_SCHEMA]]}
+                remarkPlugins={[remarkGfm]}
                 skipHtml
                 urlTransform={allowCanonicalArtifactPath}
               >

@@ -3830,3 +3830,64 @@ Copy the template below for each completed session:
   - 生产部署后人工视觉验收全流程（着陆页 → 澄清 → 工作台 → 报告 → 交付）
   - 按需在 CTA 级按钮上应用 bg-cta-gradient（当前 token 已就绪但未使用）
   - 考虑对 e2e 测试做一轮 selector 检查
+
+---
+
+## TP-UI01~06: 前端交互重构 — 统一输入框 + 卡片重排
+
+- 日期: 2026-03-30
+- 分支: `tp/unified-input-card-reorder`
+- 目标: 将初始输入和澄清输入统一为底部固定 chat 风格输入框，按内容生产时间线重排工作区卡片
+- 任务包:
+  - **TP-UI01**: 新建 `UnifiedInputBar` 组件，`resolveInputMode()` 纯函数按阶段自适应 placeholder/enabled/submitLabel，复用 `useCreateTask()` + `useClarificationSubmit()`
+  - **TP-UI02**: 新建 `OutlineCard` 组件，只展示章节标题列表，内部 null 守卫
+  - **TP-UI03**: 增强 `SessionStatusBar`，合并 `getStageStatusCopy()` 阶段描述 + 搜集进度计数器 + analysisText
+  - **TP-UI04**: `ReportCanvas` 移除 outline 渲染块（保留 store 订阅用于 auto-scroll trigger）
+  - **TP-UI05**: 重排卡片顺序 + 接入新组件到 `research-workspace-shell` 和 `research-page-client`，适配集成测试
+  - **TP-UI06**: 清理废弃代码 — 删除 `ResearchInputPanel`、`ClarificationActionPanel`、对应测试文件
+- 变更文件:
+  - 新建: `unified-input-bar.tsx`, `outline-card.tsx`, `unified-input-bar.spec.tsx`, `outline-card.spec.tsx`
+  - 删除: `research-input-panel.tsx`, `research-input-panel.spec.tsx`, `clarification-enter-submit.spec.tsx`
+  - 修改: `research-workspace-shell.tsx`, `research-page-client.tsx`, `session-status-bar.tsx`, `report-canvas.tsx`, `clarification-panels.tsx`
+  - 适配测试: `session-status-bar.spec.tsx`, `session-status-bar-terminal.spec.tsx`, `collect-progress-display.spec.tsx`, `report-canvas.spec.tsx`, `research-page-client.spec.tsx`, `clarification-flow.spec.tsx`, `create-task-flow.spec.tsx`, `report-delivery-flow.spec.tsx`, `research-transparency.spec.tsx`
+- 新卡片顺序: `SessionStatusBar` → `TerminalBanner` → `ClarificationDetailPanel` → `RequirementSummaryCard` → `TimelinePanel` → `OutlineCard` → `ReportCanvas` → `ArtifactGallery` → `DeliveryActions`
+- 测试/验证:
+  - `pnpm typecheck` — 0 error
+  - `pnpm test:unit` — 59 passed
+  - `pnpm test:component` — 81 passed (21 files)
+  - `pnpm test:integration` — 37 passed (6 files)
+- 关键设计决策:
+  - `UnifiedInputBar` 放在 `research-page-client` 级别（跨有/无任务两个分支），`fixed bottom-0` 定位
+  - delivered 确认使用 `window.confirm`
+  - 各内容卡片保持内部 null 守卫，shell 无条件渲染
+  - `selectCollectProgress` 使用标量提取避免 React 无限循环
+  - options 澄清模式的提交按钮从被删除的 `ClarificationActionPanel` 移入 `ClarificationDetailPanel`
+- 验收结论: accepted — 21 files changed, +993/-661
+
+---
+
+## TP-FIX01~03: 脚注渲染修复 + 输入框草稿清空
+
+- 日期: 2026-03-30
+- 分支: `tp/unified-input-card-reorder`（追加提交）
+- 目标: 修复 PDF/Web 脚注渲染问题 + 任务创建后输入框残留文本
+
+### TP-FIX01: 清空任务创建后的输入框草稿
+- 根因: `bootstrapCreateTaskIntoState()` 未清空 `initialPromptDraft`，禁用态 textarea 仍显示原始输入
+- 修复: 在 `bootstrapCreateTaskIntoState()` 的 `ui` 分支中增加 `initialPromptDraft: ""`
+- 变更: `research-session-store.ts`, `unified-input-bar.spec.tsx`（+1 test case）
+- 验证: 82 component tests passed
+
+### TP-FIX02: PDF 末尾参考来源使用序号替代 ref key
+- 根因: `_extract_footnote_label()` 从 `<li id="fn:ref_1">` 提取 suffix `ref_1` 作为 label，LLM 使用 `[^ref_n]` 命名时显示 `[ref_1]` 而非 `[1]`
+- 修复: `_extract_footnote_label()` 改为始终返回 `str(fallback_index)`（顺序序号）
+- 变更: `services/api/app/infrastructure/delivery/local.py`, `tests/unit/infrastructure/test_local_report_export.py`（+1 test case）
+- 验证: 16 backend tests passed
+
+### TP-FIX03: Web 端 markdown 预览支持脚注渲染
+- 根因: `react-markdown` 未配置 `remark-gfm` 插件，`[^ref_n]` 语法原样输出
+- 修复: 安装 `remark-gfm`，在 `ReportCanvas` 的 ReactMarkdown 上配置 `remarkPlugins={[remarkGfm]}`。`rehype-sanitize` 的 `defaultSchema` 已包含脚注所需全部标签/属性，无需扩展
+- 变更: `report-canvas.tsx`, `report-canvas.spec.tsx`（+1 test case），`package.json`, `pnpm-lock.yaml`
+- 验证: 83 component tests passed, typecheck 0 error
+
+- 验收结论: accepted — 三个修复全部通过

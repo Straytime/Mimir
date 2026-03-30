@@ -354,6 +354,33 @@ def test_footnote_ol_css_hides_native_list_markers() -> None:
 
 
 @pytest.mark.asyncio
+async def test_footnote_labels_use_sequential_numbers_not_ref_keys() -> None:
+    """When LLM uses [^ref_n] naming, PDF should show [1], [2] not [ref_1], [ref_2]."""
+    md = (
+        "# 参考来源序号验证\n\n"
+        "结论一[^ref_1]与结论二[^ref_2]\n\n"
+        "[^ref_1]: [来源一](https://example.com/1)\n"
+        "[^ref_2]: [来源二](https://example.com/2)\n"
+    )
+    pdf_bytes = await LocalReportExportService().build_pdf(
+        markdown=md,
+        artifacts=(),
+    )
+
+    pdf_text = _extract_pdf_text(pdf_bytes)
+
+    assert "参考来源序号验证" in pdf_text
+    # Inline refs should be sequential numbers (handled by markdown lib)
+    assert "结论一[1]" in pdf_text
+    assert "结论二[2]" in pdf_text
+    # Footnote labels at the bottom should also be sequential numbers, NOT ref_1/ref_2
+    assert "[1] 来源一" in pdf_text
+    assert "[2] 来源二" in pdf_text
+    assert "ref_1" not in pdf_text
+    assert "ref_2" not in pdf_text
+
+
+@pytest.mark.asyncio
 async def test_build_pdf_renders_double_digit_footnote_labels_completely() -> None:
     pdf_bytes = await LocalReportExportService().build_pdf(
         markdown=_build_twelve_footnote_markdown(),
