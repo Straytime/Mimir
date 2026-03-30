@@ -103,7 +103,7 @@ apps/web/
 | --- | --- | --- |
 | 左栏 `Control Rail` | 输入、配置、澄清、反馈、下载、任务状态 | 承担所有可操作区 |
 | 中栏 `Report Canvas` | 流式报告、图片、交付态结果 | 作为视觉中心与主要阅读区 |
-| 右栏 `Live Timeline` | 当前阶段、事件时间线、轻量调试摘要 | 提供“系统正在做什么”的透明度 |
+| 右栏 `Collection Trace` | 研究信息检索阶段的事件时间线 | 提供“系统正在搜集什么”的透明度 |
 
 顶栏固定显示：
 
@@ -250,34 +250,29 @@ apps/web/
 2. 报告渲染层使用 `useDeferredValue` 或等价方式降低长文本持续 parse 带来的卡顿。
 3. v1 不对正文做虚拟列表；一万字量级优先通过增量节流解决。
 
-### 5.5 `LiveTimelinePanel`
+### 5.5 `CollectionTracePanel`
 
 职责：
 
-- 将复杂 SSE 事件归一为用户可理解的时间线
-- 展示“正在做什么”
-- 作为调试与排障的第一入口
+- 仅将信息检索阶段的 SSE 事件归一为用户可理解的时间线
+- 展示从 `planning_collection` 到 `merging_sources` 之间的搜集进展
+- 作为检索过程的轻量透明度视图，不承载后续写作/交付阶段信息
 
 展示策略：
 
 - 用户主视图显示归一后的 timeline item，不直接暴露原始 event name
-- 对 `analysis.delta`、`outline.delta`、`writer.reasoning.delta` 这类调试价值高、用户价值低的事件，仅保留轻量状态文案
+- 只消费 collection 相关事件：`planner.*`、`collector.*`、`summary.completed`、`sources.merged`
+- `phase.changed` 仅在进入 `planning_collection` 时用于开启这张卡片；`collecting`、`summarizing_collection`、`merging_sources` 是其可见范围的阶段锚点
 - 本节文案表只定义时间线展示文案；事件写入 store 的权威规则见 §8
 
 建议的用户可读阶段文案：
 
 | 事件组 | 用户文案 |
 | --- | --- |
-| `clarification.*` | 正在确认研究范围 |
-| `analysis.*` | 正在分析你的研究需求 |
 | `planner.*` | 正在规划研究路径 |
 | `collector.*` | 正在搜索与读取资料 |
 | `summary.completed` | 正在整理阶段结论 |
 | `sources.merged` | 正在去重并整理引用 |
-| `outline.*` | 正在构思报告结构 |
-| `writer.*` | 正在撰写报告 |
-| `artifact.ready` | 已生成配图 |
-| `report.completed` | 报告已完成 |
 
 并发 sub-agent 展示策略：
 
@@ -286,6 +281,13 @@ apps/web/
 3. 后续 `collector.*` / `summary.completed` / `collector.completed` 事件，若携带 `subtask_id` 或 `tool_call_id`，都挂接到对应父级 item 下或显示统一标签。
 4. `TimelineItem` 必须保留 `revisionId`、`subtaskId`、`toolCallId`、`collectTarget` 字段，为未来分组渲染留出余地。
 5. 时间线默认始终自动滚动到最新事件，不提供手动暂停。
+6. `Collection Trace` 卡片自进入 `planning_collection` 起出现，并在后续 `preparing_outline` / `writing_report` / `delivered` 阶段继续保留，作为历史卡片被上推显示。
+
+高度约束：
+
+1. 长内容卡片 body 不再使用固定 `34rem`。
+2. `Collection Trace` 与 `ReportBody` 共享同一动态 max-height token，该 token 由工作台可视内容区高度推导，必须扣除顶栏与底部输入区占位。
+3. 该约束优先作用于卡片内部滚动容器，不改变外层卡片的布局节奏。
 
 ### 5.6 `DeliveryActions`
 
@@ -325,7 +327,7 @@ v1 前端不开放 `FeedbackComposer`。
 1. 任务创建成功但 SSE 尚未建立时，工作台显示三栏 skeleton。
 2. 澄清 LLM 正在生成时，`ClarificationPanel` 显示文本行 skeleton。
 3. 进入 `writing_report` 前，`ReportCanvas` 显示段落 skeleton，而不是空白区。
-4. 时间线收到 phase 切换但尚无后续细节时，插入一条轻量 skeleton row。
+4. `Collection Trace` 收到 `planning_collection` 但尚无后续细节时，插入一条轻量 skeleton row。
 5. 除以上明确的 skeleton 场景外，未开始的卡片不应以空卡片或占位文案提前占据版面。
 
 ### 5.9 `TerminalBanner`
@@ -567,39 +569,39 @@ v1 前端不开放 feedback/revision 交互，因此主流程不进入前端 rev
 
 1. 后端仍可保留 `POST /feedback` 与 revision 状态机，但前端不提供提交入口。
 2. 若 store 因异常状态带有 `revisionTransition` 数据，前端只做安全降级，不渲染 feedback composer 或 revision overlay。
-3. 时间线、报告正文、交付下载继续按现有只读视图工作。
+3. `Collection Trace`、报告正文、交付下载继续按现有只读视图工作。
 
 ## 8. 事件到 UI 的映射
 
-本节是前端事件处理的权威映射；§5.5 的事件组文案只用于时间线展示。
+本节是前端事件处理的权威映射；§5.5 的事件组文案只用于 `Collection Trace` 展示。
 
 | SSE 事件 | Store 更新 | 主 UI 行为 |
 | --- | --- | --- |
 | `task.created` | 覆盖 `snapshot` | 工作台进入活跃态 |
-| `phase.changed` | 更新 `snapshot.phase/status` | 顶栏与时间线更新 |
+| `phase.changed` | 更新 `snapshot.phase/status` | 顶栏更新；进入 `planning_collection` 时开启 `Collection Trace` |
 | `heartbeat` | 更新连接健康时间 | 不额外打断用户 |
 | `clarification.delta` | 追加 `clarificationText` | 展示追问流 |
 | `clarification.options.ready` | 写入 `questionSet`、可用动作，并初始化 `optionAnswers` 为每题 `o_auto` | 展示选单并默认全选 `o_auto` |
 | `clarification.natural.ready` | 标记可提交 | 启用澄清输入框 |
 | `clarification.countdown.started` | 更新倒计时截止时间 | 启动 15 秒倒计时 |
 | `clarification.fallback_to_natural` | 清空选单状态 | 切换为自然语言澄清 |
-| `analysis.delta` | 追加 `analysisText` | 展示“正在分析需求”过程文本 |
-| `analysis.completed` | 更新 `currentRevision.requirement_detail`，清空 `analysisText` | 在侧栏显示需求摘要 |
-| `planner.reasoning.delta` | 追加到当前规划 timeline item 的 detail | 展示规划思考过程 |
-| `planner.tool_call.requested` | 新增带 `collectTarget` 的 timeline item | 展示“正在搜集：{collect_target}” |
-| `collector.reasoning.delta` | 追加到对应 `subtaskId` timeline item 的 detail | 展示子任务搜索思考 |
-| `collector.search.*` / `collector.fetch.*` | 写入对应 `subtaskId` timeline item | 展示“正在搜索/读取资料” |
-| `collector.completed` | 将对应 subtask timeline item 标记为完成 | 展示该搜集目标已完成 |
-| `summary.completed` | 写入 timeline | 展示阶段结论已完成 |
-| `sources.merged` | 写入 timeline | 展示来源去重结果 |
-| `outline.delta` | `outlineReady = false` | 只显示“正在构思” |
-| `outline.completed` | 写入 `outline`，`outlineReady = true` | 可在侧栏显示章节概览 |
-| `writer.tool_call.requested` | timeline 增加工具调用项 | 显示“正在生成配图” |
-| `writer.tool_call.completed` | 更新对应 `toolCallId` timeline item 为完成态 | 结束“正在生成配图”状态 |
-| `writer.reasoning.delta` | 追加到当前写作 timeline item 的 detail | 展示轻量写作思考 |
+| `analysis.delta` | 追加 `analysisText` | 只在侧栏显示“正在分析需求”过程文本，不进入 `Collection Trace` |
+| `analysis.completed` | 更新 `currentRevision.requirement_detail`，清空 `analysisText` | 在侧栏显示需求摘要，不进入 `Collection Trace` |
+| `planner.reasoning.delta` | 追加到当前规划 timeline item 的 detail | 进入 `Collection Trace` 的规划项 |
+| `planner.tool_call.requested` | 新增带 `collectTarget` 的 timeline item | 进入 `Collection Trace` 的搜集项 |
+| `collector.reasoning.delta` | 追加到对应 `subtaskId` timeline item 的 detail | 进入 `Collection Trace` |
+| `collector.search.*` / `collector.fetch.*` | 写入对应 `subtaskId` timeline item | 进入 `Collection Trace` |
+| `collector.completed` | 将对应 subtask timeline item 标记为完成 | 进入 `Collection Trace`，展示该搜集目标已完成 |
+| `summary.completed` | 写入 timeline | 进入 `Collection Trace`，展示阶段结论已完成 |
+| `sources.merged` | 写入 timeline | 进入 `Collection Trace`，展示来源去重结果 |
+| `outline.delta` | `outlineReady = false` | 只影响章节概览预备态，不进入 `Collection Trace` |
+| `outline.completed` | 写入 `outline`，`outlineReady = true` | 只影响章节概览可见性，不进入 `Collection Trace` |
+| `writer.tool_call.requested` | 更新写作相关状态 | 不进入 `Collection Trace` |
+| `writer.tool_call.completed` | 更新写作相关状态 | 不进入 `Collection Trace` |
+| `writer.reasoning.delta` | 追加到当前写作 buffer | 不进入 `Collection Trace` |
 | `writer.delta` | 追加 `reportMarkdown` | 实时渲染正文 |
-| `artifact.ready` | 追加 artifact | 在报告与图库中可见 |
-| `report.completed` | 更新 `delivery` | 下载区准备就绪 |
+| `artifact.ready` | 追加 artifact | 在报告与图库中可见，不进入 `Collection Trace` |
+| `report.completed` | 更新 `delivery` | 下载区准备就绪，不进入 `Collection Trace` |
 | `task.awaiting_feedback` | 更新 `snapshot` 与 `expires_at` | 保持下载按钮可用，但不展示反馈输入 |
 | `task.failed` | 设置 `terminalReason = failed` | 切换失败态 |
 | `task.terminated` | 设置 `terminalReason = terminated` | 切换终止态 |
@@ -729,7 +731,7 @@ v1 前端不开放 feedback/revision 交互，因此主流程不进入前端 rev
 
 ## 12. 可访问性与可测试性约束
 
-1. 时间线区域使用 `aria-live="polite"`，但报告正文不做全量朗读。
+1. `Collection Trace` 区域使用 `aria-live="polite"`，但报告正文不做全量朗读。
 2. 倒计时与终止确认必须可键盘操作。
 3. 所有主要按钮都要有稳定的 `data-testid` 或语义 role。
 4. 组件设计应允许用 scripted SSE 事件序列做测试，不依赖真实网络。

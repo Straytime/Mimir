@@ -40,6 +40,6 @@ test("ClarificationDetailPanel empty state shows user-facing copy", () => {
 test("TimelinePanel empty state shows user-facing copy", () => {
   renderWithStore(<TimelinePanel items={[]} />);
 
-  expect(screen.getByText("研究进展将在这里实时显示。")).toBeInTheDocument();
-  expect(screen.queryByText(/透明度事件/)).not.toBeInTheDocument();
+  expect(screen.getByText("资料搜集会在这里逐步展开。")).toBeInTheDocument();
+  expect(screen.queryByText(/研究进展/)).not.toBeInTheDocument();
 });

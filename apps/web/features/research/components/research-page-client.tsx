@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef } from "react";
 import type { StoreApi } from "zustand";
 
 import { ResearchWorkspaceProviders, type ResearchRuntime } from "../providers/research-workspace-providers";
+import { useWorkspaceBodyMaxHeight } from "../hooks/use-workspace-body-max-height";
 import type { ResearchSessionStore } from "../store/research-session-store.types";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { ExamplePrompts } from "./example-prompts";
@@ -19,9 +21,15 @@ function ResearchPageContent() {
   const taskId = useResearchSessionStore((state) => state.session.taskId);
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
   const isActiveWorkspace = taskId !== null && snapshot !== null;
+  const mainRef = useRef<HTMLElement | null>(null);
+
+  useWorkspaceBodyMaxHeight(mainRef);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 bg-radial-glow px-sp-8 pb-32 py-16">
+    <main
+      className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 bg-radial-glow px-sp-8 pb-32 py-16"
+      ref={mainRef}
+    >
       <div className="animate-fade-in-up space-y-4">
         <p className="text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-surface-tint">
           Mimir

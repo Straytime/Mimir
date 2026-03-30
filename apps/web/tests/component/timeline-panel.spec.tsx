@@ -25,7 +25,7 @@ afterEach(() => {
   });
 });
 
-test("renders collect_target on timeline items", () => {
+test("renders collection trace items with collect_target labels", () => {
   render(
     <TimelinePanel
       items={[
@@ -46,9 +46,10 @@ test("renders collect_target on timeline items", () => {
     screen.getByText("收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展"),
   ).toBeInTheDocument();
   expect(screen.getByText("搜索： 中国 AI 搜索 产品 2025")).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
 });
 
-test("auto-scrolls to the latest timeline item by default", () => {
+test("auto-scrolls to the latest collection trace item by default", () => {
   const { rerender } = render(
     <TimelinePanel
       items={[
@@ -78,4 +79,11 @@ test("auto-scrolls to the latest timeline item by default", () => {
   );
 
   expect(scrollIntoViewSpy).toHaveBeenCalled();
+});
+
+test("shows collection-specific empty copy", () => {
+  render(<TimelinePanel items={[]} />);
+
+  expect(screen.getByText("资料搜集会在这里逐步展开。")).toBeInTheDocument();
+  expect(screen.queryByText("研究进展将在这里实时显示。")).not.toBeInTheDocument();
 });

@@ -71,6 +71,7 @@ export function SessionStatusBar() {
       aria-label="会话状态"
       className="sticky top-0 z-50 bg-surface/70 px-4 py-3 font-ui text-sm backdrop-blur-[20px]"
       role="region"
+      data-research-status-bar="true"
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">

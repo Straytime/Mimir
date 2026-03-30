@@ -269,8 +269,6 @@ describe("Stage 6 report canvas and delivery flow", () => {
 
     const outlineCard = screen.getByRole("region", { name: "报告大纲" });
     const reportCanvas = screen.getByRole("region", { name: "报告画布" });
-    const timelinePanel = screen.getByRole("region", { name: "时间线" });
-
     expect(
       within(outlineCard).getByText("中国 AI 搜索产品竞争格局研究"),
     ).toBeInTheDocument();
@@ -281,11 +279,7 @@ describe("Stage 6 report canvas and delivery flow", () => {
     expect(
       within(reportCanvas).queryByText("先完成市场格局章节，再决定是否需要图表支撑。"),
     ).not.toBeInTheDocument();
-    expect(
-      within(timelinePanel).getByText("先完成市场格局章节，再决定是否需要图表支撑。"),
-    ).toBeInTheDocument();
-    expect(within(timelinePanel).getByText("正在生成配图")).toBeInTheDocument();
-    expect(within(timelinePanel).getAllByText("已完成").length).toBeGreaterThan(0);
+    expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "提交反馈" })).not.toBeInTheDocument();
 
     await waitFor(() => {

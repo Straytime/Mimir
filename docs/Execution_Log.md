@@ -4015,3 +4015,50 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## TP-COLLECTION-TRACE-HEIGHT-01 Collection Trace Scope and Shared Body Height Cap
+
+- 日期: 2026-03-30
+- 分支: `codex/collection-trace-height-cap`
+- 目标: 将右栏 `Live Timeline` 收缩为仅展示信息检索阶段的 `Collection Trace`，并为 `Collection Trace` 与 `ReportBody` 引入共享的动态 body height token
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，明确 `Collection Trace` 只展示 `planning_collection` 到 `merging_sources` 之间的检索信息，不再承载 analysis / outline / writer / artifact / report 信息
+- 新增 `apps/web/features/research/hooks/use-workspace-body-max-height.ts` 与 `apps/web/features/research/utils/layout-vars.ts`，由工作台根节点测量顶栏与底部输入区之间的可视高度并写入共享 CSS 变量
+- 修改 `apps/web/features/research/components/timeline-panel.tsx`、`apps/web/features/research/components/report-canvas.tsx`，改为消费共享 body height token，移除写死 `34rem`
+- 修改 `apps/web/features/research/components/research-workspace-shell.tsx`，让 `Collection Trace` 只在 collection 阶段可见
+- 为 `session-status-bar.tsx` 与 `unified-input-bar.tsx` 增加布局测量标记，供共享高度 hook 使用
+- 收窄 `apps/web/features/research/mappers/timeline-mapper.ts` 的展示映射，仅保留 collection 相关事件进入 `Collection Trace`，同时保留 `outlineReady` 状态更新
+- 更新相关 component / unit / integration tests，覆盖文案、显示时机、事件过滤与共享高度 token
+
+### 验证
+- `pnpm typecheck` - 0 error
+- `pnpm test:unit` - 58 passed
+- `pnpm test:component` - 88 passed
+- `pnpm test:integration` - 37 passed
+
+### 验收结论
+- accepted
+
+---
+
+## TP-COLLECTION-TRACE-LIFECYCLE-02 Collection Trace Lifetime Correction
+
+- 日期: 2026-03-30
+- 分支: `codex/collection-trace-height-cap`
+- 目标: 修正 `Collection Trace` 的可见生命周期，确保其在 collection 阶段之后继续作为历史卡片保留并上推显示
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，明确 `Collection Trace` 自进入 `planning_collection` 起出现，并在后续 `preparing_outline` / `writing_report` / `delivered` 阶段继续保留
+- 调整 `apps/web/features/research/components/research-workspace-shell.tsx`，移除 `Collection Trace` 在 `preparing_outline` 之后隐藏的限制
+- 更新 `apps/web/tests/component/collect-progress-display.spec.tsx`、`apps/web/tests/component/research-page-client.spec.tsx`、`apps/web/tests/integration/research-transparency.spec.tsx`、`apps/web/tests/integration/report-delivery-flow.spec.tsx` 中与生命周期相关的断言
+
+### 验证
+- `pnpm typecheck` - 0 error
+- `pnpm test:component` - 88 passed
+- `pnpm test:integration` - 37 passed
+
+### 验收结论
+- accepted

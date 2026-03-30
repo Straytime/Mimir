@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import type { TimelineItem } from "../store/research-session-store.types";
+import { RESEARCH_SCROLL_BODY_MAX_HEIGHT_STYLE_VALUE } from "../utils/layout-vars";
 import { PulseIndicator } from "./pulse-indicator";
 
 type TimelinePanelProps = {
@@ -49,21 +50,22 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
 
   return (
     <section
-      aria-label="时间线"
+      aria-label="Collection Trace"
       className="bg-surface-container-low p-6"
       role="region"
     >
       <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
-        Live Timeline
+        Collection Trace
       </p>
 
       <div
         aria-live="polite"
-        className="mt-4 max-h-[34rem] overflow-y-auto pr-1"
+        className="mt-4 overflow-y-auto pr-1"
+        style={{ maxHeight: RESEARCH_SCROLL_BODY_MAX_HEIGHT_STYLE_VALUE }}
       >
         {items.length === 0 ? (
           <div className="bg-surface-container-lowest px-5 py-5 text-sm leading-7 text-tertiary">
-            研究进展将在这里实时显示。
+            资料搜集会在这里逐步展开。
           </div>
         ) : (
           <ol className="space-y-sp-6">

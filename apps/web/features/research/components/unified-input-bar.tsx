@@ -224,7 +224,10 @@ export function UnifiedInputBar() {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-outline-variant bg-surface/90 backdrop-blur-[20px]">
+    <div
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-outline-variant bg-surface/90 backdrop-blur-[20px]"
+      data-research-input-bar="true"
+    >
       <div className="mx-auto max-w-[800px] px-sp-8 py-4">
         {inputError.fieldError !== null ? (
           <p className="mb-2 text-sm text-[#FF6B6B]" role="alert">

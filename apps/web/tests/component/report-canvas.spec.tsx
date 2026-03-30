@@ -155,6 +155,24 @@ test("pauses auto-scroll on manual upward scroll and resumes on click", () => {
   });
 });
 
+test("uses the shared workspace body height token for report scrolling", () => {
+  const store = createStage6Store();
+
+  store.setState((state) => ({
+    ...state,
+    stream: {
+      ...state.stream,
+      reportMarkdown: "# 标题\n\n初始正文。",
+    },
+  }));
+
+  renderWithStore(<ReportCanvas />, { store });
+
+  expect(screen.getByRole("region", { name: "报告正文" })).toHaveStyle({
+    maxHeight: "var(--research-scroll-body-max-h)",
+  });
+});
+
 test("only renders markdown images from current task artifact urls", async () => {
   const artifact = makeArtifactSummary({
     artifact_id: "art_stage0_chart",
