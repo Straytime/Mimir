@@ -3965,6 +3965,26 @@ Copy the template below for each completed session:
 ### 验收结论
 - accepted
 
+---
+
+## TP-CARD-HEIGHT-RECOMPUTE-04 Recompute Card Height Token on Workspace Activation
+
+- 日期: 2026-03-31
+- 分支: `codex/card-level-height-cap`
+- 目标: 修正 `idle -> active workspace` 切换时 card-level height token 不重算的问题
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，明确 active workspace 挂载后必须重新计算并写入动态卡片高度 token
+- 更新 `apps/web/tests/component/research-page-client.spec.tsx`，覆盖 `Idle -> active workspace` 路径上 `--research-card-max-h` 从空值变为计算值的回归场景
+
+### 验证
+- `cd apps/web && pnpm typecheck` - 0 error
+- `cd apps/web && pnpm test:component` - 88 passed
+- `cd apps/web && pnpm test:integration` - 37 passed
+
+### 验收结论
+- accepted
+
 ## TP-FRONTEND-CLARIFICATION-WORKSPACE-TIGHTEN Clarification Workspace Tighten
 
 - 日期时间: 2026-03-30 18:52:47 CST (+0800)

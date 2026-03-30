@@ -23,7 +23,7 @@ function ResearchPageContent() {
   const isActiveWorkspace = taskId !== null && snapshot !== null;
   const mainRef = useRef<HTMLElement | null>(null);
 
-  useWorkspaceBodyMaxHeight(mainRef);
+  useWorkspaceBodyMaxHeight(mainRef, isActiveWorkspace);
 
   return (
     <main

@@ -288,6 +288,7 @@ apps/web/
 1. 长内容卡片不再使用固定 `34rem`。
 2. `Collection Trace` 与 `Report Canvas` 共享同一动态卡片级 max-height token，该 token 由工作台可视内容区高度推导，必须扣除顶栏与底部输入区占位。
 3. 该约束作用于卡片容器本身；卡片头部保持固定可见，内部 body 才是滚动区。
+4. 当页面从 `Idle` 进入 active workspace、顶栏挂载完成后，前端必须重新计算并写入该 token，不能只依赖首次挂载或窗口 resize。
 
 ### 5.6 `DeliveryActions`
 
