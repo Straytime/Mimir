@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useClarificationSubmit } from "../hooks/use-clarification-submit";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
@@ -61,17 +61,36 @@ export function ClarificationDetailPanel() {
   const submitClarification = useClarificationSubmit();
   const remainingSeconds = useCountdownSeconds(countdownDeadlineAt);
   const isSubmitting = pendingAction === "submitting_clarification";
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (snapshot === null || snapshot.phase !== "clarifying") {
+      return;
+    }
+
+    if (typeof panelRef.current?.scrollIntoView !== "function") {
+      return;
+    }
+
+    panelRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [snapshot?.phase]);
 
   if (snapshot === null || snapshot.phase !== "clarifying") {
     return null;
   }
 
   return (
-    <div className="space-y-5">
+    <div
+      className="scroll-mt-24 space-y-5"
+      ref={panelRef}
+    >
       <div className="space-y-2">
         <h3 className="text-lg font-semibold text-primary">澄清详情</h3>
         <p className="text-sm leading-6 text-secondary">
-          系统根据你的研究主题生成了以下追问，帮助进一步明确需求。
+          在开始之前，有一些问题需要你的反馈
         </p>
       </div>
 

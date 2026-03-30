@@ -2,7 +2,7 @@
 
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { useDisconnectGuard } from "../hooks/use-disconnect-guard";
-import { selectCanDisconnectTask, selectCollectProgress } from "../store/selectors";
+import { selectCanDisconnectTask } from "../store/selectors";
 import { PulseIndicator } from "./pulse-indicator";
 
 const SSE_STATE_LABELS = {
@@ -16,25 +16,25 @@ const SSE_STATE_LABELS = {
 function getStageStatusCopy(phase: string) {
   switch (phase) {
     case "analyzing_requirement":
-      return { eyebrow: "Requirement Analysis", title: "正在分析你的研究需求", description: "系统正在固化研究目标、范围与输出格式，完成后将进入规划与搜集。" };
+      return { title: "正在分析你的研究需求" };
     case "planning_collection":
-      return { eyebrow: "Collection Planning", title: "正在规划研究路径", description: "规划器正在拆解搜集目标，规划后续子任务的执行路径。" };
+      return { title: "正在规划研究路径" };
     case "collecting":
-      return { eyebrow: "Collection", title: "正在搜索与读取资料", description: "子任务正在按搜集目标搜索与读取资料，进展会同步到时间线。" };
+      return { title: "正在搜索与读取资料" };
     case "summarizing_collection":
-      return { eyebrow: "Collection Summary", title: "正在整理阶段结论", description: "系统正在汇总每个搜集目标的阶段结论，为来源合并做准备。" };
+      return { title: "正在整理阶段结论" };
     case "merging_sources":
-      return { eyebrow: "Source Merge", title: "正在去重并整理引用", description: "系统正在合并重复来源，固定当前可用的引用集合。" };
+      return { title: "正在去重并整理引用" };
     case "preparing_outline":
-      return { eyebrow: "Outline Drafting", title: "正在构思报告结构", description: "系统正在基于搜集结果构思报告大纲与章节结构。" };
+      return { title: "正在构思报告结构" };
     case "writing_report":
-      return { eyebrow: "Report Writing", title: "正在撰写报告与生成配图", description: "报告正文持续生成中，配图完成后会同步展示。" };
+      return { title: "正在撰写报告与生成配图" };
     case "processing_feedback":
-      return { eyebrow: "Feedback Processing", title: "正在处理反馈", description: "系统正在根据你的反馈修订报告内容。" };
+      return { title: "正在处理反馈" };
     case "delivered":
-      return { eyebrow: "Delivery", title: "报告已完成并进入交付阶段", description: "报告已就绪，你可以下载或提交反馈。" };
+      return { title: "报告已完成并进入交付阶段" };
     default:
-      return { eyebrow: "Workspace", title: "工作台已接管当前任务", description: "当前任务仍在进行中，工作台会按阶段依次展示进展。" };
+      return { title: "工作台已接管当前任务" };
   }
 }
 
@@ -44,12 +44,9 @@ const TERMINAL_LABELS: Record<string, string> = {
   expired: "任务已过期",
 };
 
-function fmt02(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
 export function SessionStatusBar() {
   const sseState = useResearchSessionStore((state) => state.session.sseState);
+  const taskId = useResearchSessionStore((state) => state.session.taskId);
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
   const pendingAction = useResearchSessionStore(
     (state) => state.ui.pendingAction,
@@ -58,15 +55,6 @@ export function SessionStatusBar() {
     (state) => state.ui.terminalReason,
   );
   const canDisconnectTask = useResearchSessionStore(selectCanDisconnectTask);
-  const collectProgressTotal = useResearchSessionStore(
-    (state) => selectCollectProgress(state)?.total ?? null,
-  );
-  const collectProgressFinished = useResearchSessionStore(
-    (state) => selectCollectProgress(state)?.finished ?? null,
-  );
-  const analysisText = useResearchSessionStore(
-    (state) => state.stream.analysisText,
-  );
   const disconnectTask = useDisconnectGuard();
 
   const stageCopy = snapshot ? getStageStatusCopy(snapshot.phase) : null;
@@ -78,13 +66,6 @@ export function SessionStatusBar() {
       : "未开始";
 
   const isTerminal = terminalReason !== null;
-  const hasDetailContent = snapshot !== null && !isTerminal && stageCopy !== null;
-
-  const analysisPrefix =
-    snapshot?.phase === "processing_feedback"
-      ? "正在处理反馈："
-      : "正在分析需求：";
-
   return (
     <section
       aria-label="会话状态"
@@ -113,22 +94,9 @@ export function SessionStatusBar() {
         </button>
       </div>
 
-      {hasDetailContent ? (
+      {taskId !== null ? (
         <div className="mt-1 text-xs text-secondary">
-          <span>{stageCopy.description}</span>
-          {collectProgressTotal !== null && collectProgressFinished !== null ? (
-            <span>
-              {" "}
-              · 搜集进度: {fmt02(collectProgressFinished)}/
-              {fmt02(collectProgressTotal)}
-            </span>
-          ) : null}
-          {analysisText.length > 0 ? (
-            <p className="mt-1 truncate">
-              {analysisPrefix}
-              {analysisText}
-            </p>
-          ) : null}
+          <p className="truncate">taskId: {taskId}</p>
         </div>
       ) : null}
     </section>

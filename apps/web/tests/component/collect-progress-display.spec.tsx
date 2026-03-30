@@ -23,7 +23,7 @@ function makeCollectItem(
   };
 }
 
-test("shows collect progress during collecting phase", () => {
+test("shows the timeline card once collecting begins", () => {
   const store = createResearchSessionStore(
     makeResearchSessionState({
       session: {
@@ -49,8 +49,9 @@ test("shows collect progress during collecting phase", () => {
 
   renderWithStore(<ResearchWorkspaceShell />, { store });
 
-  expect(screen.getAllByText(/搜集进度/).length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText(/01\/03/)).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "时间线" })).toBeInTheDocument();
+  expect(screen.getAllByText("搜集子任务")).toHaveLength(3);
+  expect(screen.queryByText(/搜集进度/)).not.toBeInTheDocument();
 });
 
 test("does not show collect progress during non-collecting phase", () => {

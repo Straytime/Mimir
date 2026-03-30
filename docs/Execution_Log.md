@@ -3965,6 +3965,37 @@ Copy the template below for each completed session:
 ### 验收结论
 - accepted
 
+## TP-FRONTEND-CLARIFICATION-WORKSPACE-TIGHTEN Clarification Workspace Tighten
+
+- 日期时间: 2026-03-30 18:52:47 CST (+0800)
+- 任务包编号: frontend-clarification-workspace-tighten
+- session 标识: codex-execute-agent-frontend-clarification-workspace-tighten
+- 目标摘要: 收口前端工作台澄清体验与阶段展示逻辑，将澄清详情文案改为更自然的反馈请求，提交初始需求后自动滚动到澄清详情区，未开始的工作台卡片改为按阶段出现，同时让顶栏下半部只显示 `taskId`，不再展示阶段补充小字、搜集进度或 `analysisText`。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `docs/Execution_Log.md`
+  - `apps/web/features/research/components/clarification-panels.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/tests/component/session-status-bar.spec.tsx`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/component/collect-progress-display.spec.tsx`
+  - `apps/web/tests/integration/create-task-flow.spec.tsx`
+  - `apps/web/tests/integration/clarification-flow.spec.tsx`
+- 测试/验证:
+  - 已运行: `pnpm test:component -- --runInBand apps/web/tests/component/session-status-bar.spec.tsx apps/web/tests/component/research-page-client.spec.tsx apps/web/tests/component/collect-progress-display.spec.tsx`
+  - 已运行: `pnpm test:integration -- --runInBand apps/web/tests/integration/create-task-flow.spec.tsx apps/web/tests/integration/clarification-flow.spec.tsx`
+  - 已运行: `pnpm test:component`
+  - 已运行: `pnpm test:integration`
+  - 已运行: `pnpm typecheck`
+  - 未运行: 无
+- 验收结论: accepted
+- blocker / 风险:
+  - `pnpm test:integration` 过程中仍会看到来自无关 `report-delivery-flow` 的现有 MSW heartbeat 警告，但不会影响测试结果
+- 下一步建议:
+  - 如需进一步优化，可在不改变阶段 gating 的前提下，再细化 timeline / outline 的视觉密度
+  - 当前任务可直接进入收尾与后续任务分派
+
 ---
 
 ## TP-WEB-FOOTNOTE-01 Hide Footnote Backrefs

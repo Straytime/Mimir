@@ -592,8 +592,8 @@ describe("Stage 4 clarification flow", () => {
     });
 
     expect(
-      screen.getByText("正在分析需求：正在整理研究范围与输出格式。"),
-    ).toBeInTheDocument();
+      screen.queryByText("正在分析需求：正在整理研究范围与输出格式。"),
+    ).not.toBeInTheDocument();
 
     const completedEvent = makeAnalysisCompletedEvent();
 
@@ -612,8 +612,5 @@ describe("Stage 4 clarification flow", () => {
       screen.getByRole("heading", { name: "分析中国 AI 搜索产品竞争格局" }),
     ).toBeInTheDocument();
     expect(store.getState().stream.analysisText).toBe("");
-    expect(
-      screen.queryByText("正在分析需求：正在整理研究范围与输出格式。"),
-    ).not.toBeInTheDocument();
   });
 });
