@@ -297,3 +297,75 @@ test("renders footnote references and definitions from [^ref_n] syntax", () => {
   expect(screen.getByRole("link", { name: "来源一" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "来源二" })).toBeInTheDocument();
 });
+
+test("keeps distinct footnote keys separate when ref_1 and ref1 both exist", () => {
+  const store = createStage6Store();
+
+  const markdown = [
+    "A[^ref_1]与B[^ref1]同时引用",
+    "",
+    "[^ref_1]: [来源A](https://example.com/a)",
+    "[^ref1]: [来源B](https://example.com/b)",
+  ].join("\n");
+
+  store.setState((state) => ({
+    ...state,
+    stream: {
+      ...state.stream,
+      reportMarkdown: markdown,
+    },
+  }));
+
+  renderWithStore(<ReportCanvas />, { store });
+
+  expect(document.querySelectorAll("sup a")).toHaveLength(2);
+  expect(screen.getByRole("link", { name: "来源A" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "来源B" })).toBeInTheDocument();
+});
+
+test("does not fabricate placeholder footnotes when definition is missing", () => {
+  const store = createStage6Store();
+
+  store.setState((state) => ({
+    ...state,
+    stream: {
+      ...state.stream,
+      reportMarkdown: "结论[^ref_49]没有对应 definition。",
+    },
+  }));
+
+  renderWithStore(<ReportCanvas />, { store });
+
+  expect(screen.queryByText("(来源缺失)")).not.toBeInTheDocument();
+  expect(document.querySelector("section[data-footnotes]")).not.toBeInTheDocument();
+});
+
+test("keeps multiline footnote continuation inside the footnote block", () => {
+  const store = createStage6Store();
+
+  const markdown = [
+    "结论[^ref_1]带有多行来源",
+    "",
+    "[^ref_1]: 第一行",
+    "    第二行延续",
+  ].join("\n");
+
+  store.setState((state) => ({
+    ...state,
+    stream: {
+      ...state.stream,
+      reportMarkdown: markdown,
+    },
+  }));
+
+  renderWithStore(<ReportCanvas />, { store });
+
+  const leakedParagraph = Array.from(document.querySelectorAll("p")).find((node) =>
+    node.textContent?.includes("第二行延续") &&
+    node.closest("section[data-footnotes]") === null,
+  );
+  expect(leakedParagraph).toBeUndefined();
+  expect(document.querySelector("section[data-footnotes]")).toHaveTextContent(
+    "第二行延续",
+  );
+});

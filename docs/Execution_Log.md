@@ -3933,3 +3933,34 @@ Copy the template below for each completed session:
 - 非脚注内容（加粗、链接、代码块）→ 原样保留
 
 - 验收结论: accepted
+
+---
+
+## TP-FIX04-RB01 Web Footnote Preprocessor Rollback
+
+- 日期: 2026-03-30
+- 分支: `codex/rollback-tp-fix04-web-footnotes`
+- 目标: 回滚 `TP-FIX04` 的 web 端 footnote 预处理层，恢复 `ReportCanvas` 对 `remark-gfm` 的原始 markdown 语义消费方式，保留 `TP-FIX01~03` 中 PDF 端脚注标签与 Web 端 GFM 接线修复
+
+### 回滚内容
+- 删除 `apps/web/features/research/utils/normalize-footnotes.ts`
+- 删除 `apps/web/tests/unit/normalize-footnotes.spec.ts`
+- 从 `apps/web/features/research/components/report-canvas.tsx` 移除 `normalizeFootnotes()` 接线，改为直接传递 `deferredReportMarkdown`
+
+### 文档收口
+- 更新 `docs/Frontend_IA.md` 的 `ReportCanvas` 渲染约束，明确 Web 预览不得重编号、不得删除 definition、不得合成占位来源
+
+### 回归测试
+- 新增 `apps/web/tests/component/report-canvas.spec.tsx` 覆盖以下场景：
+  - `[^ref_1]` 与 `[^ref1]` 并存时保持独立脚注
+  - 缺失 definition 时不伪造 `(来源缺失)`
+  - 多行 footnote definition 的 continuation line 不泄漏到正文
+  - 标准 `[^ref_n]` 脚注渲染仍然正常
+
+### 验证
+- `pnpm typecheck` — 0 error
+- `pnpm test:unit` — 59 passed (12 files)
+- `pnpm test:component` — 86 passed (21 files)
+
+### 验收结论
+- accepted
