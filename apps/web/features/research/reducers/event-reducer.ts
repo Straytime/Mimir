@@ -141,7 +141,6 @@ function reduceStreamTimeline(
   return reduceTimelineStream(
     {
       collectionTrace: state.stream.collectionTrace,
-      timeline: state.stream.timeline,
       outlineReady: state.stream.outlineReady,
     },
     event,

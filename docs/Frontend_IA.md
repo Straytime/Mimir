@@ -296,12 +296,12 @@ apps/web/
 数据约束：
 
 1. `stream.collectionTrace` 是 `Collection Trace` 的权威数据结构。
-2. 若为兼容现有未重构 UI 暂时保留 `stream.timeline`，它只能作为过渡投影视图，不能再作为 collection trace 结构语义的唯一来源。
+2. collection 相关前端逻辑只能从 `stream.collectionTrace` 推导，不再保留旧 `stream.timeline` 兼容投影。
 3. `outline.*`、`writer.*`、`artifact.ready`、`report.completed`、`task.awaiting_feedback` 均不得写入 `collectionTrace`。
 
 UI 呈现规则：
 
-1. `Collection Trace` 面板的主渲染输入必须来自 `stream.collectionTrace`，不得再以 `stream.timeline` 作为主数据源。
+1. `Collection Trace` 面板的主渲染输入必须来自 `stream.collectionTrace`。
 2. 每个一级 `plan round` 节点使用独立 section 呈现，标题固定为 `Plan Round N`，并以比二级块更强的标题与边框权重表达顶层层级。
 3. 每个 `collect group` 在同一 `plan round` 内按发生顺序渲染；组内 `collect` 与 `summary` 必须是两个同级块，不得把 `summary` 塞回 `collect.entries`。
 4. `collect` 内部的 `reasoning`、`search started`、`search completed`、`fetch started`、`fetch completed`、`collect completed` 必须严格按时间顺序穿插显示，不得重新排序或合并为单行摘要。
@@ -431,7 +431,6 @@ type ResearchSessionStore = {
     outline: ResearchOutline | null;
     outlineReady: boolean;
     collectionTrace: CollectionTraceRoot;
-    timeline: TimelineItem[];
     artifacts: ArtifactSummary[];
     lastEventSeq: number | null;
   };
@@ -556,32 +555,14 @@ type CollectionSourcesMergedNode = {
 };
 ```
 
-`TimelineItem` 若仍保留，只能作为过渡兼容结构：
-
-```ts
-type TimelineItem = {
-  id: string;
-  revisionId: string | null;
-  kind: "phase" | "reasoning" | "collect" | "summary" | "tool_call" | "system";
-  label: string;
-  detail?: string;
-  status: "running" | "completed" | "failed";
-  occurredAt: string;
-  subtaskId?: string;
-  toolCallId?: string;
-  collectTarget?: string;
-};
-```
-
 规则：
 
 1. `taskToken` 只保存在内存，不做 persistence middleware。
-2. `writer.delta` 与 `clarification.delta` 直接累积到字符串 buffer，不把每个 delta 都塞入 timeline。
-3. collection 相关事件必须优先写入 `collectionTrace`，而不是直接压扁为单个 timeline detail 字符串。
-4. 若保留 `timeline` 兼容层，在 `CT-UI` 完成前允许继续保留 legacy 写入，但它只能作为过渡视图，不能再作为 collection trace 结构语义的权威来源。
-5. 当 `active_revision_id` 发生切换时，必须清空上一轮的 `analysisText`、`clarificationText`、`questionSet`、`reportMarkdown`、`outline`、`artifacts` 与旧 `delivery`，避免跨 revision 污染。
-6. `optionAnswers` 只在 `clarification.options.ready` 到达后初始化为“每题 -> o_auto”的映射，不能在 ready 前乐观创建。
-7. 下载与交付刷新状态独立于 `pendingAction`，因为它们可与阅读或反馈输入并存。
+2. `writer.delta` 与 `clarification.delta` 直接累积到字符串 buffer，不把每个 delta 都塞入 collection 事件流。
+3. collection 相关事件必须写入 `collectionTrace`，而不是压扁为单个 detail 字符串。
+4. 当 `active_revision_id` 发生切换时，必须清空上一轮的 `analysisText`、`clarificationText`、`questionSet`、`reportMarkdown`、`outline`、`artifacts` 与旧 `delivery`，避免跨 revision 污染。
+5. `optionAnswers` 只在 `clarification.options.ready` 到达后初始化为“每题 -> o_auto”的映射，不能在 ready 前乐观创建。
+6. 下载与交付刷新状态独立于 `pendingAction`，因为它们可与阅读或反馈输入并存。
 
 ### 6.3 派生状态
 
@@ -772,7 +753,6 @@ v1 前端不开放 feedback/revision 交互，因此主流程不进入前端 rev
 - `use-feedback-submit`
 - `use-delivery-refresh`
 - `use-report-auto-scroll`
-- `use-timeline-auto-scroll`
 
 ### 9.3 `features/research/reducers`
 
@@ -781,7 +761,7 @@ v1 前端不开放 feedback/revision 交互，因此主流程不进入前端 rev
 - `event-reducer.ts`
   - 把 `EventEnvelope` 归一为 store patch
 - `timeline-mapper.ts`
-  - 把事件映射为用户可读 timeline item
+  - 把事件映射为 `collectionTrace` 与 `outlineReady`
 - `task-snapshot-merger.ts`
   - 统一处理 `POST /tasks`、`GET /tasks`、SSE snapshot 覆盖规则
 
@@ -834,7 +814,7 @@ v1 前端不开放 feedback/revision 交互，因此主流程不进入前端 rev
 
 - `PhasePill`
 - `ConnectionIndicator`
-- `TimelineItemCard`
+- `CollectionTraceEntryCard`
 - `ArtifactThumb`
 
 ## 11. 错误态与边界行为

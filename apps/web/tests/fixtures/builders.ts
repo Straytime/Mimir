@@ -55,7 +55,6 @@ import type {
   CollectionToolEvent,
   CollectionTraceRoot,
   ResearchSessionState,
-  TimelineItem,
 } from "@/features/research/store/research-session-store.types";
 
 type ResearchSessionStateOverrides = {
@@ -958,20 +957,6 @@ export function makeResearchSessionState(
       ...baseState.deliveryUi,
       ...overrides.deliveryUi,
     },
-  };
-}
-
-export function makeTimelineItem(
-  overrides: Partial<TimelineItem> = {},
-): TimelineItem {
-  return {
-    id: "timeline_stage5",
-    revisionId: "rev_stage0",
-    kind: "system",
-    label: "正在分析你的研究需求",
-    status: "running",
-    occurredAt: "2026-03-13T14:31:15+08:00",
-    ...overrides,
   };
 }
 

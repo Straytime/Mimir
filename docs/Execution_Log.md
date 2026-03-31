@@ -4174,3 +4174,27 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## CT-CLEANUP Remove Legacy Collection Timeline Compatibility Layer
+
+- 日期: 2026-03-31
+- 分支: `codex/collection-trace-tree-data`
+- 目标: 移除 web 前端中为旧 `timeline` 保留的 collection 兼容层，让 collection 相关前端逻辑只依赖 `stream.collectionTrace`
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，明确 `collectionTrace` 是 collection 相关前端逻辑的唯一权威流，删除 `stream.timeline` / `TimelineItem` 兼容层的文档定义
+- 修改 `apps/web/features/research/store/selectors.ts`，让 `selectCollectProgress` 从 `collectionTrace` 推导搜集进度，不再依赖旧 timeline 投影
+- 修改 `apps/web/features/research/store/research-session-store.types.ts`、`apps/web/features/research/store/research-session-store.ts`，删除 `stream.timeline`、`TimelineItem` 与 `revision-divider` 死代码，并在 revision switch 时显式清空 `collectionTrace`
+- 重写 `apps/web/features/research/mappers/timeline-mapper.ts` 与 `apps/web/features/research/reducers/event-reducer.ts`，保留文件边界但移除 collection timeline 兼容写入，只维护 `collectionTrace` 与 `outlineReady`
+- 更新 `apps/web/tests/unit/collect-progress.spec.ts`、`apps/web/tests/unit/mappers/timeline-mapper.spec.ts`、新增 `apps/web/tests/unit/research-session-store.spec.ts`，并同步收口 `apps/web/tests/component/session-status-bar.spec.tsx` 与 `apps/web/tests/fixtures/builders.ts`
+
+### 验证
+- `cd apps/web && pnpm typecheck`
+- `cd apps/web && pnpm test:unit`
+- `cd apps/web && pnpm test:component`
+- `cd apps/web && pnpm test:integration`
+
+### 验收结论
+- accepted

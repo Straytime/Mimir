@@ -138,19 +138,6 @@ export type CollectionTraceRoot = {
   nodes: CollectionTraceNode[];
 };
 
-export type TimelineItem = {
-  id: string;
-  revisionId: string | null;
-  kind: "phase" | "reasoning" | "collect" | "summary" | "tool_call" | "system";
-  label: string;
-  detail?: string;
-  status: "running" | "completed" | "failed";
-  occurredAt: string;
-  subtaskId?: string;
-  toolCallId?: string;
-  collectTarget?: string;
-};
-
 export type ResearchSessionState = {
   session: {
     taskId: string | null;
@@ -179,7 +166,6 @@ export type ResearchSessionState = {
     outline: ResearchOutline | null;
     outlineReady: boolean;
     collectionTrace: CollectionTraceRoot;
-    timeline: TimelineItem[];
     artifacts: ArtifactSummary[];
     lastEventSeq: number | null;
   };
@@ -294,7 +280,6 @@ export function createResearchSessionState(): ResearchSessionState {
       collectionTrace: {
         nodes: [],
       },
-      timeline: [],
       artifacts: [],
       lastEventSeq: null,
     },

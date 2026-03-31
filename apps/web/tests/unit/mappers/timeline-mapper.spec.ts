@@ -32,7 +32,6 @@ function reduceEvents(
     (stream, event) => reduceTimelineStream(stream, event),
     {
       collectionTrace: baseStream.collectionTrace,
-      timeline: baseStream.timeline,
       outlineReady: baseStream.outlineReady,
     },
   );
@@ -274,5 +273,16 @@ describe("reduceTimelineStream", () => {
 
     expect(result.collectionTrace.nodes).toEqual([]);
     expect(result.outlineReady).toBe(true);
+  });
+
+  test("does not retain a legacy timeline projection for collection events", () => {
+    const result = reduceEvents([
+      makePlannerReasoningDeltaEvent(),
+      makePlannerToolCallRequestedEvent(),
+      makeCollectorCompletedEvent(),
+    ]);
+
+    expect(result.collectionTrace.nodes).toHaveLength(1);
+    expect("timeline" in (result as Record<string, unknown>)).toBe(false);
   });
 });

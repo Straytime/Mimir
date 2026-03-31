@@ -2,23 +2,12 @@ import { expect, test } from "vitest";
 
 import { selectCollectProgress } from "@/features/research/store/selectors";
 import {
+  makeCollectionCollectGroup,
+  makeCollectionPlanRoundNode,
+  makeCollectionTraceRoot,
   makeResearchSessionState,
   makeTaskSnapshot,
 } from "@/tests/fixtures/builders";
-import type { TimelineItem } from "@/features/research/store/research-session-store.types";
-
-function makeCollectItem(
-  overrides: Partial<TimelineItem> & { id: string },
-): TimelineItem {
-  return {
-    revisionId: "rev_0",
-    kind: "collect",
-    label: "搜集子任务",
-    status: "running",
-    occurredAt: "2026-03-27T00:00:00Z",
-    ...overrides,
-  };
-}
 
 test("returns progress when phase is collecting with mixed statuses", () => {
   const state = makeResearchSessionState({
@@ -29,11 +18,47 @@ test("returns progress when phase is collecting with mixed statuses", () => {
       }),
     },
     stream: {
-      timeline: [
-        makeCollectItem({ id: "c1", status: "completed" }),
-        makeCollectItem({ id: "c2", status: "running" }),
-        makeCollectItem({ id: "c3", status: "running" }),
-      ],
+      collectionTrace: makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                id: "c1",
+                collect: {
+                  id: "collect_1",
+                  kind: "collect",
+                  label: "搜集子任务 1",
+                  status: "completed",
+                  occurredAt: "2026-03-27T00:00:00Z",
+                  entries: [],
+                },
+              }),
+              makeCollectionCollectGroup({
+                id: "c2",
+                collect: {
+                  id: "collect_2",
+                  kind: "collect",
+                  label: "搜集子任务 2",
+                  status: "running",
+                  occurredAt: "2026-03-27T00:00:00Z",
+                  entries: [],
+                },
+              }),
+              makeCollectionCollectGroup({
+                id: "c3",
+                collect: {
+                  id: "collect_3",
+                  kind: "collect",
+                  label: "搜集子任务 3",
+                  status: "running",
+                  occurredAt: "2026-03-27T00:00:00Z",
+                  entries: [],
+                },
+              }),
+            ],
+          }),
+        ],
+      }),
     },
   });
 
@@ -49,10 +74,36 @@ test("returns progress when phase is summarizing_collection", () => {
       }),
     },
     stream: {
-      timeline: [
-        makeCollectItem({ id: "c1", status: "completed" }),
-        makeCollectItem({ id: "c2", status: "completed" }),
-      ],
+      collectionTrace: makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                id: "c1",
+                collect: {
+                  id: "collect_1",
+                  kind: "collect",
+                  label: "搜集子任务 1",
+                  status: "completed",
+                  occurredAt: "2026-03-27T00:00:00Z",
+                  entries: [],
+                },
+              }),
+              makeCollectionCollectGroup({
+                id: "c2",
+                collect: {
+                  id: "collect_2",
+                  kind: "collect",
+                  label: "搜集子任务 2",
+                  status: "completed",
+                  occurredAt: "2026-03-27T00:00:00Z",
+                  entries: [],
+                },
+              }),
+            ],
+          }),
+        ],
+      }),
     },
   });
 
@@ -68,9 +119,25 @@ test("returns null when phase is not collecting or summarizing", () => {
       }),
     },
     stream: {
-      timeline: [
-        makeCollectItem({ id: "c1", status: "completed" }),
-      ],
+      collectionTrace: makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                id: "c1",
+                collect: {
+                  id: "collect_1",
+                  kind: "collect",
+                  label: "搜集子任务 1",
+                  status: "completed",
+                  occurredAt: "2026-03-27T00:00:00Z",
+                  entries: [],
+                },
+              }),
+            ],
+          }),
+        ],
+      }),
     },
   });
 
@@ -86,7 +153,9 @@ test("returns zero totals when no collect items exist", () => {
       }),
     },
     stream: {
-      timeline: [],
+      collectionTrace: {
+        nodes: [],
+      },
     },
   });
 
@@ -102,11 +171,47 @@ test("counts failed collect items as finished", () => {
       }),
     },
     stream: {
-      timeline: [
-        makeCollectItem({ id: "c1", status: "completed" }),
-        makeCollectItem({ id: "c2", status: "failed" }),
-        makeCollectItem({ id: "c3", status: "running" }),
-      ],
+      collectionTrace: makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                id: "c1",
+                collect: {
+                  id: "collect_1",
+                  kind: "collect",
+                  label: "搜集子任务 1",
+                  status: "completed",
+                  occurredAt: "2026-03-27T00:00:00Z",
+                  entries: [],
+                },
+              }),
+              makeCollectionCollectGroup({
+                id: "c2",
+                collect: {
+                  id: "collect_2",
+                  kind: "collect",
+                  label: "搜集子任务 2",
+                  status: "failed",
+                  occurredAt: "2026-03-27T00:00:00Z",
+                  entries: [],
+                },
+              }),
+              makeCollectionCollectGroup({
+                id: "c3",
+                collect: {
+                  id: "collect_3",
+                  kind: "collect",
+                  label: "搜集子任务 3",
+                  status: "running",
+                  occurredAt: "2026-03-27T00:00:00Z",
+                  entries: [],
+                },
+              }),
+            ],
+          }),
+        ],
+      }),
     },
   });
 
