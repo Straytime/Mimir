@@ -140,7 +140,7 @@ function reduceStreamTimeline(
 ) {
   return reduceTimelineStream(
     {
-      timeline: state.stream.timeline,
+      collectionTrace: state.stream.collectionTrace,
       outlineReady: state.stream.outlineReady,
     },
     event,

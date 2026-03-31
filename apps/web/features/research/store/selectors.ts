@@ -85,13 +85,13 @@ export function selectCollectProgress(
     return null;
   }
 
-  const collectItems = state.stream.timeline.filter(
-    (item) => item.kind === "collect",
+  const collectItems = state.stream.collectionTrace.nodes.flatMap((node) =>
+    node.kind === "plan_round" ? node.collectGroups.map((group) => group.collect) : [],
   );
 
   return {
     total: collectItems.length,
-    finished: collectItems.filter((item) => item.status !== "running").length,
+    finished: collectItems.filter((collect) => collect.status !== "running").length,
   };
 }
 

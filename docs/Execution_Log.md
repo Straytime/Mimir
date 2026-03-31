@@ -4128,3 +4128,73 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## CT-DATA Collection Trace Tree Data Model
+
+- 日期: 2026-03-31
+- 分支: `codex/collection-trace-tree-data`
+- 目标: 将 `Collection Trace` 的底层数据从扁平 `TimelineItem[]` 收敛为能表达 `plan round -> collect group -> collect events / summary` 与 `sources merged` 的树状结构，同时保留最小 `timeline` 兼容层，不提前重做 UI
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，把 `Collection Trace` 定义为卡片级根节点，并明确独立 `plan round`、`collect group`、同级 `summary`、一级 `sources merged` 与前端 round inference 规则
+- 在 `apps/web/features/research/store/research-session-store.types.ts` 中新增 `CollectionTraceRoot`、`CollectionPlanRoundNode`、`CollectionCollectGroup`、`CollectionCollectEntry`、`CollectionSummaryNode`、`CollectionSourcesMergedNode` 等类型，并将 `stream.collectionTrace` 纳入权威状态
+- 新增 `apps/web/features/research/mappers/collection-trace-builder.ts`，用显式规则处理 planner loop 切分、collect reasoning burst 切分、4 类工具事件落位、summary sibling 挂接与 `sources merged` 顶层终点节点
+- 修改 `apps/web/features/research/mappers/timeline-mapper.ts` 与 `apps/web/features/research/reducers/event-reducer.ts`，在保留现有 `timeline` 兼容层的同时，把 collection 相关事件同步写入新的 `collectionTrace`
+- 更新 `apps/web/tests/unit/mappers/timeline-mapper.spec.ts`，覆盖多轮 planner loop、collect group 内时间顺序、summary sibling、sources merged 顶层节点与 collection-only 过滤回归
+
+### 验证
+- `cd apps/web && pnpm typecheck` - 0 error
+- `cd apps/web && pnpm test:unit` - 59 passed
+- `cd apps/web && pnpm test:component` - 89 passed
+
+### 验收结论
+- accepted
+
+---
+
+## CT-UI Collection Trace Hierarchical Rendering
+
+- 日期: 2026-03-31
+- 分支: `codex/collection-trace-tree-data`
+- 目标: 将 `Collection Trace` 的前端渲染切到权威的 `stream.collectionTrace` 树状模型，准确呈现 `plan round -> collect / summary -> sources merged` 的层级与折叠预览交互
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，补充 `Collection Trace` 的 UI 呈现规则，明确 `stream.collectionTrace` 是面板主数据源、`Plan Round N` 顶层 section、`collect` / `summary` 同级、reasoning 与 summary 默认单行预览且独立展开、`Sources Merged` 直接完整显示
+- 重写 `apps/web/features/research/components/timeline-panel.tsx`，将渲染输入从扁平 `TimelineItem[]` 切到 `CollectionTraceRoot`，新增 plan round、collect group、tool event、summary、sources merged 的层级化展示与独立展开控制，同时保留卡片级限高与内部自动滚动
+- 修改 `apps/web/features/research/components/research-workspace-shell.tsx`，让工作台将 `stream.collectionTrace` 作为 `Collection Trace` 卡片的唯一主数据输入
+- 扩展 `apps/web/tests/fixtures/builders.ts`，新增 collection trace 树结构的测试夹具
+- 更新 `apps/web/tests/component/timeline-panel.spec.tsx`、`apps/web/tests/component/collect-progress-display.spec.tsx`、`apps/web/tests/component/copy-cleanup.spec.tsx`、`apps/web/tests/component/research-page-client.spec.tsx` 与 `apps/web/tests/integration/research-transparency.spec.tsx`，覆盖多轮 plan、collect / summary 同级、tool event 顺序、独立展开与 sources merged 终点渲染
+
+### 验证
+- `cd apps/web && pnpm typecheck` - 0 error
+- `cd apps/web && pnpm test:component` - 91 passed
+- `cd apps/web && pnpm test:integration` - 37 passed
+
+### 验收结论
+- accepted
+
+---
+
+## CT-CLEANUP Remove Legacy Collection Timeline Compatibility Layer
+
+- 日期: 2026-03-31
+- 分支: `codex/collection-trace-tree-data`
+- 目标: 移除 web 前端中为旧 `timeline` 保留的 collection 兼容层，让 collection 相关前端逻辑只依赖 `stream.collectionTrace`
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，明确 `collectionTrace` 是 collection 相关前端逻辑的唯一权威流，删除 `stream.timeline` / `TimelineItem` 兼容层的文档定义
+- 修改 `apps/web/features/research/store/selectors.ts`，让 `selectCollectProgress` 从 `collectionTrace` 推导搜集进度，不再依赖旧 timeline 投影
+- 修改 `apps/web/features/research/store/research-session-store.types.ts`、`apps/web/features/research/store/research-session-store.ts`，删除 `stream.timeline`、`TimelineItem` 与 `revision-divider` 死代码，并在 revision switch 时显式清空 `collectionTrace`
+- 重写 `apps/web/features/research/mappers/timeline-mapper.ts` 与 `apps/web/features/research/reducers/event-reducer.ts`，保留文件边界但移除 collection timeline 兼容写入，只维护 `collectionTrace` 与 `outlineReady`
+- 更新 `apps/web/tests/unit/collect-progress.spec.ts`、`apps/web/tests/unit/mappers/timeline-mapper.spec.ts`、新增 `apps/web/tests/unit/research-session-store.spec.ts`，并同步收口 `apps/web/tests/component/session-status-bar.spec.tsx` 与 `apps/web/tests/fixtures/builders.ts`
+
+### 验证
+- `cd apps/web && pnpm typecheck`
+- `cd apps/web && pnpm test:unit`
+- `cd apps/web && pnpm test:component`
+- `cd apps/web && pnpm test:integration`
+
+### 验收结论
+- accepted

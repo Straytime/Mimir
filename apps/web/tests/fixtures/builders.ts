@@ -45,8 +45,16 @@ import type {
 } from "@/lib/contracts";
 import { createResearchSessionState } from "@/features/research/store/research-session-store.types";
 import type {
+  CollectionCollectCompletedEvent,
+  CollectionCollectEntry,
+  CollectionCollectGroup,
+  CollectionPlanRoundNode,
+  CollectionReasoningBurst,
+  CollectionSourcesMergedNode,
+  CollectionSummaryNode,
+  CollectionToolEvent,
+  CollectionTraceRoot,
   ResearchSessionState,
-  TimelineItem,
 } from "@/features/research/store/research-session-store.types";
 
 type ResearchSessionStateOverrides = {
@@ -952,16 +960,135 @@ export function makeResearchSessionState(
   };
 }
 
-export function makeTimelineItem(
-  overrides: Partial<TimelineItem> = {},
-): TimelineItem {
+export function makeCollectionReasoningBurst(
+  overrides: Partial<CollectionReasoningBurst> = {},
+): CollectionReasoningBurst {
   return {
-    id: "timeline_stage5",
+    id: "reasoning_stage0",
+    kind: "reasoning_burst",
+    occurredAt: "2026-03-31T10:00:00+08:00",
+    detail: "先确定需要补齐哪些公开资料。",
+    ...overrides,
+  };
+}
+
+export function makeCollectionToolEvent(
+  overrides: Partial<CollectionToolEvent> = {},
+): CollectionToolEvent {
+  return {
+    id: "tool_stage0",
+    kind: "search_started",
+    occurredAt: "2026-03-31T10:01:00+08:00",
+    label: "Search Started",
+    detail: "AI 搜索 厂商 2025",
+    ...overrides,
+  };
+}
+
+export function makeCollectionCollectCompletedEvent(
+  overrides: Partial<CollectionCollectCompletedEvent> = {},
+): CollectionCollectCompletedEvent {
+  return {
+    id: "collect_completed_stage0",
+    kind: "collect_completed",
+    occurredAt: "2026-03-31T10:05:00+08:00",
+    status: "completed",
+    detail: "已整理 3 条候选来源。",
+    ...overrides,
+  };
+}
+
+export function makeCollectionSummaryNode(
+  overrides: Partial<CollectionSummaryNode> = {},
+): CollectionSummaryNode {
+  return {
+    id: "summary_stage0",
+    kind: "summary",
+    occurredAt: "2026-03-31T10:06:00+08:00",
+    status: "completed",
+    detail: "这一轮资料表明市场格局正在向超级入口收敛。",
+    ...overrides,
+  };
+}
+
+export function makeCollectionCollectGroup(
+  overrides: Partial<CollectionCollectGroup> & {
+    collectEntries?: CollectionCollectEntry[];
+  } = {},
+): CollectionCollectGroup {
+  const collectEntries = overrides.collectEntries ?? [
+    makeCollectionReasoningBurst(),
+    makeCollectionToolEvent(),
+    makeCollectionCollectCompletedEvent(),
+  ];
+
+  return {
+    id: "collect_group_stage0",
     revisionId: "rev_stage0",
-    kind: "system",
-    label: "正在分析你的研究需求",
-    status: "running",
-    occurredAt: "2026-03-13T14:31:15+08:00",
+    toolCallId: "call_stage0",
+    subtaskId: "sub_stage0",
+    collectTarget: "收集 AI 搜索厂商",
+    occurredAt: "2026-03-31T10:00:00+08:00",
+    collect: {
+      id: "collect_stage0",
+      kind: "collect",
+      label: "收集 AI 搜索厂商",
+      status: "completed",
+      occurredAt: "2026-03-31T10:00:00+08:00",
+      entries: collectEntries,
+      ...overrides.collect,
+    },
+    summary: overrides.summary ?? makeCollectionSummaryNode(),
+    ...overrides,
+  };
+}
+
+export function makeCollectionPlanRoundNode(
+  overrides: Partial<CollectionPlanRoundNode> = {},
+): CollectionPlanRoundNode {
+  return {
+    id: "plan_round_stage0",
+    kind: "plan_round",
+    revisionId: "rev_stage0",
+    roundIndex: 1,
+    label: "规划轮次 1",
+    status: "completed",
+    occurredAt: "2026-03-31T09:59:00+08:00",
+    reasoningBursts: [
+      makeCollectionReasoningBurst({
+        id: "plan_reasoning_stage0",
+        detail: "先拆成厂商格局和商业化两个搜集方向。",
+      }),
+    ],
+    collectGroups: [makeCollectionCollectGroup()],
+    ...overrides,
+  };
+}
+
+export function makeCollectionSourcesMergedNode(
+  overrides: Partial<CollectionSourcesMergedNode> = {},
+): CollectionSourcesMergedNode {
+  return {
+    id: "sources_merged_stage0",
+    kind: "sources_merged",
+    occurredAt: "2026-03-31T10:10:00+08:00",
+    status: "completed",
+    sourceCountBeforeMerge: 9,
+    sourceCountAfterMerge: 6,
+    referenceCount: 6,
+    detail: "已去重 3 条重复来源，并整理 6 条引用。",
+    ...overrides,
+  };
+}
+
+export function makeCollectionTraceRoot(
+  overrides: Partial<CollectionTraceRoot> = {},
+): CollectionTraceRoot {
+  return {
+    nodes: [
+      makeCollectionPlanRoundNode(),
+      makeCollectionSourcesMergedNode(),
+    ],
     ...overrides,
   };
 }

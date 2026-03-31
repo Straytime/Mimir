@@ -45,17 +45,97 @@ export type CreateTaskUiState = {
   retryAfterLabel: string | null;
 };
 
-export type TimelineItem = {
+export type CollectionTraceStatus = "running" | "completed" | "failed";
+
+export type CollectionReasoningBurst = {
   id: string;
-  revisionId: string | null;
-  kind: "phase" | "reasoning" | "collect" | "summary" | "tool_call" | "system";
+  kind: "reasoning_burst";
+  occurredAt: string;
+  detail: string;
+};
+
+export type CollectionToolEvent = {
+  id: string;
+  kind:
+    | "search_started"
+    | "search_completed"
+    | "fetch_started"
+    | "fetch_completed";
+  occurredAt: string;
   label: string;
   detail?: string;
-  status: "running" | "completed" | "failed";
+};
+
+export type CollectionCollectCompletedEvent = {
+  id: string;
+  kind: "collect_completed";
   occurredAt: string;
+  status: Exclude<CollectionTraceStatus, "running">;
+  detail: string;
+};
+
+export type CollectionCollectEntry =
+  | CollectionReasoningBurst
+  | CollectionToolEvent
+  | CollectionCollectCompletedEvent;
+
+export type CollectionCollectNode = {
+  id: string;
+  kind: "collect";
+  label: string;
+  status: CollectionTraceStatus;
+  occurredAt: string;
+  entries: CollectionCollectEntry[];
+};
+
+export type CollectionSummaryNode = {
+  id: string;
+  kind: "summary";
+  occurredAt: string;
+  status: Exclude<CollectionTraceStatus, "running">;
+  detail?: string;
+};
+
+export type CollectionCollectGroup = {
+  id: string;
+  revisionId: string | null;
+  toolCallId: string;
   subtaskId?: string;
-  toolCallId?: string;
   collectTarget?: string;
+  occurredAt: string;
+  collect: CollectionCollectNode;
+  summary: CollectionSummaryNode | null;
+};
+
+export type CollectionPlanRoundNode = {
+  id: string;
+  kind: "plan_round";
+  revisionId: string | null;
+  roundIndex: number;
+  label: string;
+  status: CollectionTraceStatus;
+  occurredAt: string;
+  reasoningBursts: CollectionReasoningBurst[];
+  collectGroups: CollectionCollectGroup[];
+};
+
+export type CollectionSourcesMergedNode = {
+  id: string;
+  kind: "sources_merged";
+  occurredAt: string;
+  status: "completed";
+  sourceCountBeforeMerge: number;
+  sourceCountAfterMerge: number;
+  referenceCount: number;
+  detail: string;
+};
+
+export type CollectionTraceNode =
+  | CollectionPlanRoundNode
+  | CollectionSourcesMergedNode;
+
+export type CollectionTraceRoot = {
+  nodes: CollectionTraceNode[];
 };
 
 export type ResearchSessionState = {
@@ -85,7 +165,7 @@ export type ResearchSessionState = {
     reportMarkdown: string;
     outline: ResearchOutline | null;
     outlineReady: boolean;
-    timeline: TimelineItem[];
+    collectionTrace: CollectionTraceRoot;
     artifacts: ArtifactSummary[];
     lastEventSeq: number | null;
   };
@@ -197,7 +277,9 @@ export function createResearchSessionState(): ResearchSessionState {
       reportMarkdown: "",
       outline: null,
       outlineReady: false,
-      timeline: [],
+      collectionTrace: {
+        nodes: [],
+      },
       artifacts: [],
       lastEventSeq: null,
     },

@@ -4,10 +4,12 @@ import { expect, test } from "vitest";
 import { SessionStatusBar } from "@/features/research/components/session-status-bar";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
 import {
+  makeCollectionCollectGroup,
+  makeCollectionPlanRoundNode,
+  makeCollectionTraceRoot,
   makePhaseChangedEvent,
   makeResearchSessionState,
   makeTaskSnapshot,
-  makeTimelineItem,
 } from "@/tests/fixtures/builders";
 import { renderWithStore } from "@/tests/fixtures/render";
 
@@ -95,10 +97,30 @@ test("shows taskId only in the lower row and omits description, collect progress
       },
       stream: {
         analysisText: "用户希望研究量子计算的最新进展",
-        timeline: [
-          makeTimelineItem({ id: "t1", kind: "collect", status: "completed" }),
-          makeTimelineItem({ id: "t2", kind: "collect", status: "running" }),
-        ],
+        collectionTrace: makeCollectionTraceRoot({
+          nodes: [
+            makeCollectionPlanRoundNode({
+              collectGroups: [
+                makeCollectionCollectGroup({
+                  id: "collect_1",
+                  toolCallId: "call_1",
+                }),
+                makeCollectionCollectGroup({
+                  id: "collect_2",
+                  toolCallId: "call_2",
+                  collect: {
+                    id: "collect_2_node",
+                    kind: "collect",
+                    label: "搜集子任务 2",
+                    status: "running",
+                    occurredAt: "2026-03-31T10:00:00+08:00",
+                    entries: [],
+                  },
+                }),
+              ],
+            }),
+          ],
+        }),
       },
     }),
   );

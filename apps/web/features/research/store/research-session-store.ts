@@ -15,7 +15,6 @@ import type {
   PendingAction,
   ResearchSessionState,
   ResearchSessionStore,
-  TimelineItem,
 } from "./research-session-store.types";
 import { createResearchSessionState } from "./research-session-store.types";
 
@@ -78,23 +77,6 @@ function clearFeedbackUiStateInState(): Pick<
   };
 }
 
-function createRevisionDividerTimelineItem(
-  args: {
-    revisionId: string;
-    revisionNumber: number;
-    occurredAt: string;
-  },
-): TimelineItem {
-  return {
-    id: `revision-divider:${args.revisionId}`,
-    revisionId: args.revisionId,
-    kind: "phase",
-    label: `第 ${args.revisionNumber} 轮研究开始`,
-    status: "completed",
-    occurredAt: args.occurredAt,
-  };
-}
-
 function startRevisionTransitionInState(
   state: ResearchSessionState,
   args: {
@@ -141,9 +123,6 @@ function enterRevisionSwitchingInState(
           updated_at: event.timestamp,
           available_actions: [],
         };
-  const hasDivider = state.stream.timeline.some((item) => {
-    return item.id === `revision-divider:${pendingRevisionId}`;
-  });
 
   return {
     ...state,
@@ -168,16 +147,9 @@ function enterRevisionSwitchingInState(
       reportMarkdown: "",
       outline: null,
       outlineReady: false,
-      timeline: hasDivider
-        ? state.stream.timeline
-        : [
-            ...state.stream.timeline,
-            createRevisionDividerTimelineItem({
-              revisionId: pendingRevisionId,
-              revisionNumber: pendingRevisionNumber,
-              occurredAt: event.timestamp,
-            }),
-          ],
+      collectionTrace: {
+        nodes: [],
+      },
       artifacts: [],
     },
     ui: {

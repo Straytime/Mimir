@@ -53,8 +53,8 @@ export function ResearchWorkspaceShell() {
   useClarificationCountdown();
 
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
-  const timelineItems = useResearchSessionStore(
-    (state) => state.stream.timeline,
+  const collectionTrace = useResearchSessionStore(
+    (state) => state.stream.collectionTrace,
   );
   const requirementDetail = useResearchSessionStore(
     (state) => state.remote.currentRevision?.requirement_detail ?? null,
@@ -159,7 +159,7 @@ export function ResearchWorkspaceShell() {
             data-research-card-anchor="collectionTrace"
             ref={collectionTraceRef}
           >
-            <TimelinePanel items={timelineItems} />
+            <TimelinePanel trace={collectionTrace} />
           </div>
         ) : null}
         {shouldShowOutline ? (

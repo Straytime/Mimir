@@ -3,25 +3,14 @@ import { expect, test } from "vitest";
 
 import { ResearchWorkspaceShell } from "@/features/research/components/research-workspace-shell";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
-import type { TimelineItem } from "@/features/research/store/research-session-store.types";
 import {
+  makeCollectionCollectGroup,
+  makeCollectionPlanRoundNode,
+  makeCollectionTraceRoot,
   makeResearchSessionState,
   makeTaskSnapshot,
 } from "@/tests/fixtures/builders";
 import { renderWithStore } from "@/tests/fixtures/render";
-
-function makeCollectItem(
-  overrides: Partial<TimelineItem> & { id: string },
-): TimelineItem {
-  return {
-    revisionId: "rev_0",
-    kind: "collect",
-    label: "搜集子任务",
-    status: "running",
-    occurredAt: "2026-03-27T00:00:00Z",
-    ...overrides,
-  };
-}
 
 test("shows the collection trace card once collection begins", () => {
   const store = createResearchSessionStore(
@@ -38,11 +27,29 @@ test("shows the collection trace card once collection begins", () => {
         }),
       },
       stream: {
-        timeline: [
-          makeCollectItem({ id: "c1", status: "completed" }),
-          makeCollectItem({ id: "c2", status: "running" }),
-          makeCollectItem({ id: "c3", status: "running" }),
-        ],
+        collectionTrace: makeCollectionTraceRoot({
+          nodes: [
+            makeCollectionPlanRoundNode({
+              collectGroups: [
+                makeCollectionCollectGroup({
+                  id: "c1",
+                  toolCallId: "call_1",
+                  collectTarget: "搜集子任务 1",
+                }),
+                makeCollectionCollectGroup({
+                  id: "c2",
+                  toolCallId: "call_2",
+                  collectTarget: "搜集子任务 2",
+                }),
+                makeCollectionCollectGroup({
+                  id: "c3",
+                  toolCallId: "call_3",
+                  collectTarget: "搜集子任务 3",
+                }),
+              ],
+            }),
+          ],
+        }),
       },
     }),
   );
@@ -50,7 +57,8 @@ test("shows the collection trace card once collection begins", () => {
   renderWithStore(<ResearchWorkspaceShell />, { store });
 
   expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
-  expect(screen.getAllByText("搜集子任务")).toHaveLength(3);
+  expect(screen.getByRole("heading", { name: "Plan Round 1" })).toBeInTheDocument();
+  expect(screen.getAllByRole("heading", { name: "Collect" })).toHaveLength(3);
   expect(screen.queryByText(/搜集进度/)).not.toBeInTheDocument();
 });
 
@@ -69,9 +77,18 @@ test("keeps the collection trace visible during later phases", () => {
         }),
       },
       stream: {
-        timeline: [
-          makeCollectItem({ id: "c1", status: "completed" }),
-        ],
+        collectionTrace: makeCollectionTraceRoot({
+          nodes: [
+            makeCollectionPlanRoundNode({
+              collectGroups: [
+                makeCollectionCollectGroup({
+                  id: "c1",
+                  toolCallId: "call_1",
+                }),
+              ],
+            }),
+          ],
+        }),
       },
     }),
   );
