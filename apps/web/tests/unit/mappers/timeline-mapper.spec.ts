@@ -26,63 +26,20 @@ import {
 function reduceEvents(
   events: Parameters<typeof reduceTimelineStream>[1][],
 ) {
+  const baseStream = createResearchSessionState().stream;
+
   return events.reduce(
     (stream, event) => reduceTimelineStream(stream, event),
     {
-      timeline: createResearchSessionState().stream.timeline,
-      outlineReady: createResearchSessionState().stream.outlineReady,
+      collectionTrace: baseStream.collectionTrace,
+      timeline: baseStream.timeline,
+      outlineReady: baseStream.outlineReady,
     },
   );
 }
 
 describe("reduceTimelineStream", () => {
-  test("ignores non-collection events and only keeps the collection start marker", () => {
-    const result = reduceEvents([
-      makeAnalysisDeltaEvent(),
-      makeAnalysisCompletedEvent(),
-      makeOutlineDeltaEvent({
-        payload: {
-          delta: '{ "outline": "raw debug delta" }',
-        },
-      }),
-      makeWriterReasoningDeltaEvent(),
-      makeArtifactReadyEvent(),
-      makeReportCompletedEvent(),
-      makePhaseChangedEvent({
-        seq: 60,
-        revision_id: "rev_stage1",
-        phase: "processing_feedback",
-        payload: {
-          from_phase: "delivered",
-          to_phase: "processing_feedback",
-          status: "running",
-        },
-      }),
-      makePhaseChangedEvent({
-        seq: 61,
-        revision_id: "rev_stage1",
-        phase: "planning_collection",
-        payload: {
-          from_phase: "analyzing_requirement",
-          to_phase: "planning_collection",
-          status: "running",
-        },
-      }),
-    ]);
-
-    expect(result.timeline).toEqual([
-      expect.objectContaining({
-        id: "phase:61",
-        kind: "phase",
-        revisionId: "rev_stage1",
-        label: "新一轮研究已进入规划阶段",
-        status: "running",
-      }),
-    ]);
-    expect(result.outlineReady).toBe(false);
-  });
-
-  test("maps planning, collection, summary, and merged-source events into collection trace items", () => {
+  test("creates independent top-level plan rounds for separate planner loops", () => {
     const result = reduceEvents([
       makePhaseChangedEvent({
         seq: 29,
@@ -96,139 +53,226 @@ describe("reduceTimelineStream", () => {
       }),
       makePlannerReasoningDeltaEvent(),
       makePlannerToolCallRequestedEvent(),
-      makeCollectorReasoningDeltaEvent(),
-      makeCollectorSearchStartedEvent(),
-      makeCollectorSearchCompletedEvent(),
-      makeCollectorFetchStartedEvent(),
-      makeCollectorFetchCompletedEvent(),
-      makeCollectorCompletedEvent(),
-      makeSummaryCompletedEvent(),
-      makeSourcesMergedEvent(),
-    ]);
-
-    expect(result.timeline).toEqual([
-      expect.objectContaining({
-        id: "phase:29",
-        kind: "phase",
-        label: "新一轮研究已进入规划阶段",
-        status: "running",
-      }),
-      expect.objectContaining({
-        id: "planning:rev_stage0",
-        kind: "reasoning",
-        label: "正在规划研究路径",
-        detail: "当前还缺少代表性玩家与市场趋势信息。",
-        status: "running",
-      }),
-      expect.objectContaining({
-        id: "collect:call_ai_search",
-        kind: "collect",
-        label: "收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展",
-        collectTarget:
-          "收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展",
-        subtaskId: "sub_ai_search",
-        toolCallId: "call_ai_search",
-        status: "completed",
-      }),
-      expect.objectContaining({
-        id: "summary:call_ai_search:sub_ai_search",
-        kind: "summary",
-        label: "阶段结论已整理",
-        collectTarget:
-          "收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展",
-        status: "completed",
-      }),
-      expect.objectContaining({
-        id: "sources-merged:23",
-        kind: "system",
-        label: "来源已去重并整理引用",
-        status: "completed",
-      }),
-    ]);
-
-    expect(result.timeline[1]?.detail).toContain("当前还缺少代表性玩家与市场趋势信息。");
-    expect(result.timeline[2]?.detail).toContain("先做高时效搜索，再读取官方来源。");
-    expect(result.timeline[2]?.detail).toContain("搜索： 中国 AI 搜索 产品 2025");
-    expect(result.timeline[2]?.detail).toContain("搜索完成：10 条结果");
-    expect(result.timeline[2]?.detail).toContain("读取资料：https://example.com/article");
-    expect(result.timeline[2]?.detail).toContain("读取完成：某公司发布会回顾");
-    expect(result.timeline[2]?.detail).toContain("搜集完成：4 条资料");
-    expect(result.timeline[3]?.detail).toContain("官方披露更多集中在 2025 年后。");
-    expect(result.timeline[4]?.detail).toContain("18 -> 11");
-  });
-
-  test("keeps interleaved sub-agent events attached to the correct collect target", () => {
-    const result = reduceEvents([
-      makePlannerToolCallRequestedEvent({
+      makePlannerReasoningDeltaEvent({
+        seq: 30,
+        timestamp: "2026-03-13T14:33:00+08:00",
         payload: {
-          tool_call_id: "call_ai_search",
-          collect_target: "收集 AI 搜索厂商",
-          additional_info: "优先官方资料。",
+          delta: "还缺少商业化与收入线索。",
         },
       }),
       makePlannerToolCallRequestedEvent({
-        seq: 16,
+        seq: 31,
+        timestamp: "2026-03-13T14:33:05+08:00",
         payload: {
           tool_call_id: "call_revenue",
           collect_target: "收集商业化与收入线索",
-          additional_info: "关注 2025 年财报。",
-        },
-      }),
-      makeCollectorReasoningDeltaEvent({
-        seq: 17,
-        payload: {
-          subtask_id: "sub_revenue",
-          tool_call_id: "call_revenue",
-          delta: "先查财报与业绩会。",
-        },
-      }),
-      makeCollectorSearchStartedEvent({
-        seq: 18,
-        payload: {
-          subtask_id: "sub_ai_search",
-          tool_call_id: "call_ai_search",
-          search_query: "AI 搜索 厂商 2025",
-          search_recency_filter: "noLimit",
-        },
-      }),
-      makeCollectorSearchStartedEvent({
-        seq: 19,
-        payload: {
-          subtask_id: "sub_revenue",
-          tool_call_id: "call_revenue",
-          search_query: "AI 搜索 商业化 收入 2025",
-          search_recency_filter: "noLimit",
+          additional_info: "关注财报与业绩会。",
         },
       }),
     ]);
 
-    expect(result.timeline).toEqual([
+    expect(result.collectionTrace.nodes).toHaveLength(2);
+    expect(result.collectionTrace.nodes).toEqual([
       expect.objectContaining({
-        id: "collect:call_ai_search",
-        collectTarget: "收集 AI 搜索厂商",
+        kind: "plan_round",
+        roundIndex: 1,
+        revisionId: "rev_stage0",
       }),
       expect.objectContaining({
-        id: "collect:call_revenue",
+        kind: "plan_round",
+        roundIndex: 2,
+        revisionId: "rev_stage0",
+      }),
+    ]);
+
+    const firstPlanRound = result.collectionTrace.nodes[0];
+    const secondPlanRound = result.collectionTrace.nodes[1];
+
+    if (firstPlanRound?.kind !== "plan_round" || secondPlanRound?.kind !== "plan_round") {
+      throw new Error("expected plan rounds");
+    }
+
+    expect(firstPlanRound.reasoningBursts).toEqual([
+      expect.objectContaining({
+        kind: "reasoning_burst",
+        detail: "当前还缺少代表性玩家与市场趋势信息。",
+      }),
+    ]);
+    expect(firstPlanRound.collectGroups).toEqual([
+      expect.objectContaining({
+        toolCallId: "call_ai_search",
+        collectTarget:
+          "收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展",
+      }),
+    ]);
+
+    expect(secondPlanRound.reasoningBursts).toEqual([
+      expect.objectContaining({
+        kind: "reasoning_burst",
+        detail: "还缺少商业化与收入线索。",
+      }),
+    ]);
+    expect(secondPlanRound.collectGroups).toEqual([
+      expect.objectContaining({
+        toolCallId: "call_revenue",
         collectTarget: "收集商业化与收入线索",
       }),
     ]);
-    expect(result.timeline[0]?.detail).toContain("搜索： AI 搜索 厂商 2025");
-    expect(result.timeline[0]?.detail).not.toContain("AI 搜索 商业化 收入 2025");
-    expect(result.timeline[1]?.detail).toContain("先查财报与业绩会。");
-    expect(result.timeline[1]?.detail).toContain("搜索： AI 搜索 商业化 收入 2025");
-    expect(result.timeline[1]?.detail).not.toContain("AI 搜索 厂商 2025");
   });
 
-  test("does not map outline, writer, artifact, or report events into the collection trace", () => {
+  test("keeps collect reasoning bursts and four tool event types in time order within one collect group", () => {
     const result = reduceEvents([
-      makeOutlineDeltaEvent(),
-      makeOutlineCompletedEvent(),
+      makePlannerReasoningDeltaEvent(),
+      makePlannerToolCallRequestedEvent(),
+      makeCollectorReasoningDeltaEvent(),
+      makeCollectorSearchStartedEvent(),
+      makeCollectorSearchCompletedEvent(),
+      makeCollectorReasoningDeltaEvent({
+        seq: 19,
+        timestamp: "2026-03-13T14:32:18+08:00",
+        payload: {
+          subtask_id: "sub_ai_search",
+          tool_call_id: "call_ai_search",
+          delta: "再读取官方来源与发布会回顾。",
+        },
+      }),
+      makeCollectorFetchStartedEvent(),
+      makeCollectorFetchCompletedEvent(),
+      makeCollectorCompletedEvent(),
+    ]);
+
+    const firstPlanRound = result.collectionTrace.nodes[0];
+
+    if (firstPlanRound?.kind !== "plan_round") {
+      throw new Error("expected a plan round");
+    }
+
+    const collectGroup = firstPlanRound.collectGroups[0];
+
+    expect(collectGroup).toEqual(
+      expect.objectContaining({
+        toolCallId: "call_ai_search",
+        collectTarget:
+          "收集 2024-2026 年中国 AI 搜索产品的主要厂商与公开进展",
+      }),
+    );
+
+    expect(collectGroup?.collect.entries.map((entry) => entry.kind)).toEqual([
+      "reasoning_burst",
+      "search_started",
+      "search_completed",
+      "reasoning_burst",
+      "fetch_started",
+      "fetch_completed",
+      "collect_completed",
+    ]);
+    expect(collectGroup?.collect.entries[0]).toEqual(
+      expect.objectContaining({
+        kind: "reasoning_burst",
+        detail: "先做高时效搜索，再读取官方来源。",
+      }),
+    );
+    expect(collectGroup?.collect.entries[1]).toEqual(
+      expect.objectContaining({
+        kind: "search_started",
+        detail: "中国 AI 搜索 产品 2025",
+      }),
+    );
+    expect(collectGroup?.collect.entries[2]).toEqual(
+      expect.objectContaining({
+        kind: "search_completed",
+        detail: "10 条结果",
+      }),
+    );
+    expect(collectGroup?.collect.entries[3]).toEqual(
+      expect.objectContaining({
+        kind: "reasoning_burst",
+        detail: "再读取官方来源与发布会回顾。",
+      }),
+    );
+    expect(collectGroup?.collect.entries[4]).toEqual(
+      expect.objectContaining({
+        kind: "fetch_started",
+        detail: "https://example.com/article",
+      }),
+    );
+    expect(collectGroup?.collect.entries[5]).toEqual(
+      expect.objectContaining({
+        kind: "fetch_completed",
+        detail: "某公司发布会回顾",
+      }),
+    );
+    expect(collectGroup?.collect.entries[6]).toEqual(
+      expect.objectContaining({
+        kind: "collect_completed",
+        detail: "搜集完成：4 条资料",
+        status: "completed",
+      }),
+    );
+  });
+
+  test("stores summary as a sibling of collect within the same collect group", () => {
+    const result = reduceEvents([
+      makePlannerReasoningDeltaEvent(),
+      makePlannerToolCallRequestedEvent(),
+      makeCollectorReasoningDeltaEvent(),
+      makeCollectorCompletedEvent(),
+      makeSummaryCompletedEvent(),
+    ]);
+
+    const firstPlanRound = result.collectionTrace.nodes[0];
+
+    if (firstPlanRound?.kind !== "plan_round") {
+      throw new Error("expected a plan round");
+    }
+
+    const collectGroup = firstPlanRound.collectGroups[0];
+
+    expect(collectGroup?.summary).toEqual(
+      expect.objectContaining({
+        kind: "summary",
+        status: "completed",
+      }),
+    );
+    expect(collectGroup?.summary?.detail).toContain("官方披露更多集中在 2025 年后。");
+    expect(collectGroup?.collect.entries.map((entry) => entry.kind)).not.toContain("summary");
+  });
+
+  test("appends sources merged as a top-level terminal node", () => {
+    const result = reduceEvents([
+      makePlannerReasoningDeltaEvent(),
+      makePlannerToolCallRequestedEvent(),
+      makeSourcesMergedEvent(),
+    ]);
+
+    expect(result.collectionTrace.nodes).toHaveLength(2);
+    expect(result.collectionTrace.nodes[1]).toEqual(
+      expect.objectContaining({
+        kind: "sources_merged",
+        status: "completed",
+        sourceCountBeforeMerge: 18,
+        sourceCountAfterMerge: 11,
+        referenceCount: 11,
+      }),
+    );
+  });
+
+  test("keeps collection trace filtered to collection events only", () => {
+    const result = reduceEvents([
+      makeAnalysisDeltaEvent(),
+      makeAnalysisCompletedEvent(),
+      makeOutlineDeltaEvent({
+        payload: {
+          delta: '{ "outline": "raw debug delta" }',
+        },
+      }),
       makeWriterReasoningDeltaEvent(),
       makeArtifactReadyEvent(),
       makeReportCompletedEvent(),
+      makeOutlineCompletedEvent(),
     ]);
 
+    expect(result.collectionTrace.nodes).toEqual([]);
     expect(result.outlineReady).toBe(true);
-    expect(result.timeline).toEqual([]);
   });
 });

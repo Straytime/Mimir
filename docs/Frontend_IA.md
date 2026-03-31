@@ -254,16 +254,16 @@ apps/web/
 
 职责：
 
-- 仅将信息检索阶段的 SSE 事件归一为用户可理解的时间线
+- 仅将信息检索阶段的 SSE 事件归一为用户可理解的结构化 trace
 - 展示从 `planning_collection` 到 `merging_sources` 之间的搜集进展
 - 作为检索过程的轻量透明度视图，不承载后续写作/交付阶段信息
 
 展示策略：
 
-- 用户主视图显示归一后的 timeline item，不直接暴露原始 event name
+- `Collection Trace` 卡片自身是根节点；卡片内部只展示一级 `plan round` 节点与一级终点 `sources merged` 节点
 - 只消费 collection 相关事件：`planner.*`、`collector.*`、`summary.completed`、`sources.merged`
 - `phase.changed` 仅在进入 `planning_collection` 时用于开启这张卡片；`collecting`、`summarizing_collection`、`merging_sources` 是其可见范围的阶段锚点
-- 本节文案表只定义时间线展示文案；事件写入 store 的权威规则见 §8
+- 本节只定义结构与展示语义；事件写入 store 的权威规则见 §8
 
 建议的用户可读阶段文案：
 
@@ -274,14 +274,30 @@ apps/web/
 | `summary.completed` | 正在整理阶段结论 |
 | `sources.merged` | 正在去重并整理引用 |
 
-并发 sub-agent 展示策略：
+层级结构：
 
-1. v1 采用“线性时间线 + 明确标注所属搜集目标”的方案，不做多列并排。
-2. 每个 `planner.tool_call.requested` 生成一条父级 timeline item，主标题直接展示 `collect_target`。
-3. 后续 `collector.*` / `summary.completed` / `collector.completed` 事件，若携带 `subtask_id` 或 `tool_call_id`，都挂接到对应父级 item 下或显示统一标签。
-4. `TimelineItem` 必须保留 `revisionId`、`subtaskId`、`toolCallId`、`collectTarget` 字段，为未来分组渲染留出余地。
-5. 时间线默认始终自动滚动到最新事件，不提供手动暂停。
+1. 每轮 planner loop 必须生成一个独立一级 `plan round` 节点，不能把后续轮次 reasoning 继续拼接到第一轮 plan 上。
+2. `sources merged` 是整个 `Collection Trace` 的一级终点节点，与任意 `plan round` 同级。
+3. 每个 `plan round` 下可以有多个 `collect group`；每个 group 以 `planner.tool_call.requested.tool_call_id` 为主键。
+4. 每个 `collect group` 内必须包含两个同级块：`collect` 与 `summary`。`summary` 是 `collect` 的延续，但不是 `collect.entries` 的子项。
+5. `collect` 内部按时间顺序保留独立事件，不得把 reasoning、tool call、tool result 无边界地压扁成单个 `detail` 字符串。
 6. `Collection Trace` 卡片自进入 `planning_collection` 起出现，并在后续 `preparing_outline` / `writing_report` / `delivered` 阶段继续保留，作为历史卡片被上推显示。
+7. 时间线默认始终自动滚动到最新事件，不提供手动暂停。
+
+前端轮次推断规则：
+
+1. 后端当前不提供显式 `round_id`，因此 `plan round` 必须在前端推断。
+2. 若不存在活动 `plan round`，首个 `planner.reasoning.delta` 创建 `plan round 1`。
+3. 若最近一个 `plan round` 已经包含至少一个 `collect group`，随后再次出现 `planner.reasoning.delta`，则必须开启新的 `plan round`，而不是继续追加到旧轮次。
+4. 同一 `plan round` 内，连续的 `planner.reasoning.delta` 视为同一个 planner reasoning burst；直到出现 `planner.tool_call.requested` 或下一轮 plan 才结束。
+5. `collect` 内的 reasoning round 也必须前端推断：连续的 `collector.reasoning.delta` 属于同一 reasoning round；一旦出现 `collector.search.started`、`collector.search.completed`、`collector.fetch.started`、`collector.fetch.completed` 或 `collector.completed`，当前 reasoning round 立即闭合，下一段 reasoning delta 必须开启新的 round。
+6. `summary.completed` 不参与 round 切分；它只挂到对应 `collect group.summary`，并保留自身时间戳与状态。
+
+数据约束：
+
+1. `stream.collectionTrace` 是 `Collection Trace` 的权威数据结构。
+2. 若为兼容现有未重构 UI 暂时保留 `stream.timeline`，它只能作为过渡投影视图，不能再作为 collection trace 结构语义的唯一来源。
+3. `outline.*`、`writer.*`、`artifact.ready`、`report.completed`、`task.awaiting_feedback` 均不得写入 `collectionTrace`。
 
 高度约束：
 
@@ -404,6 +420,7 @@ type ResearchSessionStore = {
     reportMarkdown: string;
     outline: ResearchOutline | null;
     outlineReady: boolean;
+    collectionTrace: CollectionTraceRoot;
     timeline: TimelineItem[];
     artifacts: ArtifactSummary[];
     lastEventSeq: number | null;
@@ -436,7 +453,100 @@ type ResearchSessionStore = {
 };
 ```
 
-`TimelineItem` 建议最小结构：
+`CollectionTraceRoot` 建议结构：
+
+```ts
+type CollectionTraceRoot = {
+  nodes: CollectionTraceNode[];
+};
+
+type CollectionTraceNode = CollectionPlanRoundNode | CollectionSourcesMergedNode;
+
+type CollectionPlanRoundNode = {
+  id: string;
+  kind: "plan_round";
+  revisionId: string | null;
+  roundIndex: number;
+  label: string;
+  status: "running" | "completed" | "failed";
+  occurredAt: string;
+  reasoningBursts: CollectionReasoningBurst[];
+  collectGroups: CollectionCollectGroup[];
+};
+
+type CollectionCollectGroup = {
+  id: string;
+  revisionId: string | null;
+  toolCallId: string;
+  subtaskId?: string;
+  collectTarget?: string;
+  occurredAt: string;
+  collect: CollectionCollectNode;
+  summary: CollectionSummaryNode | null;
+};
+
+type CollectionCollectNode = {
+  id: string;
+  kind: "collect";
+  label: string;
+  status: "running" | "completed" | "failed";
+  occurredAt: string;
+  entries: CollectionCollectEntry[];
+};
+
+type CollectionCollectEntry =
+  | CollectionReasoningBurst
+  | CollectionToolEvent
+  | CollectionCollectCompletedEvent;
+
+type CollectionReasoningBurst = {
+  id: string;
+  kind: "reasoning_burst";
+  occurredAt: string;
+  detail: string;
+};
+
+type CollectionToolEvent = {
+  id: string;
+  kind:
+    | "search_started"
+    | "search_completed"
+    | "fetch_started"
+    | "fetch_completed";
+  occurredAt: string;
+  label: string;
+  detail?: string;
+};
+
+type CollectionCollectCompletedEvent = {
+  id: string;
+  kind: "collect_completed";
+  occurredAt: string;
+  status: "completed" | "failed";
+  detail: string;
+};
+
+type CollectionSummaryNode = {
+  id: string;
+  kind: "summary";
+  occurredAt: string;
+  status: "completed" | "failed";
+  detail?: string;
+};
+
+type CollectionSourcesMergedNode = {
+  id: string;
+  kind: "sources_merged";
+  occurredAt: string;
+  status: "completed";
+  sourceCountBeforeMerge: number;
+  sourceCountAfterMerge: number;
+  referenceCount: number;
+  detail: string;
+};
+```
+
+`TimelineItem` 若仍保留，只能作为过渡兼容结构：
 
 ```ts
 type TimelineItem = {
@@ -457,10 +567,11 @@ type TimelineItem = {
 
 1. `taskToken` 只保存在内存，不做 persistence middleware。
 2. `writer.delta` 与 `clarification.delta` 直接累积到字符串 buffer，不把每个 delta 都塞入 timeline。
-3. timeline 存归一后的 `TimelineItem`，而不是全量原始 event 副本。
-4. 当 `active_revision_id` 发生切换时，必须清空上一轮的 `analysisText`、`clarificationText`、`questionSet`、`reportMarkdown`、`outline`、`artifacts` 与旧 `delivery`，避免跨 revision 污染。
-5. `optionAnswers` 只在 `clarification.options.ready` 到达后初始化为“每题 -> o_auto”的映射，不能在 ready 前乐观创建。
-6. 下载与交付刷新状态独立于 `pendingAction`，因为它们可与阅读或反馈输入并存。
+3. collection 相关事件必须优先写入 `collectionTrace`，而不是直接压扁为单个 timeline detail 字符串。
+4. 若保留 `timeline` 兼容层，在 `CT-UI` 完成前允许继续保留 legacy 写入，但它只能作为过渡视图，不能再作为 collection trace 结构语义的权威来源。
+5. 当 `active_revision_id` 发生切换时，必须清空上一轮的 `analysisText`、`clarificationText`、`questionSet`、`reportMarkdown`、`outline`、`artifacts` 与旧 `delivery`，避免跨 revision 污染。
+6. `optionAnswers` 只在 `clarification.options.ready` 到达后初始化为“每题 -> o_auto”的映射，不能在 ready 前乐观创建。
+7. 下载与交付刷新状态独立于 `pendingAction`，因为它们可与阅读或反馈输入并存。
 
 ### 6.3 派生状态
 
@@ -591,13 +702,13 @@ v1 前端不开放 feedback/revision 交互，因此主流程不进入前端 rev
 | `clarification.fallback_to_natural` | 清空选单状态 | 切换为自然语言澄清 |
 | `analysis.delta` | 追加 `analysisText` | 只在侧栏显示“正在分析需求”过程文本，不进入 `Collection Trace` |
 | `analysis.completed` | 更新 `currentRevision.requirement_detail`，清空 `analysisText` | 在侧栏显示需求摘要，不进入 `Collection Trace` |
-| `planner.reasoning.delta` | 追加到当前规划 timeline item 的 detail | 进入 `Collection Trace` 的规划项 |
-| `planner.tool_call.requested` | 新增带 `collectTarget` 的 timeline item | 进入 `Collection Trace` 的搜集项 |
-| `collector.reasoning.delta` | 追加到对应 `subtaskId` timeline item 的 detail | 进入 `Collection Trace` |
-| `collector.search.*` / `collector.fetch.*` | 写入对应 `subtaskId` timeline item | 进入 `Collection Trace` |
-| `collector.completed` | 将对应 subtask timeline item 标记为完成 | 进入 `Collection Trace`，展示该搜集目标已完成 |
-| `summary.completed` | 写入 timeline | 进入 `Collection Trace`，展示阶段结论已完成 |
-| `sources.merged` | 写入 timeline | 进入 `Collection Trace`，展示来源去重结果 |
+| `planner.reasoning.delta` | 追加到当前 `plan round.reasoningBursts`；必要时开启新 `plan round` | 进入 `Collection Trace` 的规划层 |
+| `planner.tool_call.requested` | 在当前 `plan round` 下新建 `collect group` | 进入 `Collection Trace` 的搜集层 |
+| `collector.reasoning.delta` | 追加到对应 `collect group.collect.entries` 的 reasoning burst；必要时开启新 burst | 进入 `Collection Trace` |
+| `collector.search.*` / `collector.fetch.*` | 作为独立工具事件写入对应 `collect group.collect.entries` | 进入 `Collection Trace` |
+| `collector.completed` | 作为独立完成事件写入对应 `collect group.collect.entries` 并更新 `collect.status` | 进入 `Collection Trace`，展示该搜集目标已完成 |
+| `summary.completed` | 写入对应 `collect group.summary` | 进入 `Collection Trace`，展示阶段结论已完成 |
+| `sources.merged` | 追加一级 `sources merged` 终点节点 | 进入 `Collection Trace`，展示来源去重结果 |
 | `outline.delta` | `outlineReady = false` | 只影响章节概览预备态，不进入 `Collection Trace` |
 | `outline.completed` | 写入 `outline`，`outlineReady = true` | 只影响章节概览可见性，不进入 `Collection Trace` |
 | `writer.tool_call.requested` | 更新写作相关状态 | 不进入 `Collection Trace` |

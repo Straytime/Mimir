@@ -4,10 +4,11 @@ import type {
   ResearchSessionState,
   TimelineItem,
 } from "../store/research-session-store.types";
+import { reduceCollectionTrace } from "./collection-trace-builder";
 
 export type TimelineStreamState = Pick<
   ResearchSessionState["stream"],
-  "timeline" | "outlineReady"
+  "collectionTrace" | "timeline" | "outlineReady"
 >;
 
 function appendDetail(
@@ -158,6 +159,8 @@ export function reduceTimelineStream(
   stream: TimelineStreamState,
   event: EventEnvelope,
 ): TimelineStreamState {
+  const collectionTrace = reduceCollectionTrace(stream.collectionTrace, event);
+
   switch (event.event) {
     case "phase.changed":
       if (event.payload.to_phase !== "planning_collection") {
@@ -166,6 +169,7 @@ export function reduceTimelineStream(
 
       return {
         ...stream,
+        collectionTrace,
         timeline: [
           ...stream.timeline,
           {
@@ -181,6 +185,7 @@ export function reduceTimelineStream(
     case "planner.reasoning.delta":
       return {
         ...stream,
+        collectionTrace,
         timeline: upsertTimelineItem(
           stream.timeline,
           `planning:${event.revision_id ?? "unknown"}`,
@@ -205,6 +210,7 @@ export function reduceTimelineStream(
     case "planner.tool_call.requested":
       return {
         ...stream,
+        collectionTrace,
         timeline: upsertCollectTimelineItem(stream.timeline, {
           revisionId: event.revision_id,
           occurredAt: event.timestamp,
@@ -216,6 +222,7 @@ export function reduceTimelineStream(
     case "collector.reasoning.delta":
       return {
         ...stream,
+        collectionTrace,
         timeline: upsertCollectTimelineItem(stream.timeline, {
           revisionId: event.revision_id,
           occurredAt: event.timestamp,
@@ -227,6 +234,7 @@ export function reduceTimelineStream(
     case "collector.search.started":
       return {
         ...stream,
+        collectionTrace,
         timeline: upsertCollectTimelineItem(stream.timeline, {
           revisionId: event.revision_id,
           occurredAt: event.timestamp,
@@ -238,6 +246,7 @@ export function reduceTimelineStream(
     case "collector.search.completed":
       return {
         ...stream,
+        collectionTrace,
         timeline: upsertCollectTimelineItem(stream.timeline, {
           revisionId: event.revision_id,
           occurredAt: event.timestamp,
@@ -249,6 +258,7 @@ export function reduceTimelineStream(
     case "collector.fetch.started":
       return {
         ...stream,
+        collectionTrace,
         timeline: upsertCollectTimelineItem(stream.timeline, {
           revisionId: event.revision_id,
           occurredAt: event.timestamp,
@@ -260,6 +270,7 @@ export function reduceTimelineStream(
     case "collector.fetch.completed":
       return {
         ...stream,
+        collectionTrace,
         timeline: upsertCollectTimelineItem(stream.timeline, {
           revisionId: event.revision_id,
           occurredAt: event.timestamp,
@@ -273,6 +284,7 @@ export function reduceTimelineStream(
     case "collector.completed":
       return {
         ...stream,
+        collectionTrace,
         timeline: upsertCollectTimelineItem(stream.timeline, {
           revisionId: event.revision_id,
           occurredAt: event.timestamp,
@@ -306,6 +318,7 @@ export function reduceTimelineStream(
 
         return {
           ...stream,
+          collectionTrace,
           timeline: [...stream.timeline, timelineItem],
         };
       }
@@ -323,17 +336,20 @@ export function reduceTimelineStream(
 
         return {
           ...stream,
+          collectionTrace,
           timeline: [...stream.timeline, timelineItem],
         };
       }
     case "outline.delta":
       return {
         ...stream,
+        collectionTrace,
         outlineReady: false,
       };
     case "outline.completed":
       return {
         ...stream,
+        collectionTrace,
         outlineReady: true,
       };
     default:
