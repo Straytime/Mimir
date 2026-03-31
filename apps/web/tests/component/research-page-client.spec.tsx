@@ -5,11 +5,12 @@ import { ResearchPageClient } from "@/features/research/components/research-page
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
 import {
   makeArtifactSummary,
+  makeCollectionPlanRoundNode,
+  makeCollectionTraceRoot,
   makeDeliverySummary,
   makeResearchSessionState,
   makeResearchOutline,
   makeRevisionSummary,
-  makeTimelineItem,
   makeTaskSnapshot,
 } from "@/tests/fixtures/builders";
 
@@ -79,14 +80,9 @@ test("renders stage-gated workspace cards once their content is ready", () => {
         }),
       },
       stream: {
-        timeline: [
-          makeTimelineItem({
-            id: "t1",
-            kind: "system",
-            label: "正在规划研究路径",
-            status: "completed",
-          }),
-        ],
+        collectionTrace: makeCollectionTraceRoot({
+          nodes: [makeCollectionPlanRoundNode()],
+        }),
         outline: makeResearchOutline(),
         outlineReady: true,
         reportMarkdown: "# 标题\n\n正文。",

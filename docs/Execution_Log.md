@@ -4151,3 +4151,26 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## CT-UI Collection Trace Hierarchical Rendering
+
+- 日期: 2026-03-31
+- 分支: `codex/collection-trace-tree-data`
+- 目标: 将 `Collection Trace` 的前端渲染切到权威的 `stream.collectionTrace` 树状模型，准确呈现 `plan round -> collect / summary -> sources merged` 的层级与折叠预览交互
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，补充 `Collection Trace` 的 UI 呈现规则，明确 `stream.collectionTrace` 是面板主数据源、`Plan Round N` 顶层 section、`collect` / `summary` 同级、reasoning 与 summary 默认单行预览且独立展开、`Sources Merged` 直接完整显示
+- 重写 `apps/web/features/research/components/timeline-panel.tsx`，将渲染输入从扁平 `TimelineItem[]` 切到 `CollectionTraceRoot`，新增 plan round、collect group、tool event、summary、sources merged 的层级化展示与独立展开控制，同时保留卡片级限高与内部自动滚动
+- 修改 `apps/web/features/research/components/research-workspace-shell.tsx`，让工作台将 `stream.collectionTrace` 作为 `Collection Trace` 卡片的唯一主数据输入
+- 扩展 `apps/web/tests/fixtures/builders.ts`，新增 collection trace 树结构的测试夹具
+- 更新 `apps/web/tests/component/timeline-panel.spec.tsx`、`apps/web/tests/component/collect-progress-display.spec.tsx`、`apps/web/tests/component/copy-cleanup.spec.tsx`、`apps/web/tests/component/research-page-client.spec.tsx` 与 `apps/web/tests/integration/research-transparency.spec.tsx`，覆盖多轮 plan、collect / summary 同级、tool event 顺序、独立展开与 sources merged 终点渲染
+
+### 验证
+- `cd apps/web && pnpm typecheck` - 0 error
+- `cd apps/web && pnpm test:component` - 91 passed
+- `cd apps/web && pnpm test:integration` - 37 passed
+
+### 验收结论
+- accepted

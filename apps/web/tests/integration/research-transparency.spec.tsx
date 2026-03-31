@@ -313,11 +313,24 @@ describe("Stage 5 timeline and transparency", () => {
 
     const collectionTrace = screen.getByRole("region", { name: "Collection Trace" });
     expect(
-      within(collectionTrace).getByText("阶段结论已整理"),
+      within(collectionTrace).getByRole("heading", { name: "Plan Round 1" }),
     ).toBeInTheDocument();
     expect(
-      within(collectionTrace).getByText("来源已去重并整理引用"),
+      within(collectionTrace).getByText("收集 AI 搜索厂商"),
     ).toBeInTheDocument();
+    expect(
+      within(collectionTrace).getByText("收集商业化与收入线索"),
+    ).toBeInTheDocument();
+    expect(
+      within(collectionTrace).getByRole("heading", { name: "Summary" }),
+    ).toBeInTheDocument();
+    expect(
+      within(collectionTrace).getByRole("heading", { name: "Sources Merged" }),
+    ).toBeInTheDocument();
+    expect(
+      within(collectionTrace).getAllByText("Search Started").length,
+    ).toBeGreaterThan(0);
+    expect(within(collectionTrace).getByText("Fetch Completed")).toBeInTheDocument();
     expect(
       within(collectionTrace).queryByText('{ "outline": "raw debug delta" }'),
     ).not.toBeInTheDocument();

@@ -38,7 +38,7 @@ test("ClarificationDetailPanel empty state shows user-facing copy", () => {
 });
 
 test("TimelinePanel empty state shows user-facing copy", () => {
-  renderWithStore(<TimelinePanel items={[]} />);
+  renderWithStore(<TimelinePanel trace={{ nodes: [] }} />);
 
   expect(screen.getByText("资料搜集会在这里逐步展开。")).toBeInTheDocument();
   expect(screen.queryByText(/研究进展/)).not.toBeInTheDocument();

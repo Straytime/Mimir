@@ -299,6 +299,16 @@ apps/web/
 2. 若为兼容现有未重构 UI 暂时保留 `stream.timeline`，它只能作为过渡投影视图，不能再作为 collection trace 结构语义的唯一来源。
 3. `outline.*`、`writer.*`、`artifact.ready`、`report.completed`、`task.awaiting_feedback` 均不得写入 `collectionTrace`。
 
+UI 呈现规则：
+
+1. `Collection Trace` 面板的主渲染输入必须来自 `stream.collectionTrace`，不得再以 `stream.timeline` 作为主数据源。
+2. 每个一级 `plan round` 节点使用独立 section 呈现，标题固定为 `Plan Round N`，并以比二级块更强的标题与边框权重表达顶层层级。
+3. 每个 `collect group` 在同一 `plan round` 内按发生顺序渲染；组内 `collect` 与 `summary` 必须是两个同级块，不得把 `summary` 塞回 `collect.entries`。
+4. `collect` 内部的 `reasoning`、`search started`、`search completed`、`fetch started`、`fetch completed`、`collect completed` 必须严格按时间顺序穿插显示，不得重新排序或合并为单行摘要。
+5. `plan reasoning`、`collect reasoning` 与 `summary` 默认只显示单行预览，并提供独立展开控制；展开状态必须按块隔离，不能通过一个按钮同时展开整张卡片。
+6. `Sources Merged` 作为卡片末尾的一级终点节点直接完整显示，不进入折叠预览态。
+7. 视觉区分至少要让用户一眼看出三类信息：`reasoning` 是思考、`tool event` 是执行、`summary` 是阶段结论；可以沿用当前设计语言，但不得退化回无层级的纯文本列表。
+
 高度约束：
 
 1. 长内容卡片不再使用固定 `34rem`。
