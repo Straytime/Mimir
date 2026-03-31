@@ -87,12 +87,19 @@ test("renders streamed markdown and blocks raw HTML", () => {
 
 test("pauses auto-scroll on manual upward scroll and resumes on click", () => {
   const scrollIntoViewSpy = vi.fn();
+  const scrollToSpy = vi.fn();
   const originalScrollIntoView = Element.prototype.scrollIntoView;
+  const originalScrollTo = Element.prototype.scrollTo;
 
   Object.defineProperty(Element.prototype, "scrollIntoView", {
     configurable: true,
     writable: true,
     value: scrollIntoViewSpy,
+  });
+  Object.defineProperty(Element.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
   });
 
   const store = createStage6Store();
@@ -107,9 +114,10 @@ test("pauses auto-scroll on manual upward scroll and resumes on click", () => {
   renderWithStore(<ReportCanvas />, { store });
 
   const reportBody = screen.getByRole("region", { name: "报告正文" });
-  expect(scrollIntoViewSpy).toHaveBeenCalled();
+  expect(scrollToSpy).toHaveBeenCalled();
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
 
-  scrollIntoViewSpy.mockClear();
+  scrollToSpy.mockClear();
 
   Object.defineProperties(reportBody, {
     scrollHeight: {
@@ -141,17 +149,23 @@ test("pauses auto-scroll on manual upward scroll and resumes on click", () => {
     }));
   });
 
-  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+  expect(scrollToSpy).not.toHaveBeenCalled();
 
   fireEvent.click(screen.getByRole("button", { name: "回到底部" }));
 
-  expect(scrollIntoViewSpy).toHaveBeenCalled();
+  expect(scrollToSpy).toHaveBeenCalled();
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
   expect(screen.queryByRole("button", { name: "回到底部" })).not.toBeInTheDocument();
 
   Object.defineProperty(Element.prototype, "scrollIntoView", {
     configurable: true,
     writable: true,
     value: originalScrollIntoView,
+  });
+  Object.defineProperty(Element.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: originalScrollTo,
   });
 });
 

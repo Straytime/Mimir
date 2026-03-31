@@ -67,6 +67,12 @@ export function installBrowserMocks() {
     value: () => {},
   });
 
+  Object.defineProperty(Element.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: () => {},
+  });
+
   Object.defineProperty(globalThis, "ResizeObserver", {
     configurable: true,
     writable: true,

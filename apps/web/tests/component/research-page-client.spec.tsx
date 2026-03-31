@@ -109,6 +109,110 @@ test("renders stage-gated workspace cards once their content is ready", () => {
   expect(screen.queryByLabelText("交付操作")).not.toBeInTheDocument();
 });
 
+test("scrolls the current focus card to the shared workspace anchor offset", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const reportCardRect = {
+    x: 0,
+    y: 420,
+    top: 420,
+    left: 0,
+    right: 800,
+    bottom: 820,
+    width: 800,
+    height: 400,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "report") {
+        return reportCardRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "writing_report",
+            status: "running",
+          }),
+          currentRevision: makeRevisionSummary({
+            requirement_detail: {
+              research_goal: "分析中国 AI 搜索产品竞争格局",
+              domain: "互联网 / AI 产品",
+              requirement_details: "聚焦中国市场，偏商业分析，覆盖近两年变化。",
+              output_format: "business_report",
+              freshness_requirement: "high",
+              language: "zh-CN",
+            },
+          }),
+        },
+        stream: {
+          outline: makeResearchOutline(),
+          outlineReady: true,
+          reportMarkdown: "# 标题\n\n正文。",
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    expect(scrollToSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 292,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
 test("recomputes the shared card-height token when the workspace becomes active", () => {
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
 

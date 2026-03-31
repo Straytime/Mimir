@@ -51,12 +51,56 @@ test("creates a task, writes session context, and immediately starts the SSE con
   const createTaskResponse = makeCreateTaskResponse();
   const recordedBodies: unknown[] = [];
   let getTaskCalls = 0;
-  const scrollIntoViewSpy = vi.fn();
-  const originalScrollIntoView = Element.prototype.scrollIntoView;
+  const scrollToSpy = vi.fn();
+  const originalScrollTo = window.scrollTo;
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 112,
+    width: 800,
+    height: 112,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const clarificationCardRect = {
+    x: 0,
+    y: 360,
+    top: 360,
+    left: 0,
+    right: 800,
+    bottom: 640,
+    width: 800,
+    height: 280,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
 
-  Object.defineProperty(Element.prototype, "scrollIntoView", {
+  Object.defineProperty(window, "scrollTo", {
     configurable: true,
-    value: scrollIntoViewSpy,
+    writable: true,
+    value: scrollToSpy,
+  });
+
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "clarification") {
+        return clarificationCardRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
   });
 
   try {
@@ -98,9 +142,9 @@ test("creates a task, writes session context, and immediately starts the SSE con
 
     await screen.findByText("在开始之前，有一些问题需要你的反馈");
 
-    expect(scrollIntoViewSpy).toHaveBeenCalledWith({
+    expect(scrollToSpy).toHaveBeenCalledWith({
       behavior: "smooth",
-      block: "start",
+      top: 224,
     });
     expect(recordedBodies).toHaveLength(1);
     expect(recordedBodies[0]).toMatchObject({
@@ -139,9 +183,15 @@ test("creates a task, writes session context, and immediately starts the SSE con
     });
     expect(getTaskCalls).toBe(0);
   } finally {
-    Object.defineProperty(Element.prototype, "scrollIntoView", {
+    Object.defineProperty(window, "scrollTo", {
       configurable: true,
-      value: originalScrollIntoView,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
     });
   }
 });
