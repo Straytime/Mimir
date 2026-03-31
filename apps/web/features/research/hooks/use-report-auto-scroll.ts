@@ -15,15 +15,16 @@ export function useReportAutoScroll(contentKey: string) {
   );
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!autoScrollEnabled) {
+    const container = scrollContainerRef.current;
+
+    if (!autoScrollEnabled || container === null) {
       return;
     }
 
-    bottomAnchorRef.current?.scrollIntoView({
-      block: "end",
+    container.scrollTo({
+      top: container.scrollHeight,
       behavior: "smooth",
     });
   }, [autoScrollEnabled, contentKey]);
@@ -46,16 +47,17 @@ export function useReportAutoScroll(contentKey: string) {
   }
 
   function scrollToBottom() {
+    const container = scrollContainerRef.current;
+
     setReportAutoScrollEnabled(true);
-    bottomAnchorRef.current?.scrollIntoView({
-      block: "end",
+    container?.scrollTo({
+      top: container.scrollHeight,
       behavior: "smooth",
     });
   }
 
   return {
     autoScrollEnabled,
-    bottomAnchorRef,
     handleScroll,
     scrollContainerRef,
     scrollToBottom,

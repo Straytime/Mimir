@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useClarificationSubmit } from "../hooks/use-clarification-submit";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
@@ -61,32 +61,13 @@ export function ClarificationDetailPanel() {
   const submitClarification = useClarificationSubmit();
   const remainingSeconds = useCountdownSeconds(countdownDeadlineAt);
   const isSubmitting = pendingAction === "submitting_clarification";
-  const panelRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (snapshot === null || snapshot.phase !== "clarifying") {
-      return;
-    }
-
-    if (typeof panelRef.current?.scrollIntoView !== "function") {
-      return;
-    }
-
-    panelRef.current.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, [snapshot?.phase]);
 
   if (snapshot === null || snapshot.phase !== "clarifying") {
     return null;
   }
 
   return (
-    <div
-      className="scroll-mt-24 space-y-5"
-      ref={panelRef}
-    >
+    <div className="space-y-5">
       <div className="space-y-2">
         <h3 className="text-lg font-semibold text-primary">澄清详情</h3>
         <p className="text-sm leading-6 text-secondary">

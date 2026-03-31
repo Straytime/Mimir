@@ -191,7 +191,7 @@ apps/web/
 2. 倒计时仅为 UI 定时器；每次改选任意题目后重新开始 15 秒。
 3. 发生 `clarification.fallback_to_natural` 后，应清空选单状态并切到自然语言模式。
 4. 澄清详情卡片文案固定为“在开始之前，有一些问题需要你的反馈”。
-5. 提交初始需求后，页面必须显式滚动并锚定到澄清详情容器，不依赖其他卡片的布局位置。
+5. 提交初始需求后，页面必须通过工作台级共享 card anchor 规则滚动到澄清详情卡片，不依赖单个卡片自身的局部滚动逻辑。
 
 ### 5.4 `ReportCanvas`
 
@@ -289,6 +289,9 @@ apps/web/
 2. `Collection Trace` 与 `Report Canvas` 共享同一动态卡片级 max-height token，该 token 由工作台可视内容区高度推导，必须扣除顶栏与底部输入区占位。
 3. 该约束作用于卡片容器本身；卡片头部保持固定可见，内部 body 才是滚动区。
 4. 当页面从 `Idle` 进入 active workspace、顶栏挂载完成后，前端必须重新计算并写入该 token，不能只依赖首次挂载或窗口 resize。
+5. 内容卡片进入当前关注阶段或首次出现时，页面级自动定位必须使用工作台级共享 card anchor 定义，而不是各卡片自行调用页面滚动。
+6. 共享 card anchor 的目标位置是“卡片容器顶端对齐到顶栏下方统一留白”，其 offset 必须基于真实顶栏位置计算。
+7. `Collection Trace` 与 `Report Canvas` 的内容刷新只允许滚动卡片内部容器，不得驱动页面级滚动。
 
 ### 5.6 `DeliveryActions`
 

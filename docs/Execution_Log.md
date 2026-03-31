@@ -3967,6 +3967,30 @@ Copy the template below for each completed session:
 
 ---
 
+## TP-WORKSPACE-CARD-ANCHOR-05 Shared Card Anchor and Inner Scroll Decoupling
+
+- 日期: 2026-03-31
+- 分支: `codex/workspace-card-anchor-alignment`
+- 目标: 将内容卡片自动定位收敛为工作台级共享定义，并将 `Collection Trace` / `Report Canvas` 的内容刷新改为仅滚动卡片内部容器
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，明确内容卡片出现时使用工作台级共享 card anchor，对齐到顶栏下方统一留白；长内容卡片刷新只允许内部滚动，不驱动页面滚动
+- 新增 `apps/web/features/research/hooks/use-workspace-card-anchor.ts`，由工作台统一管理页面级卡片定位
+- 修改 `apps/web/features/research/components/research-workspace-shell.tsx`，给澄清、需求摘要、Collection Trace、Outline、Report 卡片接入统一 anchor 管理
+- 移除 `apps/web/features/research/components/clarification-panels.tsx` 中澄清卡片的局部页面滚动特例
+- 修改 `apps/web/features/research/components/timeline-panel.tsx` 与 `apps/web/features/research/hooks/use-report-auto-scroll.ts` / `apps/web/features/research/components/report-canvas.tsx`，将内容刷新改为容器 `scrollTo(...)`，不再依赖 `scrollIntoView`
+- 更新 component / integration tests，覆盖共享 page anchor 与 inner-scroll-only 行为
+
+### 验证
+- `cd apps/web && pnpm typecheck` - 0 error
+- `cd apps/web && pnpm test:component` - 89 passed
+- `cd apps/web && pnpm test:integration` - 37 passed
+
+### 验收结论
+- accepted
+
+---
+
 ## TP-CARD-HEIGHT-RECOMPUTE-04 Recompute Card Height Token on Workspace Activation
 
 - 日期: 2026-03-31

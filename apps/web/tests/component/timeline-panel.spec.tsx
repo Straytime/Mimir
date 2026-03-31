@@ -5,15 +5,24 @@ import { TimelinePanel } from "@/features/research/components/timeline-panel";
 import { makeTimelineItem } from "@/tests/fixtures/builders";
 
 let scrollIntoViewSpy: ReturnType<typeof vi.fn>;
+let scrollToSpy: ReturnType<typeof vi.fn>;
 let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
+let originalScrollTo: typeof Element.prototype.scrollTo;
 
 beforeEach(() => {
   scrollIntoViewSpy = vi.fn();
+  scrollToSpy = vi.fn();
   originalScrollIntoView = Element.prototype.scrollIntoView;
+  originalScrollTo = Element.prototype.scrollTo;
   Object.defineProperty(Element.prototype, "scrollIntoView", {
     configurable: true,
     writable: true,
     value: scrollIntoViewSpy,
+  });
+  Object.defineProperty(Element.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
   });
 });
 
@@ -22,6 +31,11 @@ afterEach(() => {
     configurable: true,
     writable: true,
     value: originalScrollIntoView,
+  });
+  Object.defineProperty(Element.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: originalScrollTo,
   });
 });
 
@@ -86,7 +100,8 @@ test("auto-scrolls to the latest collection trace item by default", () => {
     />,
   );
 
-  expect(scrollIntoViewSpy).toHaveBeenCalled();
+  expect(scrollToSpy).toHaveBeenCalled();
+  expect(scrollIntoViewSpy).not.toHaveBeenCalled();
 });
 
 test("shows collection-specific empty copy", () => {

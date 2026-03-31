@@ -35,15 +35,17 @@ function getStatusClassName(status: TimelineItem["status"]) {
 }
 
 export function TimelinePanel({ items }: TimelinePanelProps) {
-  const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (typeof bottomAnchorRef.current?.scrollIntoView !== "function") {
+    const container = scrollContainerRef.current;
+
+    if (container === null || typeof container.scrollTo !== "function") {
       return;
     }
 
-    bottomAnchorRef.current.scrollIntoView({
-      block: "end",
+    container.scrollTo({
+      top: container.scrollHeight,
       behavior: "smooth",
     });
   }, [items]);
@@ -62,6 +64,7 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
       <div
         aria-live="polite"
         className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1"
+        ref={scrollContainerRef}
       >
         {items.length === 0 ? (
           <div className="bg-surface-container-lowest px-5 py-5 text-sm leading-7 text-tertiary">
@@ -104,8 +107,6 @@ export function TimelinePanel({ items }: TimelinePanelProps) {
             ))}
           </ol>
         )}
-
-        <div ref={bottomAnchorRef} />
       </div>
     </section>
   );

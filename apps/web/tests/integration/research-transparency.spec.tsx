@@ -124,14 +124,7 @@ async function flushAsyncWork() {
 }
 
 describe("Stage 5 timeline and transparency", () => {
-  const originalScrollIntoView = Element.prototype.scrollIntoView;
-
   afterEach(() => {
-    Object.defineProperty(Element.prototype, "scrollIntoView", {
-      configurable: true,
-      writable: true,
-      value: originalScrollIntoView,
-    });
     vi.restoreAllMocks();
   });
 
@@ -162,14 +155,6 @@ describe("Stage 5 timeline and transparency", () => {
   });
 
   test("renders collection trace during retrieval and keeps it visible after outlining begins", async () => {
-    const scrollIntoViewSpy = vi.fn();
-
-    Object.defineProperty(Element.prototype, "scrollIntoView", {
-      configurable: true,
-      writable: true,
-      value: scrollIntoViewSpy,
-    });
-
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
     const store = createActiveStore();
 
@@ -336,7 +321,6 @@ describe("Stage 5 timeline and transparency", () => {
     expect(
       within(collectionTrace).queryByText('{ "outline": "raw debug delta" }'),
     ).not.toBeInTheDocument();
-    expect(scrollIntoViewSpy).toHaveBeenCalled();
 
     await act(async () => {
       taskEventSource.emit(

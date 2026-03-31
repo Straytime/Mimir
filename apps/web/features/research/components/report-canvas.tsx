@@ -131,7 +131,6 @@ export function ReportCanvas() {
   const deferredReportMarkdown = useDeferredValue(reportMarkdown);
   const {
     autoScrollEnabled,
-    bottomAnchorRef,
     handleScroll,
     scrollContainerRef,
     scrollToBottom,
@@ -213,8 +212,6 @@ export function ReportCanvas() {
               </ReactMarkdown>
             </div>
           )}
-
-          <div ref={bottomAnchorRef} />
         </div>
 
         {!autoScrollEnabled ? (
