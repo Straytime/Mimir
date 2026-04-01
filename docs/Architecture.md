@@ -883,6 +883,12 @@ Writer 阶段最终交付结构。
 1. `stop`
 2. `CollectPlan[]`
 
+planner stop 语义约束：
+
+- 只要 provider 原始 `provider_finish_reason = stop`，就视为 planner 主动结束当前规划轮次。
+- 此时必须保留该轮 provider 返回的 `reasoning content` 作为 planner transcript 的一部分，供后续 debug 与多轮回灌使用；不得再以 `content` 是否为合法 JSON dict 决定是否丢弃 reasoning。
+- `content` 在该场景下可以是非 JSON 文本、非 dict JSON 或空字符串；这些形态只影响是否存在可消费的 plan payload，不影响 stop 判定与 reasoning 保留。
+
 后端职责：
 
 - 按 Revision 维度累计 `collect_agent` 总调用次数
@@ -1570,6 +1576,7 @@ writer 特别约束：
 - `finish_reason` 保留应用层语义，例如 `writer_completed`、`plans_generated`、`analysis_completed`；不得再复用它承载 provider 原始 stop 原因。
 - `provider_finish_reason` 单独保存 provider 返回的真实结束原因，例如 `stop`、`length`、`tool_calls`；stream 场景若收到多个非空值，按“最后一个非空 finish reason”归一。
 - `provider_usage_json` 以结构化 JSON 保存 provider usage；后续凡是判断“截断”“length stop”“tool_calls stop”“空返回”，必须以这两个 provider 观测字段为依据，不能靠应用层 `finish_reason` 猜测。
+- 对 planner round 而言，只要 `provider_finish_reason = stop`，adapter 就必须结束当前 round 并保留 provider reasoning；不得要求 `content_text` 还能被解析为 JSON object 才保留该 reasoning。
 
 ### `llm_call_traces`
 
