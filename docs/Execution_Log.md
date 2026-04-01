@@ -4327,3 +4327,26 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## Workspace Long-Card Height And Outline Polish
+
+- 日期: 2026-04-01
+- 分支: `codex/workspace-card-height-outline-polish`
+- 目标: 修正工作台长卡高度测量与占位，让 `Collection Trace` / `Report Canvas` 使用同一 viewport content band；交付态报告默认从顶部开始阅读；将 `OutlineCard` 从 plain list 提升为可扫描的编号层级结构；把底部输入托盘改为 docked tonal surface，同时保持现有 anchor 与交互语义不变
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，补充长卡高度 token 的 viewport content band 口径、`delivered` 态报告首屏顶部规则、`OutlineCard` 结构化层级要求，以及 `UnifiedInputBar` 的 docked surface 视觉约束
+- 更新 `apps/web/tests/component/research-page-client.spec.tsx`、`apps/web/tests/component/report-canvas.spec.tsx`、`apps/web/tests/component/outline-card.spec.tsx` 与 `apps/web/tests/component/unified-input-bar.spec.tsx`，先锁定共享长卡高度 token、交付态报告首屏位置、outline 编号分组结构与输入托盘无顶边线语义；同步调整既有 card-height 回归断言以匹配新测量规则
+- 修改 `apps/web/features/research/hooks/use-workspace-body-max-height.ts`，将共享长卡高度改为基于 viewport、sticky status bar、高度固定的 input tray 与统一留白推导；并在 `apps/web/features/research/components/timeline-panel.tsx`、`apps/web/features/research/components/report-canvas.tsx` 中让长卡实际占满该内容带高度
+- 修改 `apps/web/features/research/hooks/use-report-auto-scroll.ts` 与 `apps/web/features/research/components/report-canvas.tsx`，保留 `writing_report` 阶段的自动贴底与“回到底部”按钮，同时让 `delivered` 首次渲染回到报告起始位置，避免交付态继续被推到底部
+- 修改 `apps/web/features/research/components/outline-card.tsx` 与 `apps/web/features/research/components/unified-input-bar.tsx`，将 outline 改为 leading-zero 编号、标题/说明分层的 terminal 式结构，并把底部输入区改为 tonal stacking 的 docked tray，移除原顶边线分隔
+
+### 验证
+- `cd apps/web && pnpm typecheck`
+- `cd apps/web && pnpm test:component`
+- `cd apps/web && pnpm test:integration`
+
+### 验收结论
+- accepted

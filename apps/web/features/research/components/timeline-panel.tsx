@@ -518,9 +518,12 @@ export function TimelinePanel({ trace }: TimelinePanelProps) {
   return (
     <section
       aria-label="Collection Trace"
-      className="flex max-h-full flex-col overflow-hidden bg-surface-container-low p-6"
+      className="flex flex-col overflow-hidden bg-surface-container-low p-6"
       role="region"
-      style={{ maxHeight: RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE }}
+      style={{
+        height: RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE,
+        maxHeight: RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE,
+      }}
     >
       <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
         Collection Trace

@@ -33,8 +33,12 @@ test("shows correct placeholder when no task exists (snapshot=null)", () => {
   renderWithStore(<UnifiedInputBar />, { store });
 
   const textarea = screen.getByRole("textbox");
+  const inputTray = textarea.closest("[data-research-input-bar='true']");
+
   expect(textarea).toBeEnabled();
   expect(textarea).toHaveAttribute("placeholder", "输入你的研究主题...");
+  expect(inputTray).toHaveAttribute("data-research-input-surface", "docked");
+  expect(inputTray).not.toHaveClass("border-t");
 });
 
 test("shows correct placeholder in natural clarification mode", () => {

@@ -6,7 +6,11 @@ import { useResearchSessionStore } from "../providers/research-workspace-provide
 
 const AUTO_SCROLL_RESUME_THRESHOLD_PX = 80;
 
-export function useReportAutoScroll(contentKey: string) {
+export function useReportAutoScroll(args: {
+  contentKey: string;
+  phase: string;
+}) {
+  const { contentKey, phase } = args;
   const autoScrollEnabled = useResearchSessionStore(
     (state) => state.ui.reportAutoScrollEnabled,
   );
@@ -15,11 +19,33 @@ export function useReportAutoScroll(contentKey: string) {
   );
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const deliveredInitialPositionedRef = useRef(false);
+  const isStreamingPhase = phase === "writing_report";
+  const isDeliveredPhase = phase === "delivered";
 
   useEffect(() => {
     const container = scrollContainerRef.current;
 
-    if (!autoScrollEnabled || container === null) {
+    if (!isDeliveredPhase) {
+      deliveredInitialPositionedRef.current = false;
+      return;
+    }
+
+    if (container === null || deliveredInitialPositionedRef.current) {
+      return;
+    }
+
+    container.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
+    deliveredInitialPositionedRef.current = true;
+  }, [contentKey, isDeliveredPhase]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+
+    if (!isStreamingPhase || !autoScrollEnabled || container === null) {
       return;
     }
 
@@ -27,12 +53,12 @@ export function useReportAutoScroll(contentKey: string) {
       top: container.scrollHeight,
       behavior: "smooth",
     });
-  }, [autoScrollEnabled, contentKey]);
+  }, [autoScrollEnabled, contentKey, isStreamingPhase]);
 
   function handleScroll() {
     const container = scrollContainerRef.current;
 
-    if (container === null) {
+    if (!isStreamingPhase || container === null) {
       return;
     }
 
@@ -61,5 +87,6 @@ export function useReportAutoScroll(contentKey: string) {
     handleScroll,
     scrollContainerRef,
     scrollToBottom,
+    showScrollToBottom: isStreamingPhase && !autoScrollEnabled,
   };
 }

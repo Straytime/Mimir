@@ -240,10 +240,12 @@ apps/web/
 
 滚动行为：
 
-1. 默认跟随最新内容自动滚动到底部。
+1. `writing_report` 流式阶段默认跟随最新内容自动滚动到底部，以保证写作过程可读。
 2. 当用户手动上滚且距底部超过 `80px` 时，暂停自动滚动。
 3. 暂停期间显示“回到底部”浮动按钮。
 4. 用户点击按钮或重新滚到底部后，恢复自动滚动。
+5. 当任务进入 `delivered` 且首次以交付态渲染 `Report Canvas` 时，正文滚动位置必须回到报告起始处，不得沿用流式阶段的“贴底”默认位置。
+6. `delivered` 态仍允许用户自由滚动阅读，但不再因为交付态自身挂载或 metadata 更新而自动把正文推回底部。
 
 渲染性能策略：
 
@@ -317,7 +319,7 @@ UI 呈现规则：
 高度约束：
 
 1. 长内容卡片不再使用固定 `34rem`。
-2. `Collection Trace` 与 `Report Canvas` 共享同一动态卡片级 max-height token，该 token 由工作台可视内容区高度推导，必须扣除顶栏与底部输入区占位。
+2. `Collection Trace` 与 `Report Canvas` 共享同一动态卡片级 max-height token，该 token 由工作台“内容带”高度推导：上边界是 sticky 状态区底部后的统一留白起点，下边界是固定底部输入托盘上缘前的统一留白终点，而不是依据卡片自身当前文档位置推导。
 3. 该约束作用于卡片容器本身；卡片头部保持固定可见，内部 body 才是滚动区。
 4. 当页面从 `Idle` 进入 active workspace、顶栏挂载完成后，前端必须重新计算并写入该 token，不能只依赖首次挂载或窗口 resize。
 5. 内容卡片进入当前关注阶段或首次出现时，页面级自动定位必须使用工作台级共享 card anchor 定义，而不是各卡片自行调用页面滚动。
@@ -326,6 +328,37 @@ UI 呈现规则：
 8. 共享 card anchor 不能只依赖 anchor key 变化；同一张卡片在当前阶段内从“未就绪”变为“内容首次就绪”时，也必须触发页面定位。
 9. 若同一轮状态更新中有多张内容卡片同时变为可见或可锚定，页面必须按既定卡片顺序选择更靠前的卡片作为锚点，例如 `Report Canvas` 与 `DeliveryActions` 同时出现时优先锚到 `Report Canvas`。
 10. `澄清详情` 与 `Requirement Summary` 两张卡片的 anchor 目标位置都不是卡片外层容器顶边；前者应让“澄清详情”标题贴合状态栏下方统一留白，后者应让需求摘要内容区默认完整露出，不被卡片标签或过多上边距挤出首屏。
+11. 共享 max-height token 的计算必须对 `Collection Trace` 与 `Report Canvas` 一致生效，确保两张长卡都占满同一可视内容带，并与统一 anchor 留白规则兼容。
+
+### 5.5.1 `OutlineCard`
+
+职责：
+
+- 在 `outline.ready` 后提供报告结构预览
+- 作为 `Report Canvas` 之前的阅读引导，而不是纯技术占位
+
+展示规则：
+
+1. `OutlineCard` 只在 `outlineReady === true` 且存在 `outline` 时渲染。
+2. 视觉结构必须体现 `DESIGN.md` 的 `Lab Terminal` 风格：使用 leading-zero 编号、分层 tonal stacking、无圆角漂移、无简单分隔线。
+3. 卡片头部保留 `Outline` 技术标签与报告标题；正文不能退化为纯标题列表。
+4. 各 section 必须按 `order` 顺序渲染，并显式展示 `01`、`02` 这类编号，强化终端式结构感。
+5. 每个 section 至少应拆分为“编号 / 标题 / 可读说明”三层信息；若存在 `description`，必须以可读摘要形式显示，用于帮助用户快速扫描章节意图。
+6. section 之间通过留白与 tonal surface 分组，不使用 1px 横线切割。
+
+### 5.11 `UnifiedInputBar`
+
+职责：
+
+- 作为页面唯一底部输入托盘，统一承接初始需求与自然语言澄清输入
+- 在 active workspace 中始终固定停靠底部，不改变现有提交与禁用语义
+
+视觉与布局规则：
+
+1. 输入托盘采用 docked surface 处理，而不是简单的顶边线分隔；必须通过 tonal stacking、backdrop blur、内外表面层级来体现其与正文区的区分。
+2. 不使用显式 `border-top` 作为主要分隔手段；若出于可访问性需要保留边界感，只能使用极弱的 ghost boundary、背景过渡或内阴影式处理，不能形成“硬切线”。
+3. 输入托盘本身仍是固定底部的页面级共享区域，`Collection Trace` / `Report Canvas` 的 max-height 计算必须扣除其实际占位与预留留白。
+4. 本次视觉调整只改变输入托盘表面语言，不改变 placeholder、禁用逻辑、提交热键、delivered 态新研究确认逻辑或澄清模式切换语义。
 
 ### 5.6 `DeliveryActions`
 
