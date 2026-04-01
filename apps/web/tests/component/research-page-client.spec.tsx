@@ -3,6 +3,7 @@ import { expect, test, vi } from "vitest";
 
 import { ResearchPageClient } from "@/features/research/components/research-page-client";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
+import { RESEARCH_CARD_ANCHOR_GAP_PX } from "@/features/research/utils/layout-vars";
 import {
   makeArtifactSummary,
   makeCollectionPlanRoundNode,
@@ -106,6 +107,109 @@ test("renders stage-gated workspace cards once their content is ready", () => {
   expect(screen.getByRole("region", { name: "报告画布" })).toBeInTheDocument();
   expect(screen.queryByText("配图制品")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("交付操作")).not.toBeInTheDocument();
+});
+
+test("computes the shared long-card max height from the viewport content band", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalInnerHeight = window.innerHeight;
+
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    writable: true,
+    value: 960,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return {
+          x: 0,
+          y: 220,
+          top: 220,
+          left: 0,
+          right: 800,
+          bottom: 324,
+          width: 800,
+          height: 104,
+          toJSON() {
+            return this;
+          },
+        } as DOMRect;
+      }
+
+      if (this.getAttribute("data-research-input-bar") === "true") {
+        return {
+          x: 0,
+          y: 832,
+          top: 832,
+          left: 0,
+          right: 800,
+          bottom: 960,
+          width: 800,
+          height: 128,
+          toJSON() {
+            return this;
+          },
+        } as DOMRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "writing_report",
+            status: "running",
+          }),
+        },
+        stream: {
+          collectionTrace: makeCollectionTraceRoot({
+            nodes: [makeCollectionPlanRoundNode()],
+          }),
+          outline: makeResearchOutline(),
+          outlineReady: true,
+          reportMarkdown: "# 标题\n\n正文。",
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    const expectedMaxHeight =
+      window.innerHeight - 104 - 128 - RESEARCH_CARD_ANCHOR_GAP_PX * 2;
+    const main = screen.getByRole("main");
+
+    expect(main.style.getPropertyValue("--research-card-max-h")).toBe(
+      `${expectedMaxHeight}px`,
+    );
+    expect(screen.getByRole("region", { name: "Collection Trace" })).toHaveStyle({
+      maxHeight: "var(--research-card-max-h)",
+    });
+    expect(screen.getByRole("region", { name: "报告画布" })).toHaveStyle({
+      maxHeight: "var(--research-card-max-h)",
+    });
+  } finally {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: originalInnerHeight,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
 });
 
 test("renders the embedded gallery inside DeliveryActions and not as a standalone card after delivery", () => {
@@ -963,8 +1067,11 @@ test("recomputes the shared card-height token when the workspace becomes active"
       }));
     });
 
+    const expectedMaxHeight =
+      window.innerHeight - 112 - 80 - RESEARCH_CARD_ANCHOR_GAP_PX * 2;
+
     expect(screen.getByRole("main")).toHaveStyle({
-      "--research-card-max-h": "600px",
+      "--research-card-max-h": `${expectedMaxHeight}px`,
     });
   } finally {
     Object.defineProperty(Element.prototype, "getBoundingClientRect", {

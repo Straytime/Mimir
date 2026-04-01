@@ -89,6 +89,58 @@ test("renders streamed markdown and blocks raw HTML", () => {
   expect(screen.queryByText("危险原始 HTML")).not.toBeInTheDocument();
 });
 
+test("starts delivered reports from the top instead of auto-scrolling to the bottom", () => {
+  const scrollToSpy = vi.fn();
+  const originalScrollTo = Element.prototype.scrollTo;
+
+  Object.defineProperty(Element.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "delivered",
+            status: "awaiting_feedback",
+            available_actions: ["download_markdown", "download_pdf"],
+          }),
+          delivery: makeDeliverySummary({
+            artifact_count: 1,
+          }),
+        },
+        stream: {
+          reportMarkdown: "# 标题\n\n第一段。\n\n第二段。",
+        },
+      }),
+    );
+
+    renderWithStore(<ReportCanvas />, { store });
+
+    expect(scrollToSpy).toHaveBeenCalledWith({
+      top: 0,
+      behavior: "auto",
+    });
+    expect(scrollToSpy).not.toHaveBeenCalledWith({
+      top: expect.any(Number),
+      behavior: "smooth",
+    });
+  } finally {
+    Object.defineProperty(Element.prototype, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+  }
+});
+
 test("pauses auto-scroll on manual upward scroll and resumes on click", () => {
   const scrollIntoViewSpy = vi.fn();
   const scrollToSpy = vi.fn();

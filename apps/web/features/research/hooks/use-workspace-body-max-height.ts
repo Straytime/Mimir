@@ -3,6 +3,7 @@
 import { useLayoutEffect, type RefObject } from "react";
 
 import {
+  RESEARCH_CARD_ANCHOR_GAP_PX,
   RESEARCH_CARD_MAX_HEIGHT_CSS_VAR,
   RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR,
 } from "../utils/layout-vars";
@@ -22,8 +23,13 @@ function measureWorkspaceBodyMaxHeight(root: HTMLElement) {
   }
 
   const statusBarHeight = statusBar.getBoundingClientRect().height;
+  const inputBarHeight = inputBar.getBoundingClientRect().height;
+  const viewportHeight = window.innerHeight;
   const availableHeight =
-    inputBar.getBoundingClientRect().top - statusBar.getBoundingClientRect().bottom;
+    viewportHeight -
+    statusBarHeight -
+    inputBarHeight -
+    RESEARCH_CARD_ANCHOR_GAP_PX * 2;
 
   root.style.setProperty(
     RESEARCH_CARD_MAX_HEIGHT_CSS_VAR,

@@ -127,13 +127,14 @@ export function ReportCanvas() {
 
   const deferredReportMarkdown = useDeferredValue(reportMarkdown);
   const {
-    autoScrollEnabled,
     handleScroll,
     scrollContainerRef,
     scrollToBottom,
-  } = useReportAutoScroll(
-    `${outlineReady}:${outline?.sections.length ?? 0}:${deferredReportMarkdown.length}`,
-  );
+    showScrollToBottom,
+  } = useReportAutoScroll({
+    contentKey: `${outlineReady}:${outline?.sections.length ?? 0}:${deferredReportMarkdown.length}`,
+    phase: snapshot?.phase ?? "clarifying",
+  });
 
   if (snapshot === null) {
     return null;
@@ -144,8 +145,11 @@ export function ReportCanvas() {
   return (
     <section
       aria-label="报告画布"
-      className="flex max-h-full flex-col overflow-hidden bg-surface-container-low p-6"
-      style={{ maxHeight: RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE }}
+      className="flex flex-col overflow-hidden bg-surface-container-low p-6"
+      style={{
+        height: RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE,
+        maxHeight: RESEARCH_CARD_MAX_HEIGHT_STYLE_VALUE,
+      }}
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -208,7 +212,7 @@ export function ReportCanvas() {
           )}
         </div>
 
-        {!autoScrollEnabled ? (
+        {showScrollToBottom ? (
           <button
             className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
             onClick={scrollToBottom}

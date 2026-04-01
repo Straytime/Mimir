@@ -225,10 +225,11 @@ export function UnifiedInputBar() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-40 border-t border-outline-variant bg-surface/90 backdrop-blur-[20px]"
+      className="fixed bottom-0 left-0 right-0 z-40 bg-[linear-gradient(180deg,rgba(19,19,19,0)_0%,rgba(19,19,19,0.76)_20%,rgba(19,19,19,0.94)_100%)] backdrop-blur-[20px]"
       data-research-input-bar="true"
+      data-research-input-surface="docked"
     >
-      <div className="mx-auto max-w-[800px] px-sp-8 py-4">
+      <div className="mx-auto max-w-[800px] px-sp-8 pb-4 pt-5">
         {inputError.fieldError !== null ? (
           <p className="mb-2 text-sm text-[#FF6B6B]" role="alert">
             {inputError.fieldError}
@@ -252,25 +253,27 @@ export function UnifiedInputBar() {
             ) : null}
           </div>
         ) : null}
-        <div className="flex items-stretch gap-3">
-          <textarea
-            aria-invalid={inputError.ariaInvalid}
-            className="min-h-[48px] flex-1 resize-none bg-surface-container-lowest px-4 py-3 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:opacity-70"
-            disabled={!mode.enabled || isSubmitting}
-            onChange={(event) => setDraftValue(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={mode.placeholder}
-            rows={1}
-            value={draftValue}
-          />
-          <button
-            className="flex h-12 w-[120px] shrink-0 items-center justify-center self-stretch bg-primary px-4 py-3 text-sm font-medium text-on-primary transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-            disabled={!mode.enabled || isSubmitting || draftValue.trim().length === 0}
-            onClick={() => void handleSubmit()}
-            type="button"
-          >
-            {isSubmitting ? "提交中..." : "提交"}
-          </button>
+        <div className="bg-surface-container-low/95 px-4 py-4 shadow-[0_-20px_48px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(71,71,71,0.12)]">
+          <div className="flex items-stretch gap-3">
+            <textarea
+              aria-invalid={inputError.ariaInvalid}
+              className="min-h-[48px] flex-1 resize-none bg-surface-container-lowest px-4 py-3 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={!mode.enabled || isSubmitting}
+              onChange={(event) => setDraftValue(event.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={mode.placeholder}
+              rows={1}
+              value={draftValue}
+            />
+            <button
+              className="flex h-12 w-[120px] shrink-0 items-center justify-center self-stretch bg-primary px-4 py-3 text-sm font-medium text-on-primary transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={!mode.enabled || isSubmitting || draftValue.trim().length === 0}
+              onClick={() => void handleSubmit()}
+              type="button"
+            >
+              {isSubmitting ? "提交中..." : "提交"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
