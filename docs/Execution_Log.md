@@ -4283,3 +4283,24 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## DOCS-AGENT Role Split Guidance
+
+- 日期: 2026-04-01
+- 分支: `codex/agent-role-guidance-split`
+- 目标: 将仓库级 agent 规则拆分为 `for-master-agent` 与 `for-execute-agent` 两个章节，保留通用纪律在公共区，并新增 master-agent 创建 execute-agent 时禁止 `fork_context: true` 的约束；同步更新 `CLAUDE.md`
+
+### 变更内容
+- 更新 `AGENTS.md`，将角色相关规则从原 `agent 规则` 拆分为 `通用规则`、`for-master-agent` 与 `for-execute-agent` 三部分；保留单线程串行开发、`docs-first / tests-first / implementation` 等通用纪律在公共区
+- 在 `for-master-agent` 中新增：创建 `execute-agent` 时禁止使用 `fork_context: true`，要求以干净上下文开始，只传递当前任务包所需的最小必要信息
+- 在 `for-execute-agent` 中收口执行侧职责与任务包执行原则
+- 同步更新 `CLAUDE.md`，保持与仓库级 agent 规范一致
+
+### 验证
+- 人工校对 `AGENTS.md` 与 `CLAUDE.md` 的角色章节结构与措辞一致
+- 人工确认通用规则仍留在公共区，未被错误拆分到角色章节
+
+### 验收结论
+- accepted
