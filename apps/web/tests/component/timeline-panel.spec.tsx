@@ -157,6 +157,97 @@ test("keeps collect entries in chronological order", () => {
   ]);
 });
 
+test("renders search and fetch events as compact tool rows while keeping them distinct", () => {
+  render(
+    <TimelinePanel
+      trace={makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                collectEntries: [
+                  makeCollectionReasoningBurst({
+                    id: "collect_reasoning_1",
+                    detail: "先看官方站点。",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "search_started_1",
+                    kind: "search_started",
+                    label: "Search Started",
+                    detail: "AI 搜索 厂商 2025",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "search_completed_1",
+                    kind: "search_completed",
+                    label: "Search Completed",
+                    detail: "命中 5 条结果",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "fetch_started_1",
+                    kind: "fetch_started",
+                    label: "Fetch Started",
+                    detail: "https://example.com/a",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "fetch_completed_1",
+                    kind: "fetch_completed",
+                    label: "Fetch Completed",
+                    detail: "已读取官方新闻稿",
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })}
+    />,
+  );
+
+  const collectSection = screen.getByRole("group", { name: "Collect 收集 AI 搜索厂商" });
+  const toolRows = within(collectSection).getAllByTestId("collection-trace-tool-event-row");
+
+  expect(toolRows).toHaveLength(4);
+  expect(within(toolRows[0]).getByText("Search Started")).toBeInTheDocument();
+  expect(within(toolRows[1]).getByText("Search Completed")).toBeInTheDocument();
+  expect(within(toolRows[2]).getByText("Fetch Started")).toBeInTheDocument();
+  expect(within(toolRows[3]).getByText("Fetch Completed")).toBeInTheDocument();
+  expect(within(collectSection).queryByTestId("collection-trace-reasoning-row")).toBeInTheDocument();
+});
+
+test("formats long fetch urls into host and truncated path while keeping the full url accessible", () => {
+  const longUrl =
+    "https://news.example.com/research/2026/04/01/very-long-report/with/many/segments/and/a/query-string?source=collection-trace&campaign=density-check";
+
+  render(
+    <TimelinePanel
+      trace={makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                collectEntries: [
+                  makeCollectionToolEvent({
+                    id: "fetch_started_long_url",
+                    kind: "fetch_started",
+                    label: "Fetch Started",
+                    detail: longUrl,
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })}
+    />,
+  );
+
+  const detail = screen.getByTestId("collection-trace-tool-event-detail");
+
+  expect(detail).toHaveTextContent("news.example.com/");
+  expect(detail).toHaveAttribute("title", longUrl);
+  expect(detail.textContent).not.toEqual(longUrl);
+});
+
 test("shows one-line previews for reasoning and summary and expands independently", async () => {
   const user = userEvent.setup();
 
