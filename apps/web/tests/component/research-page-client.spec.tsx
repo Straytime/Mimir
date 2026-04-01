@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 
 import { ResearchPageClient } from "@/features/research/components/research-page-client";
@@ -101,8 +101,55 @@ test("renders stage-gated workspace cards once their content is ready", () => {
   expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
   expect(screen.getByLabelText("报告大纲")).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "报告画布" })).toBeInTheDocument();
-  expect(screen.getByLabelText("图库")).toBeInTheDocument();
+  expect(screen.queryByText("配图制品")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("交付操作")).not.toBeInTheDocument();
+});
+
+test("renders the embedded gallery inside DeliveryActions and not as a standalone card after delivery", () => {
+  const store = createResearchSessionStore(
+    makeResearchSessionState({
+      session: {
+        taskId: "tsk_stage0",
+        taskToken: "secret_stage0",
+        sseState: "open",
+      },
+      remote: {
+        snapshot: makeTaskSnapshot({
+          phase: "delivered",
+          status: "awaiting_feedback",
+          available_actions: ["download_markdown", "download_pdf"],
+        }),
+        delivery: makeDeliverySummary({
+          artifact_count: 1,
+          artifacts: [
+            makeArtifactSummary({
+              filename: "chart_market_share.png",
+              url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAE/wJ/lL0uWQAAAABJRU5ErkJggg==",
+            }),
+          ],
+        }),
+      },
+      stream: {
+        outline: makeResearchOutline(),
+        outlineReady: true,
+        reportMarkdown: "# 标题\n\n正文。",
+        artifacts: [
+          makeArtifactSummary({
+            filename: "chart_market_share.png",
+            url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAE/wJ/lL0uWQAAAABJRU5ErkJggg==",
+          }),
+        ],
+      },
+    }),
+  );
+
+  render(<ResearchPageClient store={store} />);
+
+  const deliveryPanel = screen.getByRole("region", { name: "交付操作" });
+
+  expect(screen.queryByRole("region", { name: "图库" })).not.toBeInTheDocument();
+  expect(within(deliveryPanel).getByText("配图制品")).toBeInTheDocument();
+  expect(within(deliveryPanel).getByText("chart_market_share.png")).toBeInTheDocument();
 });
 
 test("scrolls the current focus card to the shared workspace anchor offset", () => {
@@ -185,6 +232,237 @@ test("scrolls the current focus card to the shared workspace anchor offset", () 
           outline: makeResearchOutline(),
           outlineReady: true,
           reportMarkdown: "# 标题\n\n正文。",
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    expect(scrollToSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 292,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
+test("reanchors the current card when the same anchor key stays active but report content becomes ready", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const reportCardRect = {
+    x: 0,
+    y: 420,
+    top: 420,
+    left: 0,
+    right: 800,
+    bottom: 820,
+    width: 800,
+    height: 400,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "report") {
+        return reportCardRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "writing_report",
+            status: "running",
+          }),
+        },
+        stream: {
+          reportMarkdown: "",
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        stream: {
+          ...state.stream,
+          reportMarkdown: "# 标题\n\n正文。",
+        },
+      }));
+    });
+
+    expect(scrollToSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 292,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
+test("keeps the report anchor when report canvas and delivery appear together", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const reportCardRect = {
+    x: 0,
+    y: 420,
+    top: 420,
+    left: 0,
+    right: 800,
+    bottom: 820,
+    width: 800,
+    height: 400,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const deliveryCardRect = {
+    x: 0,
+    y: 860,
+    top: 860,
+    left: 0,
+    right: 800,
+    bottom: 1160,
+    width: 800,
+    height: 300,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "report") {
+        return reportCardRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "delivery") {
+        return deliveryCardRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "delivered",
+            status: "awaiting_feedback",
+            available_actions: ["download_markdown", "download_pdf"],
+          }),
+          delivery: makeDeliverySummary({
+            artifact_count: 1,
+            artifacts: [
+              makeArtifactSummary({
+                filename: "chart_market_share.png",
+                url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAE/wJ/lL0uWQAAAABJRU5ErkJggg==",
+              }),
+            ],
+          }),
+        },
+        stream: {
+          outline: makeResearchOutline(),
+          outlineReady: true,
+          reportMarkdown: "# 标题\n\n正文。",
+          artifacts: [
+            makeArtifactSummary({
+              filename: "chart_market_share.png",
+              url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAE/wJ/lL0uWQAAAABJRU5ErkJggg==",
+            }),
+          ],
         },
       }),
     );

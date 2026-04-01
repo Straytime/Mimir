@@ -289,19 +289,6 @@ describe("Stage 6 report canvas and delivery flow", () => {
     expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "提交反馈" })).not.toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(taskDetailCalls).toBe(1);
-      expect(freshArtifactCalls).toBe(1);
-    });
-
-    expect(staleArtifactCalls).toBeGreaterThan(0);
-    expect(
-      await screen.findByAltText("chart_market_share.png"),
-    ).toBeInTheDocument();
-    expect(store.getState().remote.delivery?.artifacts[0]?.url).toBe(
-      new URL(freshArtifactUrl, window.location.origin).toString(),
-    );
-
     await act(async () => {
       taskEventSource.emit(
         makeTaskAwaitingFeedbackEvent({
@@ -315,6 +302,7 @@ describe("Stage 6 report canvas and delivery flow", () => {
     const statusBar = screen.getByRole("region", { name: "会话状态" });
 
     expect(within(deliveryPanel).queryByText("6800 字")).not.toBeInTheDocument();
+    expect(within(deliveryPanel).getByText("配图制品")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "下载 Markdown Zip" }),
     ).toBeEnabled();
@@ -332,6 +320,22 @@ describe("Stage 6 report canvas and delivery flow", () => {
     expect(
       screen.queryByRole("button", { name: "提交反馈" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "图库" }),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(taskDetailCalls).toBe(1);
+      expect(freshArtifactCalls).toBe(1);
+    });
+
+    expect(staleArtifactCalls).toBeGreaterThan(0);
+    expect(
+      within(deliveryPanel).getByText("chart_market_share.png"),
+    ).toBeInTheDocument();
+    expect(store.getState().remote.delivery?.artifacts[0]?.url).toBe(
+      new URL(freshArtifactUrl, window.location.origin).toString(),
+    );
 
     await user.click(within(statusBar).getByRole("button", { name: "新研究" }));
 
