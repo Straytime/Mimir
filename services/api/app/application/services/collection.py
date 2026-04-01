@@ -433,6 +433,8 @@ class CollectionOrchestrator:
         collected_items: list[CollectedSourceItem] = []
         tool_call_count = 0
         partial = False
+        tool_limit_reached = False
+        tool_limit_notice_sent = False
 
         while True:
             invocation = CollectorInvocation(
@@ -694,9 +696,47 @@ class CollectionOrchestrator:
             )
 
             tool_messages: list[PromptMessage] = []
-            for tool_call in decision.tool_calls:
+            if tool_limit_reached and tool_limit_notice_sent:
+                result = CollectResult(
+                    subtask_id=subtask_id,
+                    tool_call_id=plan.tool_call_id,
+                    collect_target=plan.collect_target,
+                    status=CollectSummaryStatus.PARTIAL,
+                    search_queries=tuple(search_queries),
+                    tool_call_count=tool_call_count,
+                    items=tuple(collected_items),
+                )
+                await self._persist_collect_result(
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    result=result,
+                )
+                await self._append_event(
+                    task_id=task_id,
+                    event="collector.completed",
+                    payload={
+                        "subtask_id": subtask_id,
+                        "tool_call_id": plan.tool_call_id,
+                        "status": result.status.value,
+                        "item_count": len(result.items),
+                        "search_queries": list(result.search_queries),
+                    },
+                )
+                return result
+
+            blocked_by_tool_limit = False
+            for index, tool_call in enumerate(decision.tool_calls):
                 if tool_call_count >= self._settings.subtask_tool_call_limit:
+                    tool_limit_reached = True
+                    tool_limit_notice_sent = True
                     partial = True
+                    blocked_by_tool_limit = True
+                    for blocked_tool_call in decision.tool_calls[index:]:
+                        tool_messages.append(
+                            self._build_collector_tool_limit_message(
+                                tool_call=blocked_tool_call
+                            )
+                        )
                     break
                 try:
                     tool_message, tool_payload, new_items = await self._execute_collector_tool_call(
@@ -725,37 +765,12 @@ class CollectionOrchestrator:
                 if tool_payload.get("success") is False:
                     partial = True
                 if tool_call_count >= self._settings.subtask_tool_call_limit:
-                    partial = True
-                    break
+                    tool_limit_reached = True
 
             transcript.extend(tool_messages)
-            if partial and tool_call_count >= self._settings.subtask_tool_call_limit:
-                result = CollectResult(
-                    subtask_id=subtask_id,
-                    tool_call_id=plan.tool_call_id,
-                    collect_target=plan.collect_target,
-                    status=CollectSummaryStatus.PARTIAL,
-                    search_queries=tuple(search_queries),
-                    tool_call_count=tool_call_count,
-                    items=tuple(collected_items),
-                )
-                await self._persist_collect_result(
-                    task_id=task_id,
-                    revision_id=revision_id,
-                    result=result,
-                )
-                await self._append_event(
-                    task_id=task_id,
-                    event="collector.completed",
-                    payload={
-                        "subtask_id": subtask_id,
-                        "tool_call_id": plan.tool_call_id,
-                        "status": result.status.value,
-                        "item_count": len(result.items),
-                        "search_queries": list(result.search_queries),
-                    },
-                )
-                return result
+            if blocked_by_tool_limit:
+                call_index += 1
+                continue
 
             call_index += 1
 
@@ -798,6 +813,41 @@ class CollectionOrchestrator:
             ),
             payload,
             (),
+        )
+
+    def _build_collector_tool_limit_message(
+        self,
+        *,
+        tool_call: CollectorToolCall,
+    ) -> PromptMessage:
+        if tool_call.tool_name == "web_search":
+            payload = build_web_search_tool_payload(
+                None,
+                search_query=str(tool_call.arguments_json.get("search_query") or ""),
+                search_recency_filter=str(
+                    tool_call.arguments_json.get("search_recency_filter") or "noLimit"
+                ),
+                error_code="tool_call_limit_exceeded",
+            )
+        elif tool_call.tool_name == "web_fetch":
+            payload = {
+                "success": False,
+                "url": str(tool_call.arguments_json.get("url") or ""),
+                "title": None,
+                "content": None,
+                "error_code": "tool_call_limit_exceeded",
+            }
+        else:
+            payload = {
+                "success": False,
+                "tool_name": tool_call.tool_name,
+                "error_code": "tool_call_limit_exceeded",
+            }
+        return PromptMessage(
+            role="tool",
+            name=tool_call.tool_name,
+            tool_call_id=tool_call.tool_call_id,
+            content=json.dumps(payload, ensure_ascii=False, indent=2),
         )
 
     async def _execute_collector_search(
