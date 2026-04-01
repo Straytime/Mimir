@@ -308,13 +308,13 @@ UI 呈现规则：
 1. `Collection Trace` 面板的主渲染输入必须来自 `stream.collectionTrace`。
 2. 每个一级 `plan round` 节点使用独立 section 呈现，标题固定为 `Plan Round N`，并以比二级块更强的标题与边框权重表达顶层层级。
 3. 每个 `collect group` 在同一 `plan round` 内按发生顺序渲染；组内 `collect` 与 `summary` 必须是两个同级块，不得把 `summary` 塞回 `collect.entries`。
-4. `collect` 内部的 `reasoning`、`search started`、`search completed`、`fetch started`、`fetch completed`、`collect completed` 必须严格按时间顺序穿插显示，不得重新排序或合并为单行摘要。
+4. `collect` 内部的 `reasoning`、tool event、`collect completed` 必须严格按时间顺序穿插显示；`search` 与 `fetch` 只允许在前端渲染层把同一对象的 `started/completed` 成对事件折叠为一条 tool row，不得改变它们相对 `reasoning` 与 `collect completed` 的时序位置，也不得合并为跨对象的单行摘要。
 5. `plan reasoning`、`collect reasoning` 与 `summary` 默认只显示单行预览，并提供独立展开控制；展开状态必须按块隔离，不能通过一个按钮同时展开整张卡片。
 6. `Sources Merged` 作为卡片末尾的一级终点节点直接完整显示，不进入折叠预览态。
-7. `search started`、`search completed`、`fetch started`、`fetch completed` 四类 tool event 必须保留为四条独立事件，但它们的视觉权重必须降级为紧凑日志行，不得继续使用与 reasoning 相同的大块卡片处理。
-8. 紧凑 tool-event 行必须遵守 `DESIGN.md` 的 `Lab Terminal` 风格：使用 tonal stacking 区分层级，不引入额外圆角漂移、阴影或 card-in-card 膨胀。
-9. `fetch` 类事件的主显示文本应优先展示 `hostname + 截断 path`；完整 URL 保留在可访问属性中，且内容容器必须使用 `min-w-0` 与单行截断策略，防止长 URL 向右溢出。
-10. 视觉区分至少要让用户一眼看出三类信息：`reasoning` 是思考、`tool event` 是执行、`summary` 是阶段结论；可以沿用当前设计语言，但不得退化回无层级的纯文本列表。
+7. `search` 与 `fetch` tool event 必须使用紧凑日志行呈现；默认以现有 `fetch` 行为基线，前端按 started/completed 成对折叠为单行，左侧只显示 `Search` 或 `Fetch`，中间显示对象，右侧显示当前状态（当前为 `Started` / `Done`，后续若有其他状态可沿用同一区域承载）。
+8. 成对折叠必须是纯 UI 层行为：仅基于现有 `collect.entries` 顺序推导，不改 store、不改 mapper、不改 `CollectionTrace` 数据模型；若出现只有 completed 而无 matching started 的异常情况，必须安全降级为单行显示，而不是直接丢弃。
+9. `search` 行的对象文本必须显示 query 本身，不再显示命中条数等 completed-only 文案；`fetch` 行的对象文本必须显示 URL 导向对象，优先使用 `hostname + 截断 path`，完整 URL 保留在可访问属性中，且内容容器必须使用 `min-w-0` 与单行截断策略，防止长 URL 向右溢出；completed 返回的标题文本不再显示在该行。
+10. 紧凑 tool-event 行必须遵守 `DESIGN.md` 的 `Lab Terminal` 风格：使用统一的低侵入 tonal stacking 区分层级，不引入额外圆角漂移、阴影或 card-in-card 膨胀；`Search` 与 `Fetch` 不应再因为事件类型不同而产生分裂的视觉处理。`reasoning` 仍应明显是思考块，`summary` 仍应明显是阶段结论。
 
 高度约束：
 

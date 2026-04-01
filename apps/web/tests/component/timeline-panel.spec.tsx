@@ -149,15 +149,13 @@ test("keeps collect entries in chronological order", () => {
 
   expect(eventText).toEqual([
     "Reasoning 1",
-    "Search Started",
-    "Search Completed",
-    "Fetch Started",
-    "Fetch Completed",
+    "Search",
+    "Fetch",
     "Collect Completed",
   ]);
 });
 
-test("renders search and fetch events as compact tool rows while keeping them distinct", () => {
+test("renders a search started/completed pair as one merged row with query object and done status", () => {
   render(
     <TimelinePanel
       trace={makeCollectionTraceRoot({
@@ -204,14 +202,187 @@ test("renders search and fetch events as compact tool rows while keeping them di
   );
 
   const collectSection = screen.getByRole("group", { name: "Collect 收集 AI 搜索厂商" });
-  const toolRows = within(collectSection).getAllByTestId("collection-trace-tool-event-row");
+  const toolRows = within(collectSection).getAllByTestId("collection-trace-tool-row");
 
-  expect(toolRows).toHaveLength(4);
-  expect(within(toolRows[0]).getByText("Search Started")).toBeInTheDocument();
-  expect(within(toolRows[1]).getByText("Search Completed")).toBeInTheDocument();
-  expect(within(toolRows[2]).getByText("Fetch Started")).toBeInTheDocument();
-  expect(within(toolRows[3]).getByText("Fetch Completed")).toBeInTheDocument();
-  expect(within(collectSection).queryByTestId("collection-trace-reasoning-row")).toBeInTheDocument();
+  expect(toolRows).toHaveLength(2);
+  expect(within(toolRows[0]).getByText("Search")).toBeInTheDocument();
+  expect(within(toolRows[0]).getByTestId("collection-trace-tool-row-object")).toHaveTextContent(
+    "AI 搜索 厂商 2025",
+  );
+  expect(within(toolRows[0]).getByText("Done")).toBeInTheDocument();
+});
+
+test("renders a fetch started/completed pair as one merged row with url object and done status", () => {
+  render(
+    <TimelinePanel
+      trace={makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                collectEntries: [
+                  makeCollectionToolEvent({
+                    id: "fetch_started_1",
+                    kind: "fetch_started",
+                    label: "Fetch Started",
+                    detail: "https://example.com/research/company-profile",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "fetch_completed_1",
+                    kind: "fetch_completed",
+                    label: "Fetch Completed",
+                    detail: "已读取官方新闻稿",
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })}
+    />,
+  );
+
+  const collectSection = screen.getByRole("group", { name: "Collect 收集 AI 搜索厂商" });
+  const toolRows = within(collectSection).getAllByTestId("collection-trace-tool-row");
+
+  expect(toolRows).toHaveLength(1);
+  expect(within(toolRows[0]).getByText("Fetch")).toBeInTheDocument();
+  expect(within(toolRows[0]).getByTestId("collection-trace-tool-row-object")).toHaveTextContent(
+    "example.com/research/company-profile",
+  );
+  expect(within(toolRows[0]).getByText("Done")).toBeInTheDocument();
+});
+
+test("hides completed-only search counts and fetch titles in merged tool rows", () => {
+  render(
+    <TimelinePanel
+      trace={makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                collectEntries: [
+                  makeCollectionToolEvent({
+                    id: "search_started_1",
+                    kind: "search_started",
+                    label: "Search Started",
+                    detail: "AI 搜索 厂商 2025",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "search_completed_1",
+                    kind: "search_completed",
+                    label: "Search Completed",
+                    detail: "命中 5 条结果",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "fetch_started_1",
+                    kind: "fetch_started",
+                    label: "Fetch Started",
+                    detail: "https://example.com/a",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "fetch_completed_1",
+                    kind: "fetch_completed",
+                    label: "Fetch Completed",
+                    detail: "已读取官方新闻稿",
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })}
+    />,
+  );
+
+  const collectSection = screen.getByRole("group", { name: "Collect 收集 AI 搜索厂商" });
+
+  expect(within(collectSection).queryByText("命中 5 条结果")).not.toBeInTheDocument();
+  expect(within(collectSection).queryByText("已读取官方新闻稿")).not.toBeInTheDocument();
+});
+
+test("keeps a started-only tool event as one row with started status", () => {
+  render(
+    <TimelinePanel
+      trace={makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                collectEntries: [
+                  makeCollectionToolEvent({
+                    id: "search_started_1",
+                    kind: "search_started",
+                    label: "Search Started",
+                    detail: "AI 搜索 厂商 2025",
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })}
+    />,
+  );
+
+  const collectSection = screen.getByRole("group", { name: "Collect 收集 AI 搜索厂商" });
+  const toolRows = within(collectSection).getAllByTestId("collection-trace-tool-row");
+
+  expect(toolRows).toHaveLength(1);
+  expect(within(toolRows[0]).getByText("Search")).toBeInTheDocument();
+  expect(within(toolRows[0]).getByTestId("collection-trace-tool-row-object")).toHaveTextContent(
+    "AI 搜索 厂商 2025",
+  );
+  expect(within(toolRows[0]).getByText("Started")).toBeInTheDocument();
+});
+
+test("uses one unified tool row treatment for search and fetch rows", () => {
+  render(
+    <TimelinePanel
+      trace={makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                collectEntries: [
+                  makeCollectionToolEvent({
+                    id: "search_started_1",
+                    kind: "search_started",
+                    label: "Search Started",
+                    detail: "AI 搜索 厂商 2025",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "search_completed_1",
+                    kind: "search_completed",
+                    label: "Search Completed",
+                    detail: "命中 5 条结果",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "fetch_started_1",
+                    kind: "fetch_started",
+                    label: "Fetch Started",
+                    detail: "https://example.com/a",
+                  }),
+                  makeCollectionToolEvent({
+                    id: "fetch_completed_1",
+                    kind: "fetch_completed",
+                    label: "Fetch Completed",
+                    detail: "已读取官方新闻稿",
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })}
+    />,
+  );
+
+  const collectSection = screen.getByRole("group", { name: "Collect 收集 AI 搜索厂商" });
+  const [searchRow, fetchRow] = within(collectSection).getAllByTestId("collection-trace-tool-row");
+
+  expect(searchRow).toHaveClass("collection-trace-tool-row--merged");
+  expect(fetchRow).toHaveClass("collection-trace-tool-row--merged");
 });
 
 test("formats long fetch urls into host and truncated path while keeping the full url accessible", () => {
@@ -241,7 +412,7 @@ test("formats long fetch urls into host and truncated path while keeping the ful
     />,
   );
 
-  const detail = screen.getByTestId("collection-trace-tool-event-detail");
+  const detail = screen.getByTestId("collection-trace-tool-row-object");
 
   expect(detail).toHaveTextContent("news.example.com/");
   expect(detail).toHaveAttribute("title", longUrl);
