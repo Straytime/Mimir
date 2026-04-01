@@ -89,7 +89,8 @@ def test_outline_prompt_semantic_lock_keeps_role_and_output_constraints() -> Non
     assert "**实体约束与大纲必须严格考量信息获取结果，保证已有信息可支撑**" in prompt.system_prompt
     assert '"标题"' in prompt.system_prompt
     assert '"section_1"' in prompt.system_prompt
-    assert '"参考来源"' in prompt.system_prompt
+    assert '"entities": []' in prompt.system_prompt
+    assert '"参考来源"' not in prompt.system_prompt
     assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
     assert "<用户研究需求>" in prompt.user_prompt
     assert "分析中国 AI 搜索产品的竞争格局与未来机会" in prompt.user_prompt

@@ -4401,3 +4401,27 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若后续还有 collector loop 调整，优先补一个更通用的 Stage 5 “等待 collection barrier 完成”测试辅助，减少各测试重复处理 SSE 时序
   - 如需继续收紧 limit 语义，可再评估是否要为“收到 limit notice 后仍继续请求工具”的 forced-partial 路径补独立 observability 事件
+
+## Prompt Update Drift Review
+
+- 日期时间: 2026-04-01 22:25:09 CST (+0800)
+- 任务包编号: 未提供
+- session 标识: codex-20260401-prompt-update-drift-review
+- 目标摘要: 审查 `prompt-update-04012155` 上用户手工修改的 collector 与 outline prompt 文案，判断是否引入契约、测试或运行时漂移；结论为 prompt 语义已变化但未造成直接运行时 breakage，因此仅补齐最小化的语义锁测试与 outline parser fixture，使当前 prompt 行为、测试预期与运行时容错保持一致。
+- 修改文件:
+  - `services/api/app/application/prompts/collection.py`
+  - `services/api/app/application/prompts/delivery.py`
+  - `services/api/tests/unit/application/test_collection_prompts.py`
+  - `services/api/tests/unit/application/test_delivery_prompts.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_outline_agent.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_collection_prompts.py tests/unit/application/test_delivery_prompts.py tests/unit/infrastructure/test_zhipu_outline_agent.py`
+  - 未运行: 其余 backend unit / contract / integration tests；本任务包仅要求审查 prompt 语义锁与直接受影响的 outline parser 路径
+- 验收结论: accepted；collector prompt 的新工具与收口语义已被语义锁测试覆盖，outline prompt 示例移除硬编码 `参考来源` section 后，相关 prompt 测试与直接受影响的 parser fixture 已同步，且 targeted tests 全部通过。
+- blocker / 风险:
+  - 未重跑更广泛的 delivery / collection 集成链路；当前结论基于 prompt builders 与 directly impacted outline parser tests
+  - outline prompt 不再示例化 `参考来源` section 后，模型输出章节结构可能更自由，但当前 parser 已允许任意非 `标题` section key，未发现新增运行时约束
+- 下一步建议:
+  - 后续如继续人工调整 prompt 文案，同步维护 prompt semantic-lock tests，避免再次出现仅测试层漂移
+  - 若线上观察到 outline 章节分布变化，再决定是否需要补充更高层的 delivery integration coverage

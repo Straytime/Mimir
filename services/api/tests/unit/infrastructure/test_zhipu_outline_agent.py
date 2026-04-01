@@ -95,10 +95,6 @@ async def test_parse_prd_key_value_format() -> None:
                     "title": "竞争格局",
                     "description": "评估主要竞争者的差异化能力。",
                 },
-                "参考来源": {
-                    "title": "参考来源",
-                    "description": "列明所有参考来源",
-                },
             },
             "entities": ["AI 搜索产品", "中国市场"],
         },
@@ -109,15 +105,12 @@ async def test_parse_prd_key_value_format() -> None:
     decision = await agent.prepare(_invocation())
 
     assert decision.outline.title == "中国 AI 搜索竞争格局研究"
-    assert len(decision.outline.sections) == 3
+    assert len(decision.outline.sections) == 2
     assert decision.outline.sections[0].title == "研究背景"
     assert decision.outline.sections[0].description == "分析市场背景与研究范围。"
     assert decision.outline.sections[0].order == 1
     assert decision.outline.sections[1].title == "竞争格局"
     assert decision.outline.sections[1].order == 2
-    assert decision.outline.sections[2].title == "参考来源"
-    assert decision.outline.sections[2].description == "列明所有参考来源"
-    assert decision.outline.sections[2].order == 3
     assert decision.outline.entities == ("AI 搜索产品", "中国市场")
     assert decision.deltas == ()
 

@@ -36,10 +36,6 @@ def _build_outline_system_prompt(now_iso: str) -> str:
         "section_n": {{
             "title": "",
             "description": ""
-        }},
-        "参考来源": {{
-            "title": "参考来源",
-            "description": "列明所有参考来源"
         }}
     }},
     "entities": []
