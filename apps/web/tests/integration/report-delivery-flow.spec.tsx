@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, test } from "vitest";
 
@@ -109,6 +110,7 @@ async function flushAsyncWork() {
 
 describe("Stage 6 report canvas and delivery flow", () => {
   test("renders outline, report body, writer tool-call states, and refreshes artifact delivery after access_token_invalid", async () => {
+    const user = userEvent.setup();
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
     const store = createStage6Store();
     const staleArtifactUrl =
@@ -157,6 +159,7 @@ describe("Stage 6 report canvas and delivery flow", () => {
     let staleArtifactCalls = 0;
     let freshArtifactCalls = 0;
     let taskDetailCalls = 0;
+    let disconnectCalls = 0;
 
     mswServer.use(
       http.get("*/api/v1/tasks/tsk_stage0/artifacts/art_stage0_chart", ({ request }) => {
@@ -199,6 +202,10 @@ describe("Stage 6 report canvas and delivery flow", () => {
           });
         },
       ),
+      http.post("*/api/v1/tasks/tsk_stage0/disconnect", () => {
+        disconnectCalls += 1;
+        return HttpResponse.json({ accepted: true }, { status: 202 });
+      }),
     );
 
     render(
@@ -305,6 +312,7 @@ describe("Stage 6 report canvas and delivery flow", () => {
     });
 
     const deliveryPanel = screen.getByRole("region", { name: "交付操作" });
+    const statusBar = screen.getByRole("region", { name: "会话状态" });
 
     expect(within(deliveryPanel).queryByText("6800 字")).not.toBeInTheDocument();
     expect(
@@ -312,10 +320,27 @@ describe("Stage 6 report canvas and delivery flow", () => {
     ).toBeEnabled();
     expect(screen.getByRole("button", { name: "下载 PDF" })).toBeEnabled();
     expect(
+      within(deliveryPanel).queryByRole("button", { name: "开始新研究" }),
+    ).not.toBeInTheDocument();
+    expect(within(statusBar).getByRole("button", { name: "新研究" })).toBeInTheDocument();
+    expect(
+      within(statusBar).queryByRole("button", { name: "终止任务" }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.queryByRole("textbox", { name: "反馈意见" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "提交反馈" }),
     ).not.toBeInTheDocument();
+
+    await user.click(within(statusBar).getByRole("button", { name: "新研究" }));
+
+    expect(disconnectCalls).toBe(0);
+    expect(
+      screen.getByRole("heading", { name: "AI 研究工作台" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("输入你的研究主题..."),
+    ).toBeInTheDocument();
   });
 });

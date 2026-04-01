@@ -111,7 +111,7 @@ apps/web/
 - 当前连接状态
 - 当前 phase / status
 - 当前 `taskId`
-- 终止任务按钮
+- 任务控制按钮（运行中为“终止任务”，`delivered` 后切为“新研究”）
 
 ### 4.3 Tablet / Mobile 布局
 
@@ -204,9 +204,9 @@ apps/web/
 子区域：
 
 1. `ReportHeader`
-   - 当前 revision 编号
+   - 固定显示 `Report Canvas` 区块标签
    - 当前阶段说明
-   - 交付后显示字数与图片数量
+   - 交付后只显示图片数量，不显示 revision 编号或报告轮次标题
 2. `ReportBody`
    - 流式 markdown 内容
 3. `ArtifactGallery`
@@ -339,6 +339,7 @@ UI 呈现规则：
 4. `pdf` 下载按钮需要 loading 状态，因为后端可能存在惰性 PDF 渲染延迟。
 5. `markdown zip` 与 `pdf` 使用独立 loading state，避免重复点击与互相阻塞。
 6. 当 `refreshingDelivery === true` 时，下载按钮与图片重试按钮统一禁用。
+7. `delivered` 后不在 `DeliveryActions` 渲染“开始新研究”入口；新研究入口统一由 `SessionStatusBar` 顶栏按钮承接。
 
 ### 5.7 `FeedbackComposer`
 
@@ -380,11 +381,15 @@ v1 前端不开放 `FeedbackComposer`。
 
 - 承接会话连接状态、当前阶段标题与任务标识
 - 作为工作台顶栏的轻量状态条
+- 承接顶栏唯一任务控制按钮
 
 展示规则：
 
 1. 顶栏下半部只展示 `taskId`，不展示阶段补充小字、`analysisText` 或搜集进度。
 2. 顶栏摘要的默认信息以当前阶段标题为准，`taskId` 作为唯一附加标识。
+3. `writing_report` 阶段标题固定为“正在生成研究内容”。
+4. 当 `snapshot.phase === delivered` 且任务未进入 terminal status 时，顶栏按钮文案切为“新研究”，点击直接调用 `reset`，不走 disconnect。
+5. 非 `delivered` 的非 terminal 任务继续显示“终止任务”，并保持原有 disconnect 行为不变。
 
 ## 6. 客户端状态模型
 

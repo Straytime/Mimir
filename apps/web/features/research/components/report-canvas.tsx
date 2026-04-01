@@ -118,9 +118,6 @@ function ReportMarkdownLink(props: ComponentPropsWithoutRef<"a">) {
 
 export function ReportCanvas() {
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
-  const currentRevision = useResearchSessionStore(
-    (state) => state.remote.currentRevision,
-  );
   const delivery = useResearchSessionStore((state) => state.remote.delivery);
   const outline = useResearchSessionStore((state) => state.stream.outline);
   const outlineReady = useResearchSessionStore((state) => state.stream.outlineReady);
@@ -155,10 +152,7 @@ export function ReportCanvas() {
           <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
             Report Canvas
           </p>
-          <h3 className="mt-sp-2 text-lg font-narrative font-semibold text-primary">
-            第 {fmt02(currentRevision?.revision_number ?? snapshot.active_revision_number)} 轮报告
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-secondary">
+          <p className="mt-sp-2 text-sm leading-6 text-secondary">
             {getReportPhaseCopy(snapshot.phase)}
           </p>
         </div>

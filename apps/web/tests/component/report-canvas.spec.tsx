@@ -75,6 +75,10 @@ test("renders streamed markdown and blocks raw HTML", () => {
 
   renderWithStore(<ReportCanvas />, { store });
 
+  expect(screen.getByText("Report Canvas")).toBeInTheDocument();
+  expect(screen.getByText("正在撰写报告")).toBeInTheDocument();
+  expect(screen.queryByText("第 02 轮报告")).not.toBeInTheDocument();
+  expect(screen.queryByText("第 2 轮报告")).not.toBeInTheDocument();
   expect(
     screen.getByRole("heading", { level: 1, name: "报告标题" }),
   ).toBeInTheDocument();

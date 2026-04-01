@@ -28,7 +28,7 @@ function getStageStatusCopy(phase: string) {
     case "preparing_outline":
       return { title: "正在构思报告结构" };
     case "writing_report":
-      return { title: "正在撰写报告与生成配图" };
+      return { title: "正在生成研究内容" };
     case "processing_feedback":
       return { title: "正在处理反馈" };
     case "delivered":
@@ -54,6 +54,7 @@ export function SessionStatusBar() {
   const terminalReason = useResearchSessionStore(
     (state) => state.ui.terminalReason,
   );
+  const reset = useResearchSessionStore((state) => state.reset);
   const canDisconnectTask = useResearchSessionStore(selectCanDisconnectTask);
   const disconnectTask = useDisconnectGuard();
 
@@ -66,6 +67,14 @@ export function SessionStatusBar() {
       : "未开始";
 
   const isTerminal = terminalReason !== null;
+  const isDeliveredPhase =
+    snapshot?.phase === "delivered" && !isTerminal;
+  const actionLabel = isDeliveredPhase
+    ? "新研究"
+    : pendingAction === "disconnecting"
+      ? "正在终止..."
+      : "终止任务";
+
   return (
     <section
       aria-label="会话状态"
@@ -85,13 +94,18 @@ export function SessionStatusBar() {
 
         <button
           className="bg-transparent px-4 py-1.5 text-sm font-medium text-primary shadow-ghost transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:text-tertiary disabled:shadow-none"
-          disabled={!canDisconnectTask}
+          disabled={isDeliveredPhase ? false : !canDisconnectTask}
           onClick={() => {
+            if (isDeliveredPhase) {
+              reset();
+              return;
+            }
+
             void disconnectTask();
           }}
           type="button"
         >
-          {pendingAction === "disconnecting" ? "正在终止..." : "终止任务"}
+          {actionLabel}
         </button>
       </div>
 
