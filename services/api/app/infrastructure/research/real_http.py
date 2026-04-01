@@ -96,18 +96,11 @@ class ZhipuPlannerAgent:
 
         if result.tool_calls:
             return self._parse_tool_calls(result, invocation)
+        if result.provider_finish_reason == "stop":
+            return self._build_stop_decision(result)
         if result.text.strip():
             return self._parse_content_json(result, invocation)
-        return PlannerDecision(
-            reasoning_deltas=(),
-            plans=(),
-            stop=True,
-            request_id=result.request_id,
-            provider_finish_reason=result.provider_finish_reason,
-            provider_usage=result.provider_usage,
-            request_payload=result.request_payload,
-            response_payload=result.response_payload,
-        )
+        return self._build_stop_decision(result)
 
     def _parse_tool_calls(
         self,
@@ -175,28 +168,10 @@ class ZhipuPlannerAgent:
                 "planner returned non-JSON text, treating as stop: request_id=%s",
                 result.request_id,
             )
-            return PlannerDecision(
-                reasoning_deltas=(),
-                plans=(),
-                stop=True,
-                request_id=result.request_id,
-                provider_finish_reason=result.provider_finish_reason,
-                provider_usage=result.provider_usage,
-                request_payload=result.request_payload,
-                response_payload=result.response_payload,
-            )
+            return ZhipuPlannerAgent._build_stop_decision(result)
 
         if not isinstance(parsed, dict):
-            return PlannerDecision(
-                reasoning_deltas=(),
-                plans=(),
-                stop=True,
-                request_id=result.request_id,
-                provider_finish_reason=result.provider_finish_reason,
-                provider_usage=result.provider_usage,
-                request_payload=result.request_payload,
-                response_payload=result.response_payload,
-            )
+            return ZhipuPlannerAgent._build_stop_decision(result)
 
         reasoning_deltas = _coerce_string_tuple(parsed.get("reasoning_deltas"))
         if not reasoning_deltas and result.reasoning_text.strip():
@@ -235,6 +210,39 @@ class ZhipuPlannerAgent:
             request_payload=result.request_payload,
             response_payload=result.response_payload,
         )
+
+    @staticmethod
+    def _build_stop_decision(result: "ZhipuCompletionResult") -> PlannerDecision:
+        return PlannerDecision(
+            reasoning_deltas=ZhipuPlannerAgent._extract_stop_reasoning_deltas(result),
+            plans=(),
+            stop=True,
+            request_id=result.request_id,
+            provider_finish_reason=result.provider_finish_reason,
+            provider_usage=result.provider_usage,
+            request_payload=result.request_payload,
+            response_payload=result.response_payload,
+        )
+
+    @staticmethod
+    def _extract_stop_reasoning_deltas(
+        result: "ZhipuCompletionResult",
+    ) -> tuple[str, ...]:
+        reasoning_text = result.reasoning_text.strip()
+        if reasoning_text:
+            return (reasoning_text,)
+
+        if not result.text.strip():
+            return ()
+
+        try:
+            parsed = json.loads(strip_markdown_code_fence(result.text))
+        except json.JSONDecodeError:
+            return ()
+
+        if not isinstance(parsed, dict):
+            return ()
+        return _coerce_string_tuple(parsed.get("reasoning_deltas"))
 
 
 class ZhipuCollectorAgent:

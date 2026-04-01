@@ -4456,3 +4456,25 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若 production 需要显式覆盖倒计时时长，可在部署变量中按新增示例配置 `MIMIR_CLARIFICATION_COUNTDOWN_SECONDS`
   - 后续如继续调整 workspace 顶部结构，优先复用 `data-research-top-stack` 这一测量入口，避免再次回退到只按 status bar 计算
+
+## TP-2026-04-01 Planner Stop Reasoning Preserve
+
+- 日期时间: 2026-04-01 23:35:17 CST (+0800)
+- 任务包编号: TP-2026-04-01-planner-stop-reasoning-preserve
+- session 标识: codex-20260401-planner-stop-reasoning-preserve
+- 目标摘要: 修复 planner adapter 在 `provider_finish_reason=stop` 时的停止语义，使其无论 `content` 是非 JSON 文本、非 dict JSON 还是空字符串，都会将 provider 返回的 `reasoning_content` 保留到 `PlannerDecision.reasoning_deltas` 中，并立即结束 planner；同时保持既有 tool_calls 与 JSON plan 解析路径不回归。
+- 修改文件:
+  - `docs/Architecture.md`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/app/infrastructure/research/real_http.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py -k "planner"`（红测，新增 3 个 stop reasoning 用例失败）；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py -k "planner"`（修复后转绿，9 passed）；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py`（49 passed）
+  - 未运行: `tests/integration`；本任务包只涉及 planner adapter 的 unit 级 stop 语义修复，未触及需要新增 integration 覆盖的跨阶段流程
+- 验收结论: accepted；`provider_finish_reason=stop` 时 planner 已不再依赖 `content` 的 JSON dict 可解析性来保留 reasoning，且既有 planner tool_call / JSON plan 解析测试保持通过。
+- blocker / 风险:
+  - 当前 stop 分支优先保留 provider `reasoning_content`；如果某些 provider 未来只在 `content` JSON 里返回 `reasoning_deltas` 且不再提供 `reasoning_content`，仍需单独评估是否要扩展 stop 分支兼容策略
+  - 本次未新增 integration 级 coverage；若后续 orchestrator 对 planner transcript 回灌策略再调整，需配套补跨轮集成验证
+- 下一步建议:
+  - 若近期继续处理 planner / collector transcript 问题，可补一条 integration 测试验证 stop round 的 reasoning 会进入下一轮 transcript
+  - 若发现其他 adapter 对 `provider_finish_reason` 仍有“靠 content 猜语义”的分支，可按同样方式单独收敛

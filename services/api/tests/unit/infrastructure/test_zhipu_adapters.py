@@ -70,6 +70,20 @@ class FakeZhipuClient:
         )
 
 
+class FakeCompletionClient:
+    def __init__(self, *, result: ZhipuCompletionResult) -> None:
+        self._result = result
+        self.calls: list[LLMInvocation] = []
+
+    async def complete(
+        self,
+        *,
+        invocation: LLMInvocation,
+    ) -> ZhipuCompletionResult:
+        self.calls.append(invocation)
+        return self._result
+
+
 class FakeStatusError(Exception):
     def __init__(self, *, status_code: int, body: dict[str, object]) -> None:
         super().__init__(f"status={status_code}")
@@ -1470,6 +1484,12 @@ def _build_planner_invocation(*, call_index: int = 1) -> PlannerInvocation:
     )
 
 
+def _build_planner_adapter_with_result(result: ZhipuCompletionResult) -> ZhipuPlannerAgent:
+    adapter = ZhipuPlannerAgent(client=FakeZhipuClient(), model="glm-test")
+    adapter._client = FakeCompletionClient(result=result)
+    return adapter
+
+
 @pytest.mark.asyncio
 async def test_planner_parses_tool_calls_response() -> None:
     raw_client = FakeZhipuClient(
@@ -1628,6 +1648,60 @@ async def test_planner_natural_language_text_returns_stop_true() -> None:
 
     assert decision.stop is True
     assert decision.plans == ()
+
+
+@pytest.mark.asyncio
+async def test_planner_preserves_reasoning_when_provider_stop_has_non_json_text() -> None:
+    adapter = _build_planner_adapter_with_result(
+        ZhipuCompletionResult(
+            text="已经完成了所有信息收集，无需继续。",
+            reasoning_text="信息已充分覆盖主要公开来源。",
+            provider_finish_reason="stop",
+        )
+    )
+
+    decision = await adapter.plan(_build_planner_invocation())
+
+    assert decision.stop is True
+    assert decision.plans == ()
+    assert decision.provider_finish_reason == "stop"
+    assert decision.reasoning_deltas == ("信息已充分覆盖主要公开来源。",)
+
+
+@pytest.mark.asyncio
+async def test_planner_preserves_reasoning_when_provider_stop_has_non_dict_json() -> None:
+    adapter = _build_planner_adapter_with_result(
+        ZhipuCompletionResult(
+            text=json.dumps(["无需继续"], ensure_ascii=False),
+            reasoning_text="现有计划已经足够，停止规划。",
+            provider_finish_reason="stop",
+        )
+    )
+
+    decision = await adapter.plan(_build_planner_invocation())
+
+    assert decision.stop is True
+    assert decision.plans == ()
+    assert decision.provider_finish_reason == "stop"
+    assert decision.reasoning_deltas == ("现有计划已经足够，停止规划。",)
+
+
+@pytest.mark.asyncio
+async def test_planner_preserves_reasoning_when_provider_stop_has_empty_content() -> None:
+    adapter = _build_planner_adapter_with_result(
+        ZhipuCompletionResult(
+            text="",
+            reasoning_text="没有更多需要补充的搜集任务。",
+            provider_finish_reason="stop",
+        )
+    )
+
+    decision = await adapter.plan(_build_planner_invocation())
+
+    assert decision.stop is True
+    assert decision.plans == ()
+    assert decision.provider_finish_reason == "stop"
+    assert decision.reasoning_deltas == ("没有更多需要补充的搜集任务。",)
 
 
 @pytest.mark.asyncio
