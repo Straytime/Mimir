@@ -4350,3 +4350,30 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## Collection Trace Tool Pair Merge
+
+- 日期: 2026-04-01
+- 分支: `codex/collection-trace-tool-pairs`
+- 任务包编号: 未提供
+- session 标识: codex-20260401-collection-trace-tool-pairs
+- 目标: 将 `Collection Trace` 中 search / fetch 的 started-completed 事件在前端渲染层折叠为单行 tool row，统一为低侵入样式；Search 显示 query，Fetch 显示 URL 导向对象，右侧仅显示当前状态，同时移除 search result count 与 fetch completed title 的旧 completed-only 文案
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，将 `Collection Trace` tool row 规则改为 render-time 成对折叠，明确统一行样式、时序保持与 completed-only 文案隐藏要求
+- 更新 `apps/web/tests/component/timeline-panel.spec.tsx`，先锁定 search/fetch 成对折叠、Started/Done 状态、旧 completed-only 文案隐藏、started-only 降级以及统一 row marker 的组件回归
+- 修改 `apps/web/features/research/components/timeline-panel.tsx`，新增本地 merge 逻辑，仅基于现有 `collect.entries` 顺序合并相邻 started/completed pair；Search 与 Fetch 共享同一 row treatment，并对没有匹配 started 的 completed 事件做安全降级显示
+
+### 验证
+- `cd apps/web && pnpm exec vitest run tests/component/timeline-panel.spec.tsx`
+- `cd apps/web && pnpm typecheck`
+- `cd apps/web && pnpm test:component`
+
+### 验收结论
+- accepted
+
+### 风险
+- 目前 render-time merge 只折叠相邻的 started/completed pair；如果后端未来输出非相邻配对事件，前端会安全降级为多行而不是跨事件重排
+- `pnpm test:component` 仍会输出既有 MSW 未匹配 artifact 请求告警，但本次任务相关测试均通过，且没有新增失败

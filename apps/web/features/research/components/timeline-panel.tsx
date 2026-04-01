@@ -6,7 +6,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CollectionCollectEntry,
   CollectionCollectGroup,
+  CollectionCollectCompletedEvent,
   CollectionPlanRoundNode,
+  CollectionReasoningBurst,
   CollectionSummaryNode,
   CollectionToolEvent,
   CollectionTraceRoot,
@@ -42,22 +44,6 @@ function getStatusClassName(status: "running" | "completed" | "failed") {
   return "bg-surface-container-high text-surface-tint";
 }
 
-function getToolEventLabel(kind: CollectionToolEvent["kind"]) {
-  if (kind === "search_started") {
-    return "Search Started";
-  }
-
-  if (kind === "search_completed") {
-    return "Search Completed";
-  }
-
-  if (kind === "fetch_started") {
-    return "Fetch Started";
-  }
-
-  return "Fetch Completed";
-}
-
 function getPreviewLine(detail: string | undefined) {
   if (!detail) {
     return "";
@@ -81,20 +67,107 @@ function hasExpandableContent(detail: string | undefined) {
   return preview.length > 0 && preview !== detail.trim();
 }
 
-function formatToolEventDetail(entry: CollectionToolEvent) {
-  if (!entry.detail) {
+type ToolRowKind = "search" | "fetch";
+type ToolRowStatus = "started" | "done";
+
+type MergedToolRowEntry = {
+  id: string;
+  kind: "tool_row";
+  occurredAt: string;
+  tool: ToolRowKind;
+  detail?: string;
+  status: ToolRowStatus;
+};
+
+type RenderableCollectEntry =
+  | CollectionReasoningBurst
+  | CollectionCollectCompletedEvent
+  | MergedToolRowEntry;
+
+function getToolRowLabel(tool: ToolRowKind) {
+  return tool === "search" ? "Search" : "Fetch";
+}
+
+function getToolRowStatusLabel(status: ToolRowStatus) {
+  return status === "done" ? "Done" : "Started";
+}
+
+function getToolKindFromEventKind(kind: CollectionToolEvent["kind"]): ToolRowKind {
+  return kind.startsWith("search") ? "search" : "fetch";
+}
+
+function isMatchingToolCompletion(
+  startedEvent: CollectionToolEvent,
+  nextEntry: CollectionCollectEntry | undefined,
+) {
+  if (nextEntry === undefined) {
+    return false;
+  }
+
+  return (
+    (startedEvent.kind === "search_started" && nextEntry.kind === "search_completed") ||
+    (startedEvent.kind === "fetch_started" && nextEntry.kind === "fetch_completed")
+  );
+}
+
+function mergeCollectEntries(entries: CollectionCollectEntry[]): RenderableCollectEntry[] {
+  const mergedEntries: RenderableCollectEntry[] = [];
+
+  for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+    const entry = entries[entryIndex];
+
+    if (entry.kind === "reasoning_burst" || entry.kind === "collect_completed") {
+      mergedEntries.push(entry);
+      continue;
+    }
+
+    if (entry.kind === "search_started" || entry.kind === "fetch_started") {
+      const nextEntry = entries[entryIndex + 1];
+      const hasMatchingCompletion = isMatchingToolCompletion(entry, nextEntry);
+
+      mergedEntries.push({
+        id: hasMatchingCompletion ? `${entry.id}:${nextEntry.id}` : entry.id,
+        kind: "tool_row",
+        occurredAt: entry.occurredAt,
+        tool: getToolKindFromEventKind(entry.kind),
+        detail: entry.detail ?? (hasMatchingCompletion ? nextEntry.detail : undefined),
+        status: hasMatchingCompletion ? "done" : "started",
+      });
+
+      if (hasMatchingCompletion) {
+        entryIndex += 1;
+      }
+
+      continue;
+    }
+
+    mergedEntries.push({
+      id: entry.id,
+      kind: "tool_row",
+      occurredAt: entry.occurredAt,
+      tool: getToolKindFromEventKind(entry.kind),
+      detail: entry.detail,
+      status: "done",
+    });
+  }
+
+  return mergedEntries;
+}
+
+function formatToolRowDetail(tool: ToolRowKind, detail: string | undefined) {
+  if (!detail) {
     return null;
   }
 
-  if (entry.kind !== "fetch_started" && entry.kind !== "fetch_completed") {
+  if (tool !== "fetch") {
     return {
-      text: entry.detail,
-      title: entry.detail,
+      text: detail,
+      title: detail,
     };
   }
 
   try {
-    const url = new URL(entry.detail);
+    const url = new URL(detail);
     const normalizedPath = `${url.pathname}${url.search}${url.hash}` || "/";
     const maxPathLength = 44;
     const truncatedPath =
@@ -104,16 +177,16 @@ function formatToolEventDetail(entry: CollectionToolEvent) {
 
     return {
       text: `${url.host}${truncatedPath}`,
-      title: entry.detail,
+      title: detail,
     };
   } catch {
     const fallbackLength = 64;
     return {
       text:
-        entry.detail.length > fallbackLength
-          ? `${entry.detail.slice(0, fallbackLength - 1)}…`
-          : entry.detail,
-      title: entry.detail,
+        detail.length > fallbackLength
+          ? `${detail.slice(0, fallbackLength - 1)}…`
+          : detail,
+      title: detail,
     };
   }
 }
@@ -197,50 +270,42 @@ function EntryRow({ label, toneClassName, children }: EntryRowProps) {
   );
 }
 
-function ToolEventRow({ entry }: { entry: CollectionToolEvent }) {
-  const detail = formatToolEventDetail(entry);
-  const toneClassName =
-    entry.kind === "search_started" || entry.kind === "search_completed"
-      ? "bg-surface-container-lowest"
-      : "bg-surface-container-low";
-  const statusLabel =
-    entry.kind === "search_started" || entry.kind === "fetch_started" ? "Started" : "Done";
+function ToolRow({ entry }: { entry: MergedToolRowEntry }) {
+  const detail = formatToolRowDetail(entry.tool, entry.detail);
 
   return (
     <div
-      className={`grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-center gap-3 px-3 py-2 ${toneClassName}`}
-      data-testid="collection-trace-tool-event-row"
+      className="collection-trace-tool-row collection-trace-tool-row--merged grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-center gap-3 bg-surface-container-low px-3 py-2"
+      data-testid="collection-trace-tool-row"
     >
       <p
         className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary"
         data-testid="collection-trace-entry-label"
       >
-        {getToolEventLabel(entry.kind)}
+        {getToolRowLabel(entry.tool)}
       </p>
       <p
         className="min-w-0 truncate text-sm font-ui leading-5 text-secondary"
-        data-testid="collection-trace-tool-event-detail"
+        data-testid="collection-trace-tool-row-object"
         title={detail?.title}
       >
         {detail?.text ?? ""}
       </p>
       <span className="text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-tertiary">
-        {statusLabel}
+        {getToolRowStatusLabel(entry.status)}
       </span>
     </div>
   );
 }
 
 function renderCollectEntry(args: {
-  entry: CollectionCollectEntry;
-  entryIndex: number;
+  entry: RenderableCollectEntry;
   reasoningIndex: number;
   collectTargetLabel: string;
   expandedBlocks: Record<string, boolean>;
   onToggle: (blockId: string) => void;
 }) {
-  const { entry, entryIndex, reasoningIndex, collectTargetLabel, expandedBlocks, onToggle } =
-    args;
+  const { entry, reasoningIndex, collectTargetLabel, expandedBlocks, onToggle } = args;
 
   if (entry.kind === "reasoning_burst") {
     return (
@@ -250,13 +315,13 @@ function renderCollectEntry(args: {
         toneClassName="bg-surface-container-low"
       >
         <div data-testid="collection-trace-reasoning-row">
-        <ExpandableText
-          blockId={entry.id}
-          detail={entry.detail}
-          expandedBlocks={expandedBlocks}
-          label={`Collect ${collectTargetLabel} reasoning ${reasoningIndex}`}
-          onToggle={onToggle}
-        />
+          <ExpandableText
+            blockId={entry.id}
+            detail={entry.detail}
+            expandedBlocks={expandedBlocks}
+            label={`Collect ${collectTargetLabel} reasoning ${reasoningIndex}`}
+            onToggle={onToggle}
+          />
         </div>
       </EntryRow>
     );
@@ -279,7 +344,7 @@ function renderCollectEntry(args: {
     );
   }
 
-  return <ToolEventRow entry={entry} key={`${entry.id}:${entryIndex}`} />;
+  return <ToolRow entry={entry} key={entry.id} />;
 }
 
 function CollectGroupCard(args: {
@@ -289,6 +354,10 @@ function CollectGroupCard(args: {
 }) {
   const { group, expandedBlocks, onToggle } = args;
   const collectTargetLabel = group.collectTarget ?? group.collect.label;
+  const mergedEntries = useMemo(
+    () => mergeCollectEntries(group.collect.entries),
+    [group.collect.entries],
+  );
   let reasoningIndex = 0;
 
   return (
@@ -310,14 +379,13 @@ function CollectGroupCard(args: {
           <StatusBadge status={group.collect.status} />
         </div>
         <div className="mt-4 space-y-2">
-          {group.collect.entries.map((entry, entryIndex) => {
+          {mergedEntries.map((entry) => {
             if (entry.kind === "reasoning_burst") {
               reasoningIndex += 1;
             }
 
             return renderCollectEntry({
               entry,
-              entryIndex,
               reasoningIndex,
               collectTargetLabel,
               expandedBlocks,
