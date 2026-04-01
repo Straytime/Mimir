@@ -306,7 +306,10 @@ UI 呈现规则：
 4. `collect` 内部的 `reasoning`、`search started`、`search completed`、`fetch started`、`fetch completed`、`collect completed` 必须严格按时间顺序穿插显示，不得重新排序或合并为单行摘要。
 5. `plan reasoning`、`collect reasoning` 与 `summary` 默认只显示单行预览，并提供独立展开控制；展开状态必须按块隔离，不能通过一个按钮同时展开整张卡片。
 6. `Sources Merged` 作为卡片末尾的一级终点节点直接完整显示，不进入折叠预览态。
-7. 视觉区分至少要让用户一眼看出三类信息：`reasoning` 是思考、`tool event` 是执行、`summary` 是阶段结论；可以沿用当前设计语言，但不得退化回无层级的纯文本列表。
+7. `search started`、`search completed`、`fetch started`、`fetch completed` 四类 tool event 必须保留为四条独立事件，但它们的视觉权重必须降级为紧凑日志行，不得继续使用与 reasoning 相同的大块卡片处理。
+8. 紧凑 tool-event 行必须遵守 `DESIGN.md` 的 `Lab Terminal` 风格：使用 tonal stacking 区分层级，不引入额外圆角漂移、阴影或 card-in-card 膨胀。
+9. `fetch` 类事件的主显示文本应优先展示 `hostname + 截断 path`；完整 URL 保留在可访问属性中，且内容容器必须使用 `min-w-0` 与单行截断策略，防止长 URL 向右溢出。
+10. 视觉区分至少要让用户一眼看出三类信息：`reasoning` 是思考、`tool event` 是执行、`summary` 是阶段结论；可以沿用当前设计语言，但不得退化回无层级的纯文本列表。
 
 高度约束：
 

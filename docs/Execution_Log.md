@@ -4244,3 +4244,22 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## CT-DENSITY Compact Collection Trace Tool Events
+
+- 日期: 2026-04-01
+- 分支: `codex/collection-trace-tool-event-density`
+- 目标: 将 `Collection Trace` 内 `search/fetch started/completed` 四类工具事件从大块嵌套卡片收敛为紧凑日志行，并消除长 fetch URL 的横向溢出风险
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，补充 `Collection Trace` 的 tool-event 密度规则，明确四类工具事件必须保留独立事件语义，但展示上降级为遵循 `DESIGN.md` 的 compact row；同时锁定 `fetch` 事件优先显示 `hostname + 截断 path`、完整 URL 保留在可访问属性中、内容区必须使用 `min-w-0` 与单行截断
+- 修改 `apps/web/features/research/components/timeline-panel.tsx`，新增 `ToolEventRow` 与 fetch URL 格式化逻辑，将 `search/fetch started/completed` 改为紧凑三段式日志行，保留 reasoning / summary / collect completed 的原有层级权重
+- 更新 `apps/web/tests/component/timeline-panel.spec.tsx`，补充 compact tool row 与长 URL 可访问/截断回归，并验证四类工具事件仍按原顺序独立显示
+
+### 验证
+- `cd apps/web && pnpm test:component -- timeline-panel.spec.tsx` - 102 passed
+
+### 验收结论
+- accepted

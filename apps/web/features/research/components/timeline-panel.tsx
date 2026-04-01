@@ -81,6 +81,43 @@ function hasExpandableContent(detail: string | undefined) {
   return preview.length > 0 && preview !== detail.trim();
 }
 
+function formatToolEventDetail(entry: CollectionToolEvent) {
+  if (!entry.detail) {
+    return null;
+  }
+
+  if (entry.kind !== "fetch_started" && entry.kind !== "fetch_completed") {
+    return {
+      text: entry.detail,
+      title: entry.detail,
+    };
+  }
+
+  try {
+    const url = new URL(entry.detail);
+    const normalizedPath = `${url.pathname}${url.search}${url.hash}` || "/";
+    const maxPathLength = 44;
+    const truncatedPath =
+      normalizedPath.length > maxPathLength
+        ? `${normalizedPath.slice(0, maxPathLength - 1)}…`
+        : normalizedPath;
+
+    return {
+      text: `${url.host}${truncatedPath}`,
+      title: entry.detail,
+    };
+  } catch {
+    const fallbackLength = 64;
+    return {
+      text:
+        entry.detail.length > fallbackLength
+          ? `${entry.detail.slice(0, fallbackLength - 1)}…`
+          : entry.detail,
+      title: entry.detail,
+    };
+  }
+}
+
 type StatusBadgeProps = {
   status: "running" | "completed" | "failed";
 };
@@ -160,6 +197,40 @@ function EntryRow({ label, toneClassName, children }: EntryRowProps) {
   );
 }
 
+function ToolEventRow({ entry }: { entry: CollectionToolEvent }) {
+  const detail = formatToolEventDetail(entry);
+  const toneClassName =
+    entry.kind === "search_started" || entry.kind === "search_completed"
+      ? "bg-surface-container-lowest"
+      : "bg-surface-container-low";
+  const statusLabel =
+    entry.kind === "search_started" || entry.kind === "fetch_started" ? "Started" : "Done";
+
+  return (
+    <div
+      className={`grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-center gap-3 px-3 py-2 ${toneClassName}`}
+      data-testid="collection-trace-tool-event-row"
+    >
+      <p
+        className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary"
+        data-testid="collection-trace-entry-label"
+      >
+        {getToolEventLabel(entry.kind)}
+      </p>
+      <p
+        className="min-w-0 truncate text-sm font-ui leading-5 text-secondary"
+        data-testid="collection-trace-tool-event-detail"
+        title={detail?.title}
+      >
+        {detail?.text ?? ""}
+      </p>
+      <span className="text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-tertiary">
+        {statusLabel}
+      </span>
+    </div>
+  );
+}
+
 function renderCollectEntry(args: {
   entry: CollectionCollectEntry;
   entryIndex: number;
@@ -178,6 +249,7 @@ function renderCollectEntry(args: {
         label={`Reasoning ${reasoningIndex}`}
         toneClassName="bg-surface-container-low"
       >
+        <div data-testid="collection-trace-reasoning-row">
         <ExpandableText
           blockId={entry.id}
           detail={entry.detail}
@@ -185,6 +257,7 @@ function renderCollectEntry(args: {
           label={`Collect ${collectTargetLabel} reasoning ${reasoningIndex}`}
           onToggle={onToggle}
         />
+        </div>
       </EntryRow>
     );
   }
@@ -206,17 +279,7 @@ function renderCollectEntry(args: {
     );
   }
 
-  return (
-    <EntryRow
-      key={`${entry.id}:${entryIndex}`}
-      label={getToolEventLabel(entry.kind)}
-      toneClassName="bg-surface-container-lowest"
-    >
-      {entry.detail ? (
-        <p className="text-sm font-ui leading-6 text-secondary">{entry.detail}</p>
-      ) : null}
-    </EntryRow>
-  );
+  return <ToolEventRow entry={entry} key={`${entry.id}:${entryIndex}`} />;
 }
 
 function CollectGroupCard(args: {
@@ -246,7 +309,7 @@ function CollectGroupCard(args: {
           </div>
           <StatusBadge status={group.collect.status} />
         </div>
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-2">
           {group.collect.entries.map((entry, entryIndex) => {
             if (entry.kind === "reasoning_burst") {
               reasoningIndex += 1;
