@@ -12,7 +12,13 @@ import { TaskArtifactImage } from "./task-artifact-image";
 
 const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
 
-export function ArtifactGallery() {
+type ArtifactGalleryProps = {
+  embedded?: boolean;
+};
+
+export function ArtifactGallery({
+  embedded = false,
+}: ArtifactGalleryProps = {}) {
   const streamArtifacts = useResearchSessionStore((state) => state.stream.artifacts);
   const delivery = useResearchSessionStore((state) => state.remote.delivery);
   const deliveryArtifacts = delivery?.artifacts ?? EMPTY_ARTIFACTS;
@@ -27,11 +33,8 @@ export function ArtifactGallery() {
     ? artifacts.find((a) => a.artifact_id === selectedArtifactId) ?? null
     : null;
 
-  return (
-    <section
-      aria-label="图库"
-      className="bg-surface-container-low p-6"
-    >
+  const galleryContent = (
+    <>
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
@@ -75,6 +78,23 @@ export function ArtifactGallery() {
           ))}
         </div>
       )}
+    </>
+  );
+
+  return (
+    <>
+      {embedded ? (
+        <div className="mt-6 border-t border-outline-variant pt-6">
+          {galleryContent}
+        </div>
+      ) : (
+        <section
+          aria-label="图库"
+          className="bg-surface-container-low p-6"
+        >
+          {galleryContent}
+        </section>
+      )}
 
       {selectedArtifact !== null ? (
         <ArtifactLightbox
@@ -82,6 +102,6 @@ export function ArtifactGallery() {
           onClose={() => setSelectedArtifactId(null)}
         />
       ) : null}
-    </section>
+    </>
   );
 }

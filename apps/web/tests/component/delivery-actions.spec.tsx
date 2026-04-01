@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { expect, test, vi } from "vitest";
@@ -10,6 +10,7 @@ import type {
   TaskDetailResult,
 } from "@/lib/api/task-api-client";
 import {
+  makeArtifactSummary,
   makeDeliverySummary,
   makeResearchSessionState,
   makeRevisionSummary,
@@ -94,6 +95,88 @@ test("does not render delivery word count in the action panel", () => {
 
   expect(screen.queryByText("6800 字")).not.toBeInTheDocument();
   expect(screen.getByText("03 张配图")).toBeInTheDocument();
+});
+
+test("renders the embedded artifact gallery empty state inside DeliveryActions", () => {
+  const store = createDeliveryStore();
+
+  store.setState((state) => ({
+    ...state,
+    remote: {
+      ...state.remote,
+      delivery: makeDeliverySummary({
+        ...state.remote.delivery!,
+        artifact_count: 0,
+        artifacts: [],
+      }),
+    },
+    stream: {
+      ...state.stream,
+      artifacts: [],
+    },
+  }));
+
+  renderWithStore(<DeliveryActions />, { store });
+
+  const deliveryPanel = screen.getByRole("region", { name: "交付操作" });
+
+  expect(within(deliveryPanel).getByText("配图制品")).toBeInTheDocument();
+  expect(
+    within(deliveryPanel).getByText("配图生成后会在这里显示缩略图与当前可用链接。"),
+  ).toBeInTheDocument();
+});
+
+test("renders embedded artifact thumbnails and keeps the lightbox flow inside DeliveryActions", async () => {
+  const user = userEvent.setup();
+  const artifact = makeArtifactSummary({
+    artifact_id: "art_stage0_chart",
+    filename: "chart_market_share.png",
+    url: "/api/v1/tasks/tsk_stage0/artifacts/art_stage0_chart?access_token=fresh",
+  });
+  const store = createDeliveryStore();
+
+  store.setState((state) => ({
+    ...state,
+    remote: {
+      ...state.remote,
+      delivery: makeDeliverySummary({
+        ...state.remote.delivery!,
+        artifact_count: 1,
+        artifacts: [artifact],
+      }),
+    },
+    stream: {
+      ...state.stream,
+      artifacts: [artifact],
+    },
+  }));
+
+  mswServer.use(
+    http.get("*/api/v1/tasks/tsk_stage0/artifacts/art_stage0_chart", () => {
+      return new HttpResponse(new Uint8Array([137, 80, 78, 71]), {
+        status: 200,
+        headers: {
+          "Content-Type": "image/png",
+        },
+      });
+    }),
+  );
+
+  renderWithStore(<DeliveryActions />, { store });
+
+  const deliveryPanel = screen.getByRole("region", { name: "交付操作" });
+  expect(within(deliveryPanel).getByText("chart_market_share.png")).toBeInTheDocument();
+
+  const card = within(deliveryPanel)
+    .getByText("chart_market_share.png")
+    .closest("article");
+
+  expect(card).not.toBeNull();
+
+  await user.click(card!);
+
+  expect(screen.getByRole("button", { name: "下载" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "关闭" })).toBeInTheDocument();
 });
 
 test("disables download buttons while waiting for the next revision after feedback submission", () => {

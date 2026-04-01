@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { ArtifactGallery } from "./artifact-gallery";
 import { useDeliveryRefresh } from "../hooks/use-delivery-refresh";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import {
@@ -240,6 +241,8 @@ export function DeliveryActions() {
       {deliveryError ? (
         <p className="mt-4 text-sm leading-6 text-[#FF6B6B]">{deliveryError}</p>
       ) : null}
+
+      <ArtifactGallery embedded />
     </section>
   );
 }

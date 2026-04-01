@@ -3,7 +3,6 @@
 import { useMemo, useRef } from "react";
 
 import { ClarificationDetailPanel } from "./clarification-panels";
-import { ArtifactGallery } from "./artifact-gallery";
 import { DeliveryActions } from "./delivery-actions";
 import { OutlineCard } from "./outline-card";
 import { RequirementSummaryCard } from "./requirement-summary-card";
@@ -59,15 +58,23 @@ export function ResearchWorkspaceShell() {
   const requirementDetail = useResearchSessionStore(
     (state) => state.remote.currentRevision?.requirement_detail ?? null,
   );
+  const clarificationText = useResearchSessionStore(
+    (state) => state.stream.clarificationText,
+  );
+  const questionSet = useResearchSessionStore((state) => state.stream.questionSet);
   const outline = useResearchSessionStore((state) => state.stream.outline);
   const outlineReady = useResearchSessionStore(
     (state) => state.stream.outlineReady,
+  );
+  const reportMarkdown = useResearchSessionStore(
+    (state) => state.stream.reportMarkdown,
   );
   const clarificationRef = useRef<HTMLDivElement | null>(null);
   const requirementSummaryRef = useRef<HTMLDivElement | null>(null);
   const collectionTraceRef = useRef<HTMLDivElement | null>(null);
   const outlineRef = useRef<HTMLDivElement | null>(null);
   const reportRef = useRef<HTMLDivElement | null>(null);
+  const deliveryRef = useRef<HTMLDivElement | null>(null);
   if (snapshot === null) {
     return null;
   }
@@ -85,10 +92,7 @@ export function ResearchWorkspaceShell() {
     outlineReady &&
     outline !== null;
   const shouldShowReport = isPhaseAtOrAfter(snapshot.phase, "writing_report");
-  const shouldShowArtifactGallery = isPhaseAtOrAfter(
-    snapshot.phase,
-    "writing_report",
-  );
+  const shouldShowDelivery = snapshot.phase === "delivered";
   const activeCardAnchor = useMemo<WorkspaceCardAnchor | null>(() => {
     if (snapshot.phase === "clarifying") {
       return "clarification";
@@ -129,7 +133,55 @@ export function ResearchWorkspaceShell() {
     [],
   );
 
-  useWorkspaceCardAnchor(activeCardAnchor, cardAnchorRefs);
+  const anchorSignal = useMemo(() => {
+    if (activeCardAnchor === null) {
+      return null;
+    }
+
+    switch (activeCardAnchor) {
+      case "clarification":
+        return [
+          snapshot.phase,
+          clarificationText.trim().length > 0 ? "text-ready" : "text-pending",
+          questionSet?.questions.length ?? 0,
+        ].join(":");
+      case "requirementSummary":
+        return [
+          snapshot.phase,
+          requirementDetail === null ? "pending" : "ready",
+        ].join(":");
+      case "collectionTrace":
+        return [
+          snapshot.phase,
+          collectionTrace.nodes.length > 0 ? "trace-ready" : "trace-pending",
+        ].join(":");
+      case "outline":
+        return [
+          snapshot.phase,
+          outlineReady ? "outline-ready" : "outline-pending",
+          outline?.sections.length ?? 0,
+        ].join(":");
+      case "report":
+        return [
+          snapshot.phase,
+          reportMarkdown.trim().length > 0 ? "report-ready" : "report-pending",
+          shouldShowDelivery ? "delivery-visible" : "delivery-hidden",
+        ].join(":");
+    }
+  }, [
+    activeCardAnchor,
+    clarificationText,
+    collectionTrace.nodes.length,
+    outline,
+    outlineReady,
+    questionSet,
+    reportMarkdown,
+    requirementDetail,
+    shouldShowDelivery,
+    snapshot.phase,
+  ]);
+
+  useWorkspaceCardAnchor(activeCardAnchor, cardAnchorRefs, anchorSignal);
 
   return (
     <section className="space-y-sp-10 pb-32">
@@ -180,14 +232,15 @@ export function ResearchWorkspaceShell() {
             <ReportCanvas />
           </div>
         ) : null}
-        {shouldShowArtifactGallery ? (
-          <div className="animate-fade-in-up stagger-5">
-            <ArtifactGallery />
+        {shouldShowDelivery ? (
+          <div
+            className="animate-fade-in-up stagger-5"
+            data-research-card-anchor="delivery"
+            ref={deliveryRef}
+          >
+            <DeliveryActions />
           </div>
         ) : null}
-        <div className="animate-fade-in-up stagger-6">
-          <DeliveryActions />
-        </div>
       </div>
     </section>
   );

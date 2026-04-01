@@ -35,11 +35,22 @@ function scrollCardIntoAnchorBand(target: HTMLElement) {
 export function useWorkspaceCardAnchor<TAnchorKey extends string>(
   activeAnchor: TAnchorKey | null,
   anchorRefs: AnchorRefs<TAnchorKey>,
+  anchorSignal: string | null,
 ) {
-  const previousAnchorRef = useRef<TAnchorKey | null>(null);
+  const previousAnchorRef = useRef<{
+    anchor: TAnchorKey | null;
+    signal: string | null;
+  }>({
+    anchor: null,
+    signal: null,
+  });
 
   useLayoutEffect(() => {
-    if (activeAnchor === null || previousAnchorRef.current === activeAnchor) {
+    if (
+      activeAnchor === null ||
+      (previousAnchorRef.current.anchor === activeAnchor &&
+        previousAnchorRef.current.signal === anchorSignal)
+    ) {
       return;
     }
 
@@ -50,6 +61,9 @@ export function useWorkspaceCardAnchor<TAnchorKey extends string>(
     }
 
     scrollCardIntoAnchorBand(target);
-    previousAnchorRef.current = activeAnchor;
-  }, [activeAnchor, anchorRefs]);
+    previousAnchorRef.current = {
+      anchor: activeAnchor,
+      signal: anchorSignal,
+    };
+  }, [activeAnchor, anchorRefs, anchorSignal]);
 }

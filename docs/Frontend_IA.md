@@ -209,8 +209,6 @@ apps/web/
    - 交付后只显示图片数量，不显示 revision 编号或报告轮次标题
 2. `ReportBody`
    - 流式 markdown 内容
-3. `ArtifactGallery`
-   - 展示已生成图片缩略图与标题
 
 渲染约束：
 
@@ -318,6 +316,8 @@ UI 呈现规则：
 5. 内容卡片进入当前关注阶段或首次出现时，页面级自动定位必须使用工作台级共享 card anchor 定义，而不是各卡片自行调用页面滚动。
 6. 共享 card anchor 的目标位置是“卡片容器顶端对齐到顶栏下方统一留白”，其 offset 必须基于真实顶栏位置计算。
 7. `Collection Trace` 与 `Report Canvas` 的内容刷新只允许滚动卡片内部容器，不得驱动页面级滚动。
+8. 共享 card anchor 不能只依赖 anchor key 变化；同一张卡片在当前阶段内从“未就绪”变为“内容首次就绪”时，也必须触发页面定位。
+9. 若同一轮状态更新中有多张内容卡片同时变为可见或可锚定，页面必须按既定卡片顺序选择更靠前的卡片作为锚点，例如 `Report Canvas` 与 `DeliveryActions` 同时出现时优先锚到 `Report Canvas`。
 
 ### 5.6 `DeliveryActions`
 
@@ -325,6 +325,7 @@ UI 呈现规则：
 
 - 提供 `markdown zip` 和 `pdf` 下载
 - 展示 access token 过期后的刷新反馈
+- 内嵌展示已生成图片缩略图与标题
 - 不展示报告字数
 
 显示时机：
@@ -340,6 +341,7 @@ UI 呈现规则：
 5. `markdown zip` 与 `pdf` 使用独立 loading state，避免重复点击与互相阻塞。
 6. 当 `refreshingDelivery === true` 时，下载按钮与图片重试按钮统一禁用。
 7. `delivered` 后不在 `DeliveryActions` 渲染“开始新研究”入口；新研究入口统一由 `SessionStatusBar` 顶栏按钮承接。
+8. `Artifact Gallery` 不再作为独立工作台卡片出现；所有配图缩略图、空态文案与 lightbox 入口统一并入 `DeliveryActions` 卡片内部。
 
 ### 5.7 `FeedbackComposer`
 
