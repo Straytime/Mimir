@@ -53,6 +53,7 @@ from app.infrastructure.db.models import (
     CollectedSourceRecord,
     LLMCallTraceRecord,
     ResearchTaskRecord,
+    TaskEventRecord,
     TaskRevisionRecord,
     TaskToolCallRecord,
 )
@@ -440,6 +441,16 @@ async def _close_stream(stream_context, response) -> None:
     await response.aclose()
 
 
+async def _wait_until(predicate, *, timeout_seconds: float = 2.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+    while True:
+        if predicate():
+            return
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError("condition not met before timeout")
+        await asyncio.sleep(0.01)
+
+
 @pytest.mark.asyncio
 async def test_full_collect_loop_runs_with_three_parallel_subtasks_and_barrier_merge(
     make_stage5_client,
@@ -791,8 +802,8 @@ async def test_collection_persists_provider_finish_reason_and_usage_for_agent_ru
     )
 
     async with client:
-        create_body, (stream_context, response, lines) = await _start_collection_flow(client)
-        await read_until_event(lines, {"sources.merged"})
+        create_body, (stream_context, response, _lines) = await _start_collection_flow(client)
+        await _wait_until(lambda: len(summarizer.invocations) == 1)
         await _close_stream(stream_context, response)
 
     agent_runs = list(
@@ -911,8 +922,8 @@ async def test_collection_persists_unified_llm_traces_for_planner_collector_and_
     )
 
     async with client:
-        create_body, (stream_context, response, lines) = await _start_collection_flow(client)
-        await read_until_event(lines, {"sources.merged"})
+        create_body, (stream_context, response, _lines) = await _start_collection_flow(client)
+        await _wait_until(lambda: len(summarizer.invocations) == 1)
         await _close_stream(stream_context, response)
 
     traces = list(
@@ -1545,7 +1556,7 @@ async def test_collect_agent_limit_exceeded_triggers_merge_not_fail(
 
 
 @pytest.mark.asyncio
-async def test_sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result(
+async def test_sub_agent_tool_call_limit_allows_finalize_round_after_tenth_tool(
     make_stage5_client,
     db_session: Session,
 ) -> None:
@@ -1585,17 +1596,21 @@ async def test_sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result(
                         url=f"https://example.com/{index}",
                         reasoning=f"读取来源 {index}。",
                     )
-                    for index in range(1, 20)
+                    for index in range(1, 10)
                 ),
                 _collector_stop_round(
-                    reasoning="达到上限后结束。",
-                    items=tuple(
+                    reasoning="已看到第十次工具结果，整理最终条目后结束。",
+                    items=(
                         CollectedSourceItem(
-                            title=f"来源 {index}",
-                            link=f"https://example.com/{index}",
-                            info=f"内容 {index}",
-                        )
-                        for index in range(1, 20)
+                            title="最终来源 A",
+                            link="https://example.com/final-a",
+                            info="最终整理信息 A",
+                        ),
+                        CollectedSourceItem(
+                            title="最终来源 B",
+                            link="https://example.com/final-b",
+                            info="最终整理信息 B",
+                        ),
                     ),
                 ),
             ),
@@ -1611,10 +1626,9 @@ async def test_sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result(
                         link=f"https://example.com/{index}",
                         snippet=f"snippet {index}",
                     )
-                    for index in range(1, 21)
+                    for index in range(1, 11)
                 ),
             },
-            fail_once_queries={"q_dense"},
         )
     )
     fetch = ScriptedWebFetchClient(
@@ -1625,7 +1639,7 @@ async def test_sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result(
                 title=f"来源 {index}",
                 content=f"内容 {index}",
             )
-            for index in range(1, 21)
+            for index in range(1, 10)
         }
     )
     client = await make_stage5_client(
@@ -1636,15 +1650,19 @@ async def test_sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result(
         web_fetch_client=fetch,
     )
     async with client:
-        create_body, (stream_context, response, lines) = await _start_collection_flow(client)
-        _, collector_completed_name, collector_completed_payload = await read_until_event(
-            lines,
-            {"collector.completed"},
-        )
-        _, merged_name, _ = await read_until_event(lines, {"sources.merged"})
+        create_body, (stream_context, response, _lines) = await _start_collection_flow(client)
+        await _wait_until(lambda: len(summarizer.invocations) == 1)
         await _close_stream(stream_context, response)
 
     db_session.expire_all()
+    collector_completed_event = db_session.scalar(
+        select(TaskEventRecord)
+        .where(
+            TaskEventRecord.task_id == create_body["task_id"],
+            TaskEventRecord.event == "collector.completed",
+        )
+        .order_by(TaskEventRecord.seq.desc())
+    )
     tool_calls = list(
         db_session.scalars(
             select(TaskToolCallRecord)
@@ -1652,11 +1670,193 @@ async def test_sub_agent_tool_call_limit_caps_at_ten_and_marks_partial_result(
             .order_by(TaskToolCallRecord.id.asc())
         )
     )
+    collected_sources = list(
+        db_session.scalars(
+        select(CollectedSourceRecord)
+            .where(CollectedSourceRecord.task_id == create_body["task_id"])
+            .where(CollectedSourceRecord.is_merged.is_(False))
+            .order_by(CollectedSourceRecord.id.asc())
+        )
+    )
+    merged_event = db_session.scalar(
+        select(TaskEventRecord)
+        .where(
+            TaskEventRecord.task_id == create_body["task_id"],
+            TaskEventRecord.event == "sources.merged",
+        )
+        .order_by(TaskEventRecord.seq.desc())
+    )
 
-    assert collector_completed_name == "collector.completed"
-    assert collector_completed_payload["payload"]["status"] == "partial"
+    assert collector_completed_event is not None
+    assert merged_event is not None
+    assert collector_completed_event.payload_json["status"] == "completed"
     assert len(tool_calls) == 10
-    assert merged_name == "sources.merged"
+    assert len(collector.invocations_by_tool_call["call_1"]) == 11
+    assert summarizer.invocations[0].item_payloads == (
+        {
+            "title": "最终来源 A",
+            "link": "https://example.com/final-a",
+            "info": "最终整理信息 A",
+        },
+        {
+            "title": "最终来源 B",
+            "link": "https://example.com/final-b",
+            "info": "最终整理信息 B",
+        },
+    )
+    assert [(source.title, source.link, source.info) for source in collected_sources] == [
+        ("最终来源 A", "https://example.com/final-a", "最终整理信息 A"),
+        ("最终来源 B", "https://example.com/final-b", "最终整理信息 B"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sub_agent_tool_call_limit_blocks_eleventh_tool_and_finalizes_with_limit_message(
+    make_stage5_client,
+    db_session: Session,
+) -> None:
+    planner = ScriptedPlannerAgent(
+        rounds=[
+            PlannerDecision(
+                reasoning_deltas=("开始搜集。",),
+                plans=(
+                    CollectPlan(
+                        tool_call_id="call_1",
+                        revision_id="rev_placeholder",
+                        collect_target="工具上限 finalize 测试",
+                        additional_info="第十次后先阻断第十一次，再让 collector 停止",
+                        freshness_requirement=FreshnessRequirement.HIGH,
+                    ),
+                ),
+                stop=False,
+            ),
+            PlannerDecision(
+                reasoning_deltas=("进入 merge。",),
+                plans=(),
+                stop=True,
+            ),
+        ]
+    )
+    collector = ScriptedCollectorAgent(
+        rounds_by_tool_call={
+            "call_1": (
+                _collector_search_round(
+                    tool_call_id="call_search_dense",
+                    query="q_dense",
+                    reasoning="先做密集搜索。",
+                ),
+                *tuple(
+                    _collector_fetch_round(
+                        tool_call_id=f"call_fetch_dense_{index}",
+                        url=f"https://example.com/{index}",
+                        reasoning=f"读取来源 {index}。",
+                    )
+                    for index in range(1, 10)
+                ),
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_blocked_10",
+                    url="https://example.com/blocked",
+                    reasoning="继续请求第十一次工具调用。",
+                ),
+                _collector_stop_round(
+                    reasoning="收到上限提示后结束。",
+                    items=(
+                        CollectedSourceItem(
+                            title="封顶后的最终来源",
+                            link="https://example.com/final-limit",
+                            info="collector 最终整理后的信息",
+                        ),
+                    ),
+                ),
+            ),
+        }
+    )
+    summarizer = ScriptedSummaryAgent()
+    search = ScriptedWebSearchClient(
+        SearchScenario(
+            results_by_query={
+                "q_dense": tuple(
+                    SearchHit(
+                        title=f"来源 {index}",
+                        link=f"https://example.com/{index}",
+                        snippet=f"snippet {index}",
+                    )
+                    for index in range(1, 11)
+                ),
+            }
+        )
+    )
+    fetch = ScriptedWebFetchClient(
+        content_by_url={
+            f"https://example.com/{index}": FetchResponse(
+                url=f"https://example.com/{index}",
+                success=True,
+                title=f"来源 {index}",
+                content=f"内容 {index}",
+            )
+            for index in range(1, 10)
+        }
+    )
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=collector,
+        summary_agent=summarizer,
+        web_search_client=search,
+        web_fetch_client=fetch,
+    )
+
+    async with client:
+        create_body, (stream_context, response, _lines) = await _start_collection_flow(client)
+        await _wait_until(lambda: len(summarizer.invocations) == 1)
+        await _close_stream(stream_context, response)
+
+    db_session.expire_all()
+    collector_completed_event = db_session.scalar(
+        select(TaskEventRecord)
+        .where(
+            TaskEventRecord.task_id == create_body["task_id"],
+            TaskEventRecord.event == "collector.completed",
+        )
+        .order_by(TaskEventRecord.seq.desc())
+    )
+    tool_calls = list(
+        db_session.scalars(
+            select(TaskToolCallRecord)
+            .where(TaskToolCallRecord.task_id == create_body["task_id"])
+            .order_by(TaskToolCallRecord.id.asc())
+        )
+    )
+    merged_event = db_session.scalar(
+        select(TaskEventRecord)
+        .where(
+            TaskEventRecord.task_id == create_body["task_id"],
+            TaskEventRecord.event == "sources.merged",
+        )
+        .order_by(TaskEventRecord.seq.desc())
+    )
+
+    assert collector_completed_event is not None
+    assert merged_event is not None
+    assert collector_completed_event.payload_json["status"] == "partial"
+    assert len(tool_calls) == 10
+    assert {call.tool_call_id for call in tool_calls} == {
+        "call_search_dense",
+        *{f"call_fetch_dense_{index}" for index in range(1, 10)},
+    }
+    assert len(collector.invocations_by_tool_call["call_1"]) == 12
+    assert any(
+        message.role == "tool"
+        and message.tool_call_id == "call_fetch_blocked_10"
+        and '"error_code": "tool_call_limit_exceeded"' in message.content
+        for message in collector.invocations_by_tool_call["call_1"][-1].transcript
+    )
+    assert summarizer.invocations[0].item_payloads == (
+        {
+            "title": "封顶后的最终来源",
+            "link": "https://example.com/final-limit",
+            "info": "collector 最终整理后的信息",
+        },
+    )
 
 
 @pytest.mark.asyncio

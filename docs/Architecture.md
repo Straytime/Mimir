@@ -640,6 +640,9 @@ sub agent 结束后产生的原始搜集结果。
 
 - `status`: `completed | partial | risk_blocked`
 - `tool_call_count`: sub agent 内部工具调用次数，最大 10
+- collector sub agent 最多实际执行 `10` 次外部工具调用；第 `10` 次 tool result 必须先回放进 transcript，再给 collector 一次额外 finalize 轮，用于决定停止并输出最终 `items`。
+- 当 collector 在达到上限后仍继续请求工具时，只阻断第 `11` 次及之后的工具执行；`task_tool_calls` 持久化记录必须保持封顶在 `10`。
+- summary 阶段的输入始终来源于最终 `CollectResult.items`；因此上限 finalize 路径下应优先使用 collector 在最后 stop 轮返回的 `items`，而不是仅依赖 orchestrator 累积的中间抓取片段。
 
 ## 7.8 CollectSummary
 

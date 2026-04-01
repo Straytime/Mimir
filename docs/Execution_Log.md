@@ -4377,3 +4377,27 @@ Copy the template below for each completed session:
 ### 风险
 - 目前 render-time merge 只折叠相邻的 started/completed pair；如果后端未来输出非相邻配对事件，前端会安全降级为多行而不是跨事件重排
 - `pnpm test:component` 仍会输出既有 MSW 未匹配 artifact 请求告警，但本次任务相关测试均通过，且没有新增失败
+
+---
+
+## Collector Limit Finalize Turn
+
+- 日期时间: 2026-04-01 18:50:10 CST (+0800)
+- 任务包编号: 未提供
+- session 标识: codex-20260401-collector-limit-finalize-turn
+- 目标摘要: 修复 collector subtask 的工具调用上限收口语义，使第 10 次工具调用完成后不再立刻硬停，而是先把第 10 次 tool result 回放进 transcript，允许 collector 再获得一次 finalize 机会；当 collector 继续请求第 11 次工具调用时，仅阻断未执行的调用，并让 summary 输入优先基于最终 `CollectResult.items`。
+- 修改文件:
+  - `docs/Architecture.md`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/integration/collection/test_collection_engine.py -k "tool_call_limit"`；`cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_collection_prompts.py tests/integration/collection/test_collection_engine.py -k "tool_call_limit or collector"`
+  - 未运行: 其余 backend 单元、契约、集成测试；本任务按任务包只覆盖 collector limit 与相关 collector 集成路径
+- 验收结论: accepted；已满足“最多执行 10 次工具调用、阻断第 11 次执行、保留 post-limit finalize 轮、summary 输入使用最终 `CollectResult.items`”的任务包验收条件。
+- blocker / 风险:
+  - 当前超限后的最终一次 stop 依赖 collector 在收到 `tool_call_limit_exceeded` tool message 后收口；若未来 provider 行为持续忽略该提示，orchestrator 仍会按 partial 结果强制收口
+  - 为消除现有 Stage 5 测试中的 SSE 时序抖动，本次相关测试改为基于 fake agent invocation 与 DB event 轮询判断完成；该变更不扩大业务行为范围，但后续若要专门验证 SSE 时序，仍建议单独补更稳健的流式测试工具
+- 下一步建议:
+  - 若后续还有 collector loop 调整，优先补一个更通用的 Stage 5 “等待 collection barrier 完成”测试辅助，减少各测试重复处理 SSE 时序
+  - 如需继续收紧 limit 语义，可再评估是否要为“收到 limit notice 后仍继续请求工具”的 forced-partial 路径补独立 observability 事件
