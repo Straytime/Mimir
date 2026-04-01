@@ -112,6 +112,19 @@ test("renders stage-gated workspace cards once their content is ready", () => {
 test("computes the shared long-card max height from the viewport content band", () => {
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
   const originalInnerHeight = window.innerHeight;
+  const topStackRect = {
+    x: 0,
+    y: 220,
+    top: 220,
+    left: 0,
+    right: 800,
+    bottom: 396,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
 
   Object.defineProperty(window, "innerHeight", {
     configurable: true,
@@ -122,6 +135,10 @@ test("computes the shared long-card max height from the viewport content band", 
     configurable: true,
     writable: true,
     value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
       if (this.getAttribute("data-research-status-bar") === "true") {
         return {
           x: 0,
@@ -186,7 +203,7 @@ test("computes the shared long-card max height from the viewport content band", 
     render(<ResearchPageClient store={store} />);
 
     const expectedMaxHeight =
-      window.innerHeight - 104 - 128 - RESEARCH_CARD_ANCHOR_GAP_PX * 2;
+      window.innerHeight - 176 - 128 - RESEARCH_CARD_ANCHOR_GAP_PX * 2;
     const main = screen.getByRole("main");
 
     expect(main.style.getPropertyValue("--research-card-max-h")).toBe(
@@ -367,6 +384,19 @@ test("reanchors the clarification title when natural clarification content becom
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
   const originalScrollTo = window.scrollTo;
   const scrollToSpy = vi.fn();
+  const topStackRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 176,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
   const statusBarRect = {
     x: 0,
     y: 0,
@@ -416,6 +446,10 @@ test("reanchors the clarification title when natural clarification content becom
     configurable: true,
     writable: true,
     value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
       if (this.getAttribute("data-research-status-bar") === "true") {
         return statusBarRect;
       }
@@ -469,7 +503,7 @@ test("reanchors the clarification title when natural clarification content becom
 
     expect(scrollToSpy).toHaveBeenCalledWith({
       behavior: "smooth",
-      top: 284,
+      top: 212,
     });
   } finally {
     Object.defineProperty(window, "scrollTo", {
@@ -489,6 +523,19 @@ test("reanchors the clarification title when options clarification questions bec
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
   const originalScrollTo = window.scrollTo;
   const scrollToSpy = vi.fn();
+  const topStackRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 176,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
   const statusBarRect = {
     x: 0,
     y: 0,
@@ -538,6 +585,10 @@ test("reanchors the clarification title when options clarification questions bec
     configurable: true,
     writable: true,
     value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
       if (this.getAttribute("data-research-status-bar") === "true") {
         return statusBarRect;
       }
@@ -604,7 +655,7 @@ test("reanchors the clarification title when options clarification questions bec
 
     expect(scrollToSpy).toHaveBeenCalledWith({
       behavior: "smooth",
-      top: 284,
+      top: 212,
     });
   } finally {
     Object.defineProperty(window, "scrollTo", {
@@ -624,6 +675,19 @@ test("reanchors the requirement summary content when requirement detail becomes 
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
   const originalScrollTo = window.scrollTo;
   const scrollToSpy = vi.fn();
+  const topStackRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 176,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
   const statusBarRect = {
     x: 0,
     y: 0,
@@ -673,6 +737,10 @@ test("reanchors the requirement summary content when requirement detail becomes 
     configurable: true,
     writable: true,
     value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
       if (this.getAttribute("data-research-status-bar") === "true") {
         return statusBarRect;
       }
@@ -737,7 +805,7 @@ test("reanchors the requirement summary content when requirement detail becomes 
 
     expect(scrollToSpy).toHaveBeenCalledWith({
       behavior: "smooth",
-      top: 456,
+      top: 384,
     });
   } finally {
     Object.defineProperty(window, "scrollTo", {

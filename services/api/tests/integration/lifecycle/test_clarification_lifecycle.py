@@ -402,7 +402,7 @@ async def test_options_clarification_can_execute_one_web_search_then_emit_ready_
         "label": "自动",
     }
     assert countdown_name == "clarification.countdown.started"
-    assert countdown_payload["payload"]["duration_seconds"] == 15
+    assert countdown_payload["payload"]["duration_seconds"] == 30
     assert web_search_client.calls == [
         {"query": "Agentic AI", "recency_filter": "noLimit"}
     ]
@@ -616,7 +616,7 @@ async def test_options_clarification_flow_emits_ready_and_countdown(
         "label": "自动",
     }
     assert countdown_name == "clarification.countdown.started"
-    assert countdown_payload["payload"]["duration_seconds"] == 15
+    assert countdown_payload["payload"]["duration_seconds"] == 30
     assert countdown_payload["payload"]["started_at"]
 
 

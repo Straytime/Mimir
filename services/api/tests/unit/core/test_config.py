@@ -42,6 +42,26 @@ def test_settings_from_env_uses_default_writer_max_rounds(monkeypatch) -> None:
     assert settings.writer_max_rounds == 5
 
 
+def test_settings_from_env_uses_default_clarification_countdown_seconds(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("MIMIR_CLARIFICATION_COUNTDOWN_SECONDS", raising=False)
+
+    settings = Settings.from_env()
+
+    assert settings.clarification_countdown_seconds == 30
+
+
+def test_settings_from_env_reads_clarification_countdown_seconds(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("MIMIR_CLARIFICATION_COUNTDOWN_SECONDS", "45")
+
+    settings = Settings.from_env()
+
+    assert settings.clarification_countdown_seconds == 45
+
+
 def test_settings_from_env_reads_writer_max_rounds(monkeypatch) -> None:
     monkeypatch.setenv("MIMIR_WRITER_MAX_ROUNDS", "7")
 

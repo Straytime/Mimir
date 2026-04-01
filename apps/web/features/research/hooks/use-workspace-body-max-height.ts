@@ -5,10 +5,26 @@ import { useLayoutEffect, type RefObject } from "react";
 import {
   RESEARCH_CARD_ANCHOR_GAP_PX,
   RESEARCH_CARD_MAX_HEIGHT_CSS_VAR,
-  RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR,
 } from "../utils/layout-vars";
 
+function resolveVisibleHeight(element: HTMLElement | null) {
+  if (element === null) {
+    return null;
+  }
+
+  const rect = element.getBoundingClientRect();
+
+  if (rect.height <= 0 && rect.width <= 0) {
+    return null;
+  }
+
+  return rect.height;
+}
+
 function measureWorkspaceBodyMaxHeight(root: HTMLElement) {
+  const topStack = root.querySelector<HTMLElement>(
+    "[data-research-top-stack='true']",
+  );
   const statusBar = root.querySelector<HTMLElement>(
     "[data-research-status-bar='true']",
   );
@@ -16,28 +32,26 @@ function measureWorkspaceBodyMaxHeight(root: HTMLElement) {
     "[data-research-input-bar='true']",
   );
 
-  if (statusBar === null || inputBar === null) {
+  if ((topStack === null && statusBar === null) || inputBar === null) {
     root.style.removeProperty(RESEARCH_CARD_MAX_HEIGHT_CSS_VAR);
-    root.style.removeProperty(RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR);
     return;
   }
 
-  const statusBarHeight = statusBar.getBoundingClientRect().height;
+  const topStackHeight =
+    resolveVisibleHeight(topStack) ??
+    resolveVisibleHeight(statusBar) ??
+    0;
   const inputBarHeight = inputBar.getBoundingClientRect().height;
   const viewportHeight = window.innerHeight;
   const availableHeight =
     viewportHeight -
-    statusBarHeight -
+    topStackHeight -
     inputBarHeight -
     RESEARCH_CARD_ANCHOR_GAP_PX * 2;
 
   root.style.setProperty(
     RESEARCH_CARD_MAX_HEIGHT_CSS_VAR,
     `${Math.max(0, Math.floor(availableHeight))}px`,
-  );
-  root.style.setProperty(
-    RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR,
-    `${Math.max(0, Math.ceil(statusBarHeight))}px`,
   );
 }
 
@@ -65,12 +79,19 @@ export function useWorkspaceBodyMaxHeight(
           })
         : null;
 
+    const topStack = root.querySelector<HTMLElement>(
+      "[data-research-top-stack='true']",
+    );
     const statusBar = root.querySelector<HTMLElement>(
       "[data-research-status-bar='true']",
     );
     const inputBar = root.querySelector<HTMLElement>(
       "[data-research-input-bar='true']",
     );
+
+    if (topStack !== null) {
+      resizeObserver?.observe(topStack);
+    }
 
     if (statusBar !== null) {
       resizeObserver?.observe(statusBar);
@@ -86,7 +107,6 @@ export function useWorkspaceBodyMaxHeight(
       window.removeEventListener("resize", update);
       resizeObserver?.disconnect();
       root.style.removeProperty(RESEARCH_CARD_MAX_HEIGHT_CSS_VAR);
-      root.style.removeProperty(RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR);
     };
   }, [isActiveWorkspace, rootRef]);
 }

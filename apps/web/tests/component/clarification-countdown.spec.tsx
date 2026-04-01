@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { OptionsClarificationCountdownSurface } from "@/features/research/components/clarification-panels";
@@ -149,9 +149,17 @@ test("options countdown stays in a global sticky surface outside the clarificati
   const countdownSurface = screen.getByRole("status", {
     name: "选单澄清倒计时",
   });
+  const topStack = countdownSurface.closest("[data-research-top-stack='true']");
 
-  expect(countdownSurface).toHaveClass("sticky");
   expect(countdownSurface).toHaveTextContent("剩余 30 秒");
+  expect(topStack).not.toBeNull();
+  expect(topStack).toHaveClass("sticky");
+  expect(topStack).toHaveClass("top-0");
+  expect(
+    within(topStack as HTMLElement).getByRole("region", {
+      name: "会话状态",
+    }),
+  ).toBeInTheDocument();
   expect(
     countdownSurface.closest("[data-research-card-anchor='clarification']"),
   ).toBeNull();

@@ -4425,3 +4425,34 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 后续如继续人工调整 prompt 文案，同步维护 prompt semantic-lock tests，避免再次出现仅测试层漂移
   - 若线上观察到 outline 章节分布变化，再决定是否需要补充更高层的 delivery integration coverage
+
+## Clarification Countdown + Top Stack Fixes
+
+- 日期时间: 2026-04-01 22:51:36 CST (+0800)
+- 任务包编号: 未提供
+- session 标识: codex-20260401-clarification-layout-countdown-fixes
+- 目标摘要: 修复 options clarification 的真实倒计时默认值仍为 15 秒、顶部倒计时在长问题列表滚动时缺少统一 sticky top stack、澄清标题与 requirement summary anchor 仍只按 status bar 计算，以及顶部状态区 sticky 行为回退的问题；本次仅在既有后端配置路径与前端工作台布局/anchor hooks 上做最小本地修复，不扩展业务功能。
+- 修改文件:
+  - `services/api/.env.example`
+  - `services/api/app/core/config.py`
+  - `services/api/tests/unit/core/test_config.py`
+  - `services/api/tests/integration/lifecycle/test_clarification_lifecycle.py`
+  - `apps/web/features/research/components/clarification-panels.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/features/research/hooks/use-workspace-body-max-height.ts`
+  - `apps/web/features/research/hooks/use-workspace-card-anchor.ts`
+  - `apps/web/features/research/utils/layout-vars.ts`
+  - `apps/web/tests/component/clarification-countdown.spec.tsx`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/core/test_config.py tests/integration/lifecycle/test_clarification_lifecycle.py -q`；`cd apps/web && pnpm test:component -- --run tests/component/clarification-countdown.spec.tsx tests/component/research-page-client.spec.tsx`；`cd apps/web && pnpm exec vitest run tests/integration/clarification-flow.spec.tsx tests/integration/create-task-flow.spec.tsx`
+  - 未运行: 更广的 frontend `pnpm test:integration` 全量回归；一次脚本尝试会把目录内无关用例一并拉起，并命中既有 `tests/integration/research-transparency.spec.tsx` 失败，因此本次按任务包只保留 directly impacted integration 用例验收
+- 验收结论: accepted；options clarification 的默认倒计时已改为 30 秒并通过后端配置/生命周期测试锁定，前端工作台已恢复为统一 sticky top stack，澄清标题与 requirement summary anchor 均按完整 top stack 高度计算，相关 targeted tests 全部通过。
+- blocker / 风险:
+  - 当前验证集中在直接受影响的 backend lifecycle、frontend component 与两条前端 integration 链路，未重新执行更大范围的 web 回归集
+  - 既有 `tests/integration/research-transparency.spec.tsx` 在全量 integration 脚本下仍失败，但失败点与本次修改范围无关，需单独任务包处理
+- 下一步建议:
+  - 若 production 需要显式覆盖倒计时时长，可在部署变量中按新增示例配置 `MIMIR_CLARIFICATION_COUNTDOWN_SECONDS`
+  - 后续如继续调整 workspace 顶部结构，优先复用 `data-research-top-stack` 这一测量入口，避免再次回退到只按 status bar 计算
