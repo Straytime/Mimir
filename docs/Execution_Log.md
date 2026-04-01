@@ -4304,3 +4304,26 @@ Copy the template below for each completed session:
 
 ### 验收结论
 - accepted
+
+---
+
+## CLARIFICATION Anchor Countdown Polish
+
+- 日期: 2026-04-01
+- 分支: `codex/clarification-anchor-countdown-polish`
+- 目标: 修正 clarification / requirement summary 共享 anchor 可视位置，新增 options clarification 全局 sticky 倒计时，将前端默认倒计时文案调整为 30 秒，并固定底部 submit 按钮宽高
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，补充 clarification ready re-anchor、Requirement Summary 可视锚点、独立 sticky 倒计时 surface、30 秒默认倒计时与输入按钮固定宽度约束
+- 更新 `apps/web/tests/component/research-page-client.spec.tsx`、`apps/web/tests/component/clarification-countdown.spec.tsx`、`apps/web/tests/component/unified-input-bar.spec.tsx` 与 `apps/web/tests/integration/clarification-flow.spec.tsx`，先锁定 clarification / requirement summary re-anchor、全局倒计时可见性、30 秒倒计时文案与 submit 按钮固定尺寸回归；同步把测试 fixtures / reducer 断言中的默认 countdown duration 调整为 30 秒
+- 修改 `apps/web/features/research/hooks/use-workspace-card-anchor.ts`，支持按卡片解析内部 anchor target；并在 `apps/web/features/research/components/clarification-panels.tsx`、`apps/web/features/research/components/requirement-summary-card.tsx` 与 `apps/web/features/research/components/research-workspace-shell.tsx` 中把 clarification 标题与 requirement summary 内容区接入共享 anchor，同时新增独立的 options clarification sticky countdown surface
+- 修改 `apps/web/features/research/hooks/use-workspace-body-max-height.ts` 与 `apps/web/features/research/utils/layout-vars.ts`，为全局 sticky countdown surface 写入状态栏高度 CSS 变量，保证其停靠在状态栏下方
+- 修改 `apps/web/features/research/components/research-config-panel.tsx` 与 `apps/web/features/research/components/unified-input-bar.tsx`，将 options clarification 默认文案更新为 30 秒，并把 submit 按钮改为固定宽度、固定高度、居中内容的布局
+
+### 验证
+- `cd apps/web && pnpm typecheck`
+- `cd apps/web && pnpm test:component`
+- `cd apps/web && pnpm test:integration`
+
+### 验收结论
+- accepted

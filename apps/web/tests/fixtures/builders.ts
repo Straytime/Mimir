@@ -452,7 +452,7 @@ export function makeClarificationCountdownStartedEvent(
     phase: "clarifying",
     timestamp: "2026-03-13T14:30:36+08:00",
     payload: {
-      duration_seconds: 15,
+      duration_seconds: 30,
       started_at: "2026-03-13T14:30:36+08:00",
       ...overrides.payload,
     },

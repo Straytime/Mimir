@@ -140,7 +140,7 @@ describe("reduceResearchSessionEvent", () => {
     const result = reduceResearchSessionEvent(state, event);
 
     expect(result.ui.clarificationCountdownDeadlineAt).toBe(
-      "2026-03-13T06:30:51.000Z",
+      "2026-03-13T06:31:06.000Z",
     );
   });
 

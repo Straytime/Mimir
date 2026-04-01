@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
@@ -264,4 +264,40 @@ test("bootstrapCreateTask clears initialPromptDraft", () => {
 
   // After bootstrapping, the draft should be cleared
   expect(store.getState().ui.initialPromptDraft).toBe("");
+});
+
+test("submit button keeps a fixed width and input-aligned height while submitting", () => {
+  const store = createResearchSessionStore();
+
+  store.getState().setInitialPromptDraft("研究主题");
+
+  renderWithStore(<UnifiedInputBar />, { store });
+
+  const textarea = screen.getByRole("textbox");
+  const button = screen.getByRole("button", { name: "提交" });
+
+  expect(textarea).toHaveClass("min-h-[48px]");
+  expect(button).toHaveClass(
+    "h-12",
+    "w-[120px]",
+    "self-stretch",
+    "justify-center",
+  );
+
+  act(() => {
+    store.setState((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        pendingAction: "creating_task",
+      },
+    }));
+  });
+
+  expect(screen.getByRole("button", { name: "提交中..." })).toHaveClass(
+    "h-12",
+    "w-[120px]",
+    "self-stretch",
+    "justify-center",
+  );
 });

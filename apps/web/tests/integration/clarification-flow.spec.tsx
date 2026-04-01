@@ -238,7 +238,7 @@ describe("Stage 4 clarification flow", () => {
     ).toBeChecked();
   });
 
-  test("starts a 15-second countdown, resets it on option change, and auto submits on timeout", async () => {
+  test("starts a 30-second countdown, resets it on option change, and auto submits on timeout", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-16T00:00:00+08:00"));
     const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
@@ -267,7 +267,7 @@ describe("Stage 4 clarification flow", () => {
       taskEventSource.emit(
         makeClarificationCountdownStartedEvent({
           payload: {
-            duration_seconds: 15,
+            duration_seconds: 30,
             started_at: "2026-03-16T00:00:00+08:00",
           },
         }),
@@ -275,21 +275,23 @@ describe("Stage 4 clarification flow", () => {
       await flushAsyncWork();
     });
 
-    expect(screen.getByText("剩余 15 秒")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "选单澄清倒计时" })).toHaveTextContent(
+      "剩余 30 秒",
+    );
 
     await act(async () => {
       vi.advanceTimersByTime(5_000);
       await flushAsyncWork();
     });
 
-    expect(screen.getByText(/剩余 10 秒/)).toBeInTheDocument();
+    expect(screen.getByText(/剩余 25 秒/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: "行业现状与趋势" }));
 
-    expect(screen.getByText("剩余 15 秒")).toBeInTheDocument();
+    expect(screen.getByText("剩余 30 秒")).toBeInTheDocument();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(30_000);
       await flushAsyncWork();
     });
 
@@ -345,7 +347,7 @@ describe("Stage 4 clarification flow", () => {
       taskEventSource.emit(
         makeClarificationCountdownStartedEvent({
           payload: {
-            duration_seconds: 15,
+            duration_seconds: 30,
             started_at: "2026-03-16T00:00:00+08:00",
           },
         }),
@@ -532,7 +534,7 @@ describe("Stage 4 clarification flow", () => {
       taskEventSource.emit(
         makeClarificationCountdownStartedEvent({
           payload: {
-            duration_seconds: 15,
+            duration_seconds: 30,
             started_at: "2026-03-16T00:00:00+08:00",
           },
         }),

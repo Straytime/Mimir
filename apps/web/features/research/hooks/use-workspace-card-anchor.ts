@@ -9,6 +9,15 @@ type AnchorRefs<TAnchorKey extends string> = Record<
   RefObject<HTMLElement | null>
 >;
 
+type AnchorTargets<TAnchorKey extends string> = Partial<
+  Record<
+    TAnchorKey,
+    {
+      selector: string;
+    }
+  >
+>;
+
 function scrollCardIntoAnchorBand(target: HTMLElement) {
   const root = target.closest("main");
 
@@ -32,10 +41,34 @@ function scrollCardIntoAnchorBand(target: HTMLElement) {
   });
 }
 
+function resolveAnchorTarget(
+  rootTarget: HTMLElement,
+  selector: string | undefined,
+) {
+  if (selector === undefined) {
+    return rootTarget;
+  }
+
+  const candidate = rootTarget.querySelector<HTMLElement>(selector);
+
+  if (candidate === null) {
+    return rootTarget;
+  }
+
+  const rect = candidate.getBoundingClientRect();
+
+  if (rect.height <= 0 && rect.width <= 0) {
+    return rootTarget;
+  }
+
+  return candidate;
+}
+
 export function useWorkspaceCardAnchor<TAnchorKey extends string>(
   activeAnchor: TAnchorKey | null,
   anchorRefs: AnchorRefs<TAnchorKey>,
   anchorSignal: string | null,
+  anchorTargets?: AnchorTargets<TAnchorKey>,
 ) {
   const previousAnchorRef = useRef<{
     anchor: TAnchorKey | null;
@@ -54,16 +87,21 @@ export function useWorkspaceCardAnchor<TAnchorKey extends string>(
       return;
     }
 
-    const target = anchorRefs[activeAnchor]?.current;
+    const rootTarget = anchorRefs[activeAnchor]?.current;
 
-    if (target === null || target === undefined) {
+    if (rootTarget === null || rootTarget === undefined) {
       return;
     }
+
+    const target = resolveAnchorTarget(
+      rootTarget,
+      anchorTargets?.[activeAnchor]?.selector,
+    );
 
     scrollCardIntoAnchorBand(target);
     previousAnchorRef.current = {
       anchor: activeAnchor,
       signal: anchorSignal,
     };
-  }, [activeAnchor, anchorRefs, anchorSignal]);
+  }, [activeAnchor, anchorRefs, anchorSignal, anchorTargets]);
 }

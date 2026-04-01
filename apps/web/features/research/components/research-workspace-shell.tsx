@@ -2,7 +2,10 @@
 
 import { useMemo, useRef } from "react";
 
-import { ClarificationDetailPanel } from "./clarification-panels";
+import {
+  ClarificationDetailPanel,
+  OptionsClarificationCountdownSurface,
+} from "./clarification-panels";
 import { DeliveryActions } from "./delivery-actions";
 import { OutlineCard } from "./outline-card";
 import { RequirementSummaryCard } from "./requirement-summary-card";
@@ -132,6 +135,17 @@ export function ResearchWorkspaceShell() {
     }),
     [],
   );
+  const cardAnchorTargets = useMemo(
+    () => ({
+      clarification: {
+        selector: "[data-research-anchor-target='clarification-title']",
+      },
+      requirementSummary: {
+        selector: "[data-research-anchor-target='requirement-summary-content']",
+      },
+    }),
+    [],
+  );
 
   const anchorSignal = useMemo(() => {
     if (activeCardAnchor === null) {
@@ -181,12 +195,20 @@ export function ResearchWorkspaceShell() {
     snapshot.phase,
   ]);
 
-  useWorkspaceCardAnchor(activeCardAnchor, cardAnchorRefs, anchorSignal);
+  useWorkspaceCardAnchor(
+    activeCardAnchor,
+    cardAnchorRefs,
+    anchorSignal,
+    cardAnchorTargets,
+  );
 
   return (
     <section className="space-y-sp-10 pb-32">
-      <SessionStatusBar />
-      <TerminalBanner />
+      <div className="space-y-3">
+        <SessionStatusBar />
+        <OptionsClarificationCountdownSurface />
+        <TerminalBanner />
+      </div>
 
       <div className="space-y-sp-10">
         <div

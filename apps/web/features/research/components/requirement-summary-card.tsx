@@ -10,7 +10,10 @@ export function RequirementSummaryCard({
   requirementDetail,
 }: RequirementSummaryCardProps) {
   return (
-    <article className="bg-surface-container-low px-5 py-5">
+    <article
+      className="bg-surface-container-low px-5 py-5"
+      data-research-anchor-target="requirement-summary-content"
+    >
       <p className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
         {requirementDetail === null ? "Requirement Summary" : "需求摘要已生成"}
       </p>
