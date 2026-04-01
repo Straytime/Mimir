@@ -3965,6 +3965,27 @@ Copy the template below for each completed session:
 ### 验收结论
 - accepted
 
+---
+
+## CT-GUARD Plan Round Multi-Collect Guard
+
+- 日期: 2026-04-01
+- 分支: `codex/collection-trace-multi-collect-guard`
+- 目标: 锁定 `Collection Trace` 对“单轮 planner 最多同时挂 3 个 collect group” 的前端设计预期与回归测试
+
+### 变更内容
+- 更新 `docs/Frontend_IA.md`，明确单个 `plan round` 下可同时保留多个 `collect group`，且当前前端设计预期 planner 单轮一次最多发起 `3` 个 collect，并按请求顺序显示
+- 更新 `apps/web/tests/unit/mappers/timeline-mapper.spec.ts`，新增单轮 planner 连续发起 `3` 个 `tool_call_id` 仍保留在同一 `plan round` 的 mapper 回归测试，并锁定各自 collector / summary 事件按 `tool_call_id` 正确回填，不发生串组
+- 更新 `apps/web/tests/component/timeline-panel.spec.tsx`，新增一个 `plan round` 下完整渲染 `3` 个 `Collect` 块的 component 回归测试
+
+### 验证
+- `cd apps/web && pnpm typecheck`
+- `cd apps/web && pnpm test:unit`
+- `cd apps/web && pnpm test:component`
+
+### 验收结论
+- accepted
+
 ## FE-DELIVERY-STATUS-POLISH Report Delivery Status Polish
 
 - 日期时间: 2026-04-01 11:04:20 CST (+0800)

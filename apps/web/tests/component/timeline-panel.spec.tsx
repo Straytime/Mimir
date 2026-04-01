@@ -271,3 +271,43 @@ test("shows collection-specific empty copy", () => {
   expect(screen.getByText("资料搜集会在这里逐步展开。")).toBeInTheDocument();
   expect(screen.queryByText("研究进展将在这里实时显示。")).not.toBeInTheDocument();
 });
+
+test("renders up to three collect groups inside a single plan round", () => {
+  render(
+    <TimelinePanel
+      trace={makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            id: "plan_round_multi_collect",
+            roundIndex: 1,
+            collectGroups: [
+              makeCollectionCollectGroup({
+                id: "collect_group_1",
+                toolCallId: "call_vendors",
+                collectTarget: "收集主要厂商与产品进展",
+              }),
+              makeCollectionCollectGroup({
+                id: "collect_group_2",
+                toolCallId: "call_revenue",
+                collectTarget: "收集商业化与收入线索",
+              }),
+              makeCollectionCollectGroup({
+                id: "collect_group_3",
+                toolCallId: "call_policy",
+                collectTarget: "收集监管与政策变化",
+              }),
+            ],
+          }),
+        ],
+      })}
+    />,
+  );
+
+  const trace = screen.getByRole("region", { name: "Collection Trace" });
+
+  expect(within(trace).getByRole("heading", { name: "Plan Round 1" })).toBeInTheDocument();
+  expect(within(trace).getAllByRole("heading", { name: "Collect" })).toHaveLength(3);
+  expect(within(trace).getByText("收集主要厂商与产品进展")).toBeInTheDocument();
+  expect(within(trace).getByText("收集商业化与收入线索")).toBeInTheDocument();
+  expect(within(trace).getByText("收集监管与政策变化")).toBeInTheDocument();
+});

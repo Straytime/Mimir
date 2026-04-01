@@ -277,10 +277,11 @@ apps/web/
 1. 每轮 planner loop 必须生成一个独立一级 `plan round` 节点，不能把后续轮次 reasoning 继续拼接到第一轮 plan 上。
 2. `sources merged` 是整个 `Collection Trace` 的一级终点节点，与任意 `plan round` 同级。
 3. 每个 `plan round` 下可以有多个 `collect group`；每个 group 以 `planner.tool_call.requested.tool_call_id` 为主键。
-4. 每个 `collect group` 内必须包含两个同级块：`collect` 与 `summary`。`summary` 是 `collect` 的延续，但不是 `collect.entries` 的子项。
-5. `collect` 内部按时间顺序保留独立事件，不得把 reasoning、tool call、tool result 无边界地压扁成单个 `detail` 字符串。
-6. `Collection Trace` 卡片自进入 `planning_collection` 起出现，并在后续 `preparing_outline` / `writing_report` / `delivered` 阶段继续保留，作为历史卡片被上推显示。
-7. 时间线默认始终自动滚动到最新事件，不提供手动暂停。
+4. 当前前端设计预期中，planner 单轮一次最多同时发起 `3` 个 collect；若同一轮连续收到 `3` 个不同 `tool_call_id`，它们必须保留在同一个 `plan round` 内并按请求顺序显示。
+5. 每个 `collect group` 内必须包含两个同级块：`collect` 与 `summary`。`summary` 是 `collect` 的延续，但不是 `collect.entries` 的子项。
+6. `collect` 内部按时间顺序保留独立事件，不得把 reasoning、tool call、tool result 无边界地压扁成单个 `detail` 字符串。
+7. `Collection Trace` 卡片自进入 `planning_collection` 起出现，并在后续 `preparing_outline` / `writing_report` / `delivered` 阶段继续保留，作为历史卡片被上推显示。
+8. 时间线默认始终自动滚动到最新事件，不提供手动暂停。
 
 前端轮次推断规则：
 
