@@ -132,8 +132,9 @@ apps/web/
 补充规则：
 
 1. 当 `snapshot.phase === clarifying` 时，移动端将 `报告` 分段临时替换为 `澄清详情`。
-2. `操作` 分段只保留输入与提交控件；流式追问文本、选单问题与倒计时移到 `澄清详情` 分段。
-3. 当任务进入 `writing_report` 及之后阶段，再恢复 `报告` 分段。
+2. `操作` 分段只保留输入与提交控件；流式追问文本与选单问题移到 `澄清详情` 分段。
+3. 选单澄清倒计时必须保留为工作台级全局可见 sticky surface，并固定停靠在顶栏下方；移动端与桌面端都不能把倒计时只埋在长问题列表内部，避免用户滚动时丢失剩余时间感知。
+4. 当任务进入 `writing_report` 及之后阶段，再恢复 `报告` 分段。
 
 ## 5. 主要面板设计
 
@@ -182,16 +183,18 @@ apps/web/
 2. `OptionsClarificationForm`
    - 只消费 `clarification.options.ready.question_set`
    - 每题默认选中 `o_auto`
-   - 维护 15 秒倒计时
+   - 维护 30 秒倒计时
    - 支持手动提交与超时自动提交
 
 前端约束：
 
 1. 不解析原始 markdown 选单。
-2. 倒计时仅为 UI 定时器；每次改选任意题目后重新开始 15 秒。
+2. 倒计时仅为 UI 定时器；每次改选任意题目后重新开始 30 秒。
 3. 发生 `clarification.fallback_to_natural` 后，应清空选单状态并切到自然语言模式。
 4. 澄清详情卡片文案固定为“在开始之前，有一些问题需要你的反馈”。
 5. 提交初始需求后，页面必须通过工作台级共享 card anchor 规则滚动到澄清详情卡片，不依赖单个卡片自身的局部滚动逻辑。
+6. `clarification.delta` 文本或 `clarification.options.ready.question_set` 首次就绪时，即使仍处于同一 `clarifying` anchor key，也必须重新定位到澄清详情标题，使标题落在状态栏下方的统一留白区内。
+7. 选单澄清倒计时不得并入 `SessionStatusBar` 的 taskId-only 下排；若需要保持全局可见，必须作为独立的工作台级 sticky surface。
 
 ### 5.4 `ReportCanvas`
 
@@ -322,6 +325,7 @@ UI 呈现规则：
 7. `Collection Trace` 与 `Report Canvas` 的内容刷新只允许滚动卡片内部容器，不得驱动页面级滚动。
 8. 共享 card anchor 不能只依赖 anchor key 变化；同一张卡片在当前阶段内从“未就绪”变为“内容首次就绪”时，也必须触发页面定位。
 9. 若同一轮状态更新中有多张内容卡片同时变为可见或可锚定，页面必须按既定卡片顺序选择更靠前的卡片作为锚点，例如 `Report Canvas` 与 `DeliveryActions` 同时出现时优先锚到 `Report Canvas`。
+10. `澄清详情` 与 `Requirement Summary` 两张卡片的 anchor 目标位置都不是卡片外层容器顶边；前者应让“澄清详情”标题贴合状态栏下方统一留白，后者应让需求摘要内容区默认完整露出，不被卡片标签或过多上边距挤出首屏。
 
 ### 5.6 `DeliveryActions`
 
@@ -700,7 +704,7 @@ v1 前端不开放 feedback/revision 交互，因此主流程不进入前端 rev
 | `clarification.delta` | 追加 `clarificationText` | 展示追问流 |
 | `clarification.options.ready` | 写入 `questionSet`、可用动作，并初始化 `optionAnswers` 为每题 `o_auto` | 展示选单并默认全选 `o_auto` |
 | `clarification.natural.ready` | 标记可提交 | 启用澄清输入框 |
-| `clarification.countdown.started` | 更新倒计时截止时间 | 启动 15 秒倒计时 |
+| `clarification.countdown.started` | 更新倒计时截止时间 | 启动 30 秒倒计时 |
 | `clarification.fallback_to_natural` | 清空选单状态 | 切换为自然语言澄清 |
 | `analysis.delta` | 追加 `analysisText` | 只在侧栏显示“正在分析需求”过程文本，不进入 `Collection Trace` |
 | `analysis.completed` | 更新 `currentRevision.requirement_detail`，清空 `analysisText` | 在侧栏显示需求摘要，不进入 `Collection Trace` |

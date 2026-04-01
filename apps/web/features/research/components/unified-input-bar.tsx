@@ -252,7 +252,7 @@ export function UnifiedInputBar() {
             ) : null}
           </div>
         ) : null}
-        <div className="flex items-end gap-3">
+        <div className="flex items-stretch gap-3">
           <textarea
             aria-invalid={inputError.ariaInvalid}
             className="min-h-[48px] flex-1 resize-none bg-surface-container-lowest px-4 py-3 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:opacity-70"
@@ -264,7 +264,7 @@ export function UnifiedInputBar() {
             value={draftValue}
           />
           <button
-            className="shrink-0 bg-primary px-4 py-3 text-sm font-medium text-on-primary transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+            className="flex h-12 w-[120px] shrink-0 items-center justify-center self-stretch bg-primary px-4 py-3 text-sm font-medium text-on-primary transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
             disabled={!mode.enabled || isSubmitting || draftValue.trim().length === 0}
             onClick={() => void handleSubmit()}
             type="button"

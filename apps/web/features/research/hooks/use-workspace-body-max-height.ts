@@ -2,7 +2,10 @@
 
 import { useLayoutEffect, type RefObject } from "react";
 
-import { RESEARCH_CARD_MAX_HEIGHT_CSS_VAR } from "../utils/layout-vars";
+import {
+  RESEARCH_CARD_MAX_HEIGHT_CSS_VAR,
+  RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR,
+} from "../utils/layout-vars";
 
 function measureWorkspaceBodyMaxHeight(root: HTMLElement) {
   const statusBar = root.querySelector<HTMLElement>(
@@ -14,15 +17,21 @@ function measureWorkspaceBodyMaxHeight(root: HTMLElement) {
 
   if (statusBar === null || inputBar === null) {
     root.style.removeProperty(RESEARCH_CARD_MAX_HEIGHT_CSS_VAR);
+    root.style.removeProperty(RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR);
     return;
   }
 
+  const statusBarHeight = statusBar.getBoundingClientRect().height;
   const availableHeight =
     inputBar.getBoundingClientRect().top - statusBar.getBoundingClientRect().bottom;
 
   root.style.setProperty(
     RESEARCH_CARD_MAX_HEIGHT_CSS_VAR,
     `${Math.max(0, Math.floor(availableHeight))}px`,
+  );
+  root.style.setProperty(
+    RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR,
+    `${Math.max(0, Math.ceil(statusBarHeight))}px`,
   );
 }
 
@@ -71,6 +80,7 @@ export function useWorkspaceBodyMaxHeight(
       window.removeEventListener("resize", update);
       resizeObserver?.disconnect();
       root.style.removeProperty(RESEARCH_CARD_MAX_HEIGHT_CSS_VAR);
+      root.style.removeProperty(RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR);
     };
   }, [isActiveWorkspace, rootRef]);
 }

@@ -58,7 +58,7 @@ export function ResearchConfigPanel() {
             选单澄清
           </span>
           <span className="block text-sm text-secondary">
-            系统生成结构化问题并预选默认答案，15 秒倒计时后自动提交。
+            系统生成结构化问题并预选默认答案，30 秒倒计时后自动提交。
           </span>
         </span>
       </label>

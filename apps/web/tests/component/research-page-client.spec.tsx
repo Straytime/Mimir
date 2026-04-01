@@ -19,6 +19,9 @@ test("renders the idle workspace shell before a task is created", () => {
 
   expect(screen.getByRole("heading", { name: "AI 研究工作台" })).toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的研究主题...")).toBeInTheDocument();
+  expect(
+    screen.getByText("系统生成结构化问题并预选默认答案，30 秒倒计时后自动提交。"),
+  ).toBeInTheDocument();
 });
 
 test("renders the clarification copy and keeps the collection trace hidden before collection starts", () => {
@@ -241,6 +244,396 @@ test("scrolls the current focus card to the shared workspace anchor offset", () 
     expect(scrollToSpy).toHaveBeenCalledWith({
       behavior: "smooth",
       top: 292,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
+test("reanchors the clarification title when natural clarification content becomes ready", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const clarificationCardRect = {
+    x: 0,
+    y: 360,
+    top: 360,
+    left: 0,
+    right: 800,
+    bottom: 720,
+    width: 800,
+    height: 360,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const clarificationTitleRect = {
+    x: 0,
+    y: 412,
+    top: 412,
+    left: 0,
+    right: 800,
+    bottom: 448,
+    width: 800,
+    height: 36,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "clarification") {
+        return clarificationCardRect;
+      }
+
+      if (this.getAttribute("data-research-anchor-target") === "clarification-title") {
+        return clarificationTitleRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "clarifying",
+            status: "running",
+            clarification_mode: "natural",
+          }),
+        },
+        stream: {
+          clarificationText: "",
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        stream: {
+          ...state.stream,
+          clarificationText: "请补充希望聚焦的市场范围。",
+        },
+      }));
+    });
+
+    expect(scrollToSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 284,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
+test("reanchors the clarification title when options clarification questions become ready", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const clarificationCardRect = {
+    x: 0,
+    y: 360,
+    top: 360,
+    left: 0,
+    right: 800,
+    bottom: 720,
+    width: 800,
+    height: 360,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const clarificationTitleRect = {
+    x: 0,
+    y: 412,
+    top: 412,
+    left: 0,
+    right: 800,
+    bottom: 448,
+    width: 800,
+    height: 36,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "clarification") {
+        return clarificationCardRect;
+      }
+
+      if (this.getAttribute("data-research-anchor-target") === "clarification-title") {
+        return clarificationTitleRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "clarifying",
+            status: "awaiting_user_input",
+            clarification_mode: "options",
+            available_actions: ["submit_clarification"],
+          }),
+        },
+        stream: {
+          clarificationText: "请回答以下问题。",
+          questionSet: null,
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        stream: {
+          ...state.stream,
+          questionSet: {
+            questions: [
+              {
+                question_id: "q1",
+                question: "研究范围？",
+                options: [
+                  { option_id: "o_auto", label: "自动决定" },
+                  { option_id: "o_1", label: "国内市场" },
+                ],
+              },
+            ],
+          },
+        },
+      }));
+    });
+
+    expect(scrollToSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 284,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
+test("reanchors the requirement summary content when requirement detail becomes ready", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementCardRect = {
+    x: 0,
+    y: 520,
+    top: 520,
+    left: 0,
+    right: 800,
+    bottom: 900,
+    width: 800,
+    height: 380,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementContentRect = {
+    x: 0,
+    y: 584,
+    top: 584,
+    left: 0,
+    right: 800,
+    bottom: 904,
+    width: 800,
+    height: 320,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "requirementSummary") {
+        return requirementCardRect;
+      }
+
+      if (
+        this.getAttribute("data-research-anchor-target") ===
+        "requirement-summary-content"
+      ) {
+        return requirementContentRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "analyzing_requirement",
+            status: "running",
+          }),
+          currentRevision: makeRevisionSummary({
+            requirement_detail: null,
+          }),
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        remote: {
+          ...state.remote,
+          currentRevision: makeRevisionSummary({
+            requirement_detail: {
+              research_goal: "分析中国 AI 搜索产品竞争格局",
+              domain: "互联网 / AI 产品",
+              requirement_details: "聚焦中国市场，偏商业分析，覆盖近两年变化。",
+              output_format: "business_report",
+              freshness_requirement: "high",
+              language: "zh-CN",
+            },
+          }),
+        },
+      }));
+    });
+
+    expect(scrollToSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 456,
     });
   } finally {
     Object.defineProperty(window, "scrollTo", {
