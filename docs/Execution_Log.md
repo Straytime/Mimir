@@ -3965,6 +3965,31 @@ Copy the template below for each completed session:
 ### 验收结论
 - accepted
 
+## FE-DELIVERY-STATUS-POLISH Report Delivery Status Polish
+
+- 日期时间: 2026-04-01 11:04:20 CST (+0800)
+- 任务包编号: FE-DELIVERY-STATUS-POLISH
+- session 标识: codex/report-delivery-status-polish
+- 目标摘要: 收敛交付态前端文案与入口职责，移除 `Report Canvas` 中的轮次标题，调整 `writing_report` 顶栏文案为“正在生成研究内容”，并把 `delivered` 后的新研究入口从 `DeliveryActions` 移到 `SessionStatusBar`，保持非交付态 disconnect 行为不变。
+- 修改文件:
+  - `apps/web/features/research/components/report-canvas.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/features/research/components/delivery-actions.tsx`
+  - `apps/web/tests/component/report-canvas.spec.tsx`
+  - `apps/web/tests/component/session-status-bar.spec.tsx`
+  - `apps/web/tests/component/delivery-new-research.spec.tsx`
+  - `apps/web/tests/integration/report-delivery-flow.spec.tsx`
+  - `docs/Frontend_IA.md`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm test:component -- report-canvas.spec.tsx session-status-bar.spec.tsx delivery-new-research.spec.tsx`；`cd apps/web && pnpm test:integration -- report-delivery-flow.spec.tsx`；`cd apps/web && pnpm typecheck`；`cd apps/web && pnpm test:component`；`cd apps/web && pnpm test:integration`
+  - 未运行: 无
+- 验收结论: accepted；文档、测试、实现与最终验证顺序符合要求，且改动限制在任务包指定组件、文档与必要测试范围内。
+- blocker / 风险:
+  - `pnpm test:integration` 期间 `tests/integration/report-delivery-flow.spec.tsx` 仍会输出未匹配 `POST /api/v1/tasks/tsk_stage0/heartbeat` 的 MSW warning；当前测试结果为通过，但该 warning 不是本任务范围内修复项。
+- 下一步建议:
+  - 如需进一步清理测试输出，可单独下发一个小任务包为 `report-delivery-flow` 增补 heartbeat handler
+
 ---
 
 ## TP-WORKSPACE-CARD-ANCHOR-05 Shared Card Anchor and Inner Scroll Decoupling

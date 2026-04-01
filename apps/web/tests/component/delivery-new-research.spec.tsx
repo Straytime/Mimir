@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 
 import { DeliveryActions } from "@/features/research/components/delivery-actions";
+import { SessionStatusBar } from "@/features/research/components/session-status-bar";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
 import {
   makeDeliverySummary,
@@ -30,27 +31,53 @@ function createDeliveryStore() {
   );
 }
 
-test("renders '开始新研究' button when phase is delivered", () => {
+test("does not render '开始新研究' inside DeliveryActions after delivery", () => {
   const store = createDeliveryStore();
 
   renderWithStore(<DeliveryActions />, { store });
 
-  expect(screen.getByRole("button", { name: "开始新研究" })).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "开始新研究" }),
+  ).not.toBeInTheDocument();
 });
 
-test("calls reset when '开始新研究' button is clicked", async () => {
+test("moves the new research action to SessionStatusBar and uses reset there", async () => {
   const user = userEvent.setup();
   const store = createDeliveryStore();
   const resetSpy = vi.fn();
+  const disconnectTask = vi.fn();
 
   store.setState((state) => ({
     ...state,
     reset: resetSpy,
   }));
 
-  renderWithStore(<DeliveryActions />, { store });
+  renderWithStore(
+    <>
+      <SessionStatusBar />
+      <DeliveryActions />
+    </>,
+    {
+      runtime: {
+        taskApiClient: {
+          createTask: vi.fn(),
+          getTaskDetail: vi.fn(),
+          submitClarification: vi.fn(),
+          submitFeedback: vi.fn(),
+          sendHeartbeat: vi.fn(),
+          disconnectTask,
+        },
+      },
+      store,
+    },
+  );
 
-  await user.click(screen.getByRole("button", { name: "开始新研究" }));
+  expect(
+    screen.queryByRole("button", { name: "开始新研究" }),
+  ).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "新研究" }));
 
   expect(resetSpy).toHaveBeenCalledTimes(1);
+  expect(disconnectTask).not.toHaveBeenCalled();
 });

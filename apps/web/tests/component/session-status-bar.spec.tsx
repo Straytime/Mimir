@@ -1,5 +1,6 @@
 import { act, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { expect, test, vi } from "vitest";
 
 import { SessionStatusBar } from "@/features/research/components/session-status-bar";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
@@ -80,6 +81,132 @@ test("does not expose revision transition badges in the status bar", () => {
 
   expect(screen.queryByText("Revision")).not.toBeInTheDocument();
   expect(screen.queryByText(/等待第 2 轮/)).not.toBeInTheDocument();
+});
+
+test("uses '正在生成研究内容' copy during writing_report", () => {
+  const store = createResearchSessionStore(
+    makeResearchSessionState({
+      session: {
+        sseState: "open",
+        taskId: "tsk_stage0",
+        taskToken: "secret_stage0",
+        disconnectUrl: "/api/v1/tasks/tsk_stage0/disconnect",
+      },
+      remote: {
+        snapshot: makeTaskSnapshot({
+          phase: "writing_report",
+          status: "running",
+        }),
+      },
+    }),
+  );
+
+  renderWithStore(<SessionStatusBar />, { store });
+
+  expect(screen.getByText("正在生成研究内容")).toBeInTheDocument();
+  expect(
+    screen.queryByText("正在撰写报告与生成配图"),
+  ).not.toBeInTheDocument();
+});
+
+test("keeps disconnect behavior unchanged before delivery", async () => {
+  const user = userEvent.setup();
+  const disconnectTask = vi.fn().mockResolvedValue({
+    accepted: true,
+    requestId: "req_disconnect",
+    traceId: "trc_disconnect",
+  });
+  const store = createResearchSessionStore(
+    makeResearchSessionState({
+      session: {
+        sseState: "open",
+        taskId: "tsk_stage0",
+        taskToken: "secret_stage0",
+        disconnectUrl: "/api/v1/tasks/tsk_stage0/disconnect",
+      },
+      remote: {
+        snapshot: makeTaskSnapshot({
+          phase: "collecting",
+          status: "running",
+        }),
+      },
+    }),
+  );
+
+  renderWithStore(<SessionStatusBar />, {
+    runtime: {
+      taskApiClient: {
+        createTask: vi.fn(),
+        getTaskDetail: vi.fn(),
+        submitClarification: vi.fn(),
+        submitFeedback: vi.fn(),
+        sendHeartbeat: vi.fn(),
+        disconnectTask,
+      },
+    },
+    store,
+  });
+
+  await user.click(screen.getByRole("button", { name: "终止任务" }));
+
+  expect(disconnectTask).toHaveBeenCalledWith({
+    url: "/api/v1/tasks/tsk_stage0/disconnect",
+    token: "secret_stage0",
+    reason: "client_manual_abort",
+  });
+});
+
+test("switches the delivered action button to '新研究' and resets without disconnecting", async () => {
+  const user = userEvent.setup();
+  const disconnectTask = vi.fn();
+  const resetSpy = vi.fn();
+  const store = createResearchSessionStore(
+    makeResearchSessionState({
+      session: {
+        sseState: "open",
+        taskId: "tsk_stage0",
+        taskToken: "secret_stage0",
+        disconnectUrl: "/api/v1/tasks/tsk_stage0/disconnect",
+      },
+      remote: {
+        snapshot: makeTaskSnapshot({
+          phase: "delivered",
+          status: "awaiting_feedback",
+          available_actions: ["download_markdown", "download_pdf"],
+        }),
+      },
+    }),
+  );
+
+  store.setState((state) => ({
+    ...state,
+    reset: resetSpy,
+  }));
+
+  renderWithStore(<SessionStatusBar />, {
+    runtime: {
+      taskApiClient: {
+        createTask: vi.fn(),
+        getTaskDetail: vi.fn(),
+        submitClarification: vi.fn(),
+        submitFeedback: vi.fn(),
+        sendHeartbeat: vi.fn(),
+        disconnectTask,
+      },
+    },
+    store,
+  });
+
+  expect(screen.getByText("报告已完成并进入交付阶段")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "新研究" })).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "终止任务" }),
+  ).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "新研究" }));
+
+  expect(resetSpy).toHaveBeenCalledTimes(1);
+  expect(disconnectTask).not.toHaveBeenCalled();
 });
 
 test("shows taskId only in the lower row and omits description, collect progress, and analysisText", () => {
