@@ -204,7 +204,10 @@ export function ResearchWorkspaceShell() {
 
   return (
     <section className="space-y-sp-10 pb-32">
-      <div className="space-y-3">
+      <div
+        className="sticky top-0 z-50 space-y-3"
+        data-research-top-stack="true"
+      >
         <SessionStatusBar />
         <OptionsClarificationCountdownSurface />
         <TerminalBanner />

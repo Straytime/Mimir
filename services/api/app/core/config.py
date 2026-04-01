@@ -19,7 +19,7 @@ class Settings:
     lifecycle_poll_interval_seconds: float = 1.0
     task_token_ttl_hours: int = 24
     access_token_ttl_minutes: int = 10
-    clarification_countdown_seconds: int = 15
+    clarification_countdown_seconds: int = 30
     clarification_backend_timeout_seconds: int = 60
     llm_retry_max_retries: int = 3
     llm_retry_wait_seconds: int = 3
@@ -108,7 +108,7 @@ class Settings:
                 os.getenv("MIMIR_ACCESS_TOKEN_TTL_MINUTES", "10")
             ),
             clarification_countdown_seconds=int(
-                os.getenv("MIMIR_CLARIFICATION_COUNTDOWN_SECONDS", "15")
+                os.getenv("MIMIR_CLARIFICATION_COUNTDOWN_SECONDS", "30")
             ),
             clarification_backend_timeout_seconds=int(
                 os.getenv("MIMIR_CLARIFICATION_BACKEND_TIMEOUT_SECONDS", "60")

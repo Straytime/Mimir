@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import { RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR } from "../utils/layout-vars";
 import { useClarificationSubmit } from "../hooks/use-clarification-submit";
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 import { selectCanSubmitClarification } from "../store/selectors";
@@ -65,15 +64,12 @@ export function OptionsClarificationCountdownSurface() {
     <div
       aria-label="选单澄清倒计时"
       aria-live="polite"
-      className={`sticky z-40 bg-surface-container-high px-4 py-3 text-[11px] font-ui font-medium uppercase tracking-[0.15em] ${
+      className={`bg-surface-container-high px-4 py-3 text-[11px] font-ui font-medium uppercase tracking-[0.15em] ${
         remainingSeconds <= 10
           ? "text-[#FF6B6B] animate-pulse-fast"
           : "text-surface-tint"
       }`}
       role="status"
-      style={{
-        top: `calc(var(${RESEARCH_STATUS_BAR_HEIGHT_CSS_VAR}, 0px) + 0.75rem)`,
-      }}
     >
       {remainingSeconds <= 10 ? "即将自动提交 — " : null}
       剩余 {remainingSeconds} 秒

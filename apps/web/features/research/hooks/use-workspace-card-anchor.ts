@@ -18,6 +18,20 @@ type AnchorTargets<TAnchorKey extends string> = Partial<
   >
 >;
 
+function resolveVisibleBottom(element: HTMLElement | null) {
+  if (element === null) {
+    return null;
+  }
+
+  const rect = element.getBoundingClientRect();
+
+  if (rect.height <= 0 && rect.width <= 0) {
+    return null;
+  }
+
+  return rect.bottom;
+}
+
 function scrollCardIntoAnchorBand(target: HTMLElement) {
   const root = target.closest("main");
 
@@ -25,14 +39,20 @@ function scrollCardIntoAnchorBand(target: HTMLElement) {
     return;
   }
 
+  const topStack = root.querySelector<HTMLElement>(
+    "[data-research-top-stack='true']",
+  );
   const statusBar = root.querySelector<HTMLElement>(
     "[data-research-status-bar='true']",
   );
-  const statusBarBottom = statusBar?.getBoundingClientRect().bottom ?? 0;
+  const topStackBottom =
+    resolveVisibleBottom(topStack) ??
+    resolveVisibleBottom(statusBar) ??
+    0;
   const nextTop =
     window.scrollY +
     target.getBoundingClientRect().top -
-    statusBarBottom -
+    topStackBottom -
     RESEARCH_CARD_ANCHOR_GAP_PX;
 
   window.scrollTo({
