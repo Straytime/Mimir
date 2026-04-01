@@ -73,6 +73,8 @@ def test_planner_prompt_semantic_lock_keeps_role_limits_and_transcript_order() -
     assert "2.2 若能够支撑" in prompt.system_prompt
     assert "你并不需要一次性理清所有目标，而是根据已有信息进行动态规划。" in prompt.system_prompt
     assert "发起 `collect_agent` 调用时保证目标与约束自包含" in prompt.system_prompt
+    assert "提供必要、精准的补充描述信息和背景" in prompt.system_prompt
+    assert "不能假设 agent 拥有任何预设上下文。" in prompt.system_prompt
     assert "尤其是在你还未搞清研究主体的时候" in prompt.system_prompt
     assert "避免多个目标之间存在交叉和重叠" in prompt.system_prompt
     assert "最多只能同时发起 3 个`collect_agent`工具调用。" in prompt.system_prompt
@@ -145,7 +147,6 @@ def test_summary_prompt_semantic_lock_keeps_schema_and_runtime_inputs() -> None:
             prompt_name="summary_round",
             subtask_id="sub_1",
             plan=build_collect_plan(),
-            result_status="completed",
             search_queries=("中国 AI 搜索 产品 2025",),
             item_payloads=(
                 {
@@ -160,11 +161,14 @@ def test_summary_prompt_semantic_lock_keeps_schema_and_runtime_inputs() -> None:
 
     assert "关键信息总结助手" in prompt.system_prompt
     assert "提取不超过10条关键发现" in prompt.system_prompt
+    assert "只做客观的信息总结与压缩" in prompt.system_prompt
+    assert "如果搜集结果中没有任何相关内容，如实声明" in prompt.system_prompt
     assert "严禁给出高度抽象的一句话总结" in prompt.system_prompt
-    assert "严禁给出任何结论或建议" in prompt.system_prompt
-    assert "markdown 格式直接输出" in prompt.system_prompt
+    assert "严禁给出任何指引或建议" in prompt.system_prompt
+    assert "markdown 无序列表格式直接输出" in prompt.system_prompt
     assert "<信息获取目标>" in prompt.user_prompt
     assert "收集目标 1" in prompt.user_prompt
     assert "中国 AI 搜索 产品 2025" in prompt.user_prompt
     assert "某公司发布会回顾" in prompt.user_prompt
-    assert "completed" in prompt.user_prompt
+    assert "<搜集状态>" not in prompt.user_prompt
+    assert "completed" not in prompt.user_prompt

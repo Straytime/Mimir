@@ -1084,7 +1084,6 @@ class CollectionOrchestrator:
             prompt_name="summary_round",
             subtask_id=result.subtask_id,
             plan=plan,
-            result_status=result.status.value,
             search_queries=result.search_queries,
             item_payloads=tuple(
                 {
