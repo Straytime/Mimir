@@ -155,6 +155,89 @@ test("keeps collect entries in chronological order", () => {
   ]);
 });
 
+test("keeps plan and collect status badges on a single stable row for long targets", () => {
+  render(
+    <TimelinePanel
+      trace={makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            status: "running",
+            collectGroups: [
+              makeCollectionCollectGroup({
+                collectTarget:
+                  "收集关于全球企业级 AI 搜索产品定价模型、渠道策略、交付周期与安全合规定位的长目标描述",
+                collectEntries: [
+                  makeCollectionReasoningBurst({
+                    id: "collect_reasoning_1",
+                    detail: "先看官网与公开资料。",
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })}
+    />,
+  );
+
+  const planSection = screen.getByRole("heading", { name: "Plan Round 1" }).closest("section");
+  const collectSection = screen
+    .getByRole("group", {
+      name:
+        "Collect 收集关于全球企业级 AI 搜索产品定价模型、渠道策略、交付周期与安全合规定位的长目标描述",
+    })
+    .closest("section");
+
+  expect(planSection).not.toBeNull();
+  expect(collectSection).not.toBeNull();
+  expect(planSection?.firstElementChild).toHaveClass("flex-nowrap");
+  expect(collectSection?.firstElementChild).toHaveClass("flex-nowrap");
+
+  const planHeader = planSection?.firstElementChild as HTMLElement;
+  const collectHeader = collectSection?.firstElementChild as HTMLElement;
+  const planBadge = within(planHeader).getByText(/已完成|进行中|已失败/);
+  const collectBadge = within(collectHeader).getByText(
+    /已完成|进行中|已失败/,
+  );
+
+  expect(planBadge).toHaveClass("shrink-0", "whitespace-nowrap");
+  expect(collectBadge).toHaveClass("shrink-0", "whitespace-nowrap");
+});
+
+test("does not repeat completed badge on collect completed entry rows", () => {
+  render(
+    <TimelinePanel
+      trace={makeCollectionTraceRoot({
+        nodes: [
+          makeCollectionPlanRoundNode({
+            collectGroups: [
+              makeCollectionCollectGroup({
+                collectEntries: [
+                  makeCollectionCollectCompletedEvent({
+                    id: "collect_completed_1",
+                    detail: "已整理 3 条候选来源。",
+                    status: "completed",
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })}
+    />,
+  );
+
+  const collectSection = screen.getByRole("group", { name: "Collect 收集 AI 搜索厂商" });
+  expect(within(collectSection).getByText("已完成")).toBeInTheDocument();
+
+  const completedRow = within(collectSection)
+    .getByText("Collect Completed")
+    .closest("div");
+  expect(completedRow).not.toBeNull();
+  expect(within(completedRow as HTMLElement).queryByText("已完成")).not.toBeInTheDocument();
+  expect(within(completedRow as HTMLElement).getByText("已整理 3 条候选来源。")).toBeInTheDocument();
+});
+
 test("renders a search started/completed pair as one merged row with query object and done status", () => {
   render(
     <TimelinePanel

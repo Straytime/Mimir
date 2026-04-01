@@ -71,11 +71,6 @@ export function OutlineCard() {
                     <h4 className="text-[20px] font-narrative font-semibold leading-tight text-primary">
                       {section.title}
                     </h4>
-                    {section.description ? (
-                      <p className="max-w-[58ch] text-sm font-narrative leading-7 text-secondary">
-                        {section.description}
-                      </p>
-                    ) : null}
                   </div>
                 </div>
               </li>

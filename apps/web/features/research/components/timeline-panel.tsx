@@ -198,7 +198,7 @@ type StatusBadgeProps = {
 function StatusBadge({ status }: StatusBadgeProps) {
   return (
     <span
-      className={`flex items-center gap-2 px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] ${getStatusClassName(status)}`}
+      className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap px-3 py-1 text-[11px] font-ui font-medium uppercase tracking-[0.15em] ${getStatusClassName(status)}`}
     >
       {status === "running" ? <PulseIndicator /> : null}
       {getStatusLabel(status)}
@@ -329,16 +329,16 @@ function renderCollectEntry(args: {
 
   if (entry.kind === "collect_completed") {
     return (
-      <div key={entry.id} className="space-y-2 rounded-2xl border border-surface-container-high bg-surface-container px-4 py-4">
-        <div className="flex items-start justify-between gap-4">
-          <p
-            className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary"
-            data-testid="collection-trace-entry-label"
-          >
-            Collect Completed
-          </p>
-          <StatusBadge status={entry.status} />
-        </div>
+      <div
+        key={entry.id}
+        className="space-y-2 rounded-2xl border border-surface-container-high bg-surface-container px-4 py-4"
+      >
+        <p
+          className="text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary"
+          data-testid="collection-trace-entry-label"
+        >
+          Collect Completed
+        </p>
         <p className="text-sm font-ui leading-6 text-secondary">{entry.detail}</p>
       </div>
     );
@@ -367,12 +367,12 @@ function CollectGroupCard(args: {
         className="rounded-3xl border border-surface-container-high bg-surface-container px-5 py-5"
         role="group"
       >
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
+        <div className="flex flex-nowrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 space-y-1">
             <h3 className="text-sm font-ui font-semibold uppercase tracking-[0.15em] text-primary">
               Collect
             </h3>
-            <p className="text-sm font-ui font-semibold leading-6 text-primary">
+            <p className="min-w-0 text-sm font-ui font-semibold leading-6 text-primary">
               {collectTargetLabel}
             </p>
           </div>
@@ -417,7 +417,7 @@ function SummaryCard(args: {
 
   return (
     <section className="rounded-3xl border border-surface-container-high bg-surface-container-low px-5 py-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-nowrap items-start justify-between gap-4">
         <h3 className="text-sm font-ui font-semibold uppercase tracking-[0.15em] text-primary">
           Summary
         </h3>
@@ -445,8 +445,8 @@ function PlanRoundCard(args: {
 
   return (
     <section className="rounded-3xl border border-surface-container-high bg-surface-container px-5 py-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
+      <div className="flex flex-nowrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1 space-y-1">
           <h2 className="text-base font-ui font-semibold text-primary">
             {`Plan Round ${node.roundIndex}`}
           </h2>
@@ -522,8 +522,8 @@ export function TimelinePanel({ trace }: TimelinePanelProps) {
               className="rounded-3xl border border-surface-container-high bg-surface-container-low px-5 py-5"
               key={node.id}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
+              <div className="flex flex-nowrap items-start justify-between gap-4">
+                <div className="min-w-0 flex-1 space-y-1">
                   <h2 className="text-base font-ui font-semibold text-primary">
                     Sources Merged
                   </h2>

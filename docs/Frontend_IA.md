@@ -315,6 +315,8 @@ UI 呈现规则：
 8. 成对折叠必须是纯 UI 层行为：仅基于现有 `collect.entries` 顺序推导，不改 store、不改 mapper、不改 `CollectionTrace` 数据模型；若出现只有 completed 而无 matching started 的异常情况，必须安全降级为单行显示，而不是直接丢弃。
 9. `search` 行的对象文本必须显示 query 本身，不再显示命中条数等 completed-only 文案；`fetch` 行的对象文本必须显示 URL 导向对象，优先使用 `hostname + 截断 path`，完整 URL 保留在可访问属性中，且内容容器必须使用 `min-w-0` 与单行截断策略，防止长 URL 向右溢出；completed 返回的标题文本不再显示在该行。
 10. 紧凑 tool-event 行必须遵守 `DESIGN.md` 的 `Lab Terminal` 风格：使用统一的低侵入 tonal stacking 区分层级，不引入额外圆角漂移、阴影或 card-in-card 膨胀；`Search` 与 `Fetch` 不应再因为事件类型不同而产生分裂的视觉处理。`reasoning` 仍应明显是思考块，`summary` 仍应明显是阶段结论。
+11. `Plan Round` 与 `Collect` 标题区右侧状态徽标必须保持单行、固定内容宽度优先，不得被左侧长标题或长 collect target 挤压到换行、压扁或变形成多行标签；标题区容器必须显式限制 `wrap` 与 `shrink` 行为。
+12. `collect completed` 事件行仅保留事件标签与完成详情，不再重复渲染右侧 `已完成` 状态徽标；完成态信息以所在 `collect` 分组头部状态为准，避免同一块内双重完成反馈。
 
 高度约束：
 
@@ -341,9 +343,9 @@ UI 呈现规则：
 
 1. `OutlineCard` 只在 `outlineReady === true` 且存在 `outline` 时渲染。
 2. 视觉结构必须体现 `DESIGN.md` 的 `Lab Terminal` 风格：使用 leading-zero 编号、分层 tonal stacking、无圆角漂移、无简单分隔线。
-3. 卡片头部保留 `Outline` 技术标签与报告标题；正文不能退化为纯标题列表。
+3. 卡片头部保留 `Outline` 技术标签与报告标题；正文以章节标题序列为主，不额外暴露 section description。
 4. 各 section 必须按 `order` 顺序渲染，并显式展示 `01`、`02` 这类编号，强化终端式结构感。
-5. 每个 section 至少应拆分为“编号 / 标题 / 可读说明”三层信息；若存在 `description`，必须以可读摘要形式显示，用于帮助用户快速扫描章节意图。
+5. 每个 section 至少应拆分为“编号 / 标题”两层信息；若后端提供 `description`，前端在该卡片中仍不展示，避免提前泄露章节展开内容。
 6. section 之间通过留白与 tonal surface 分组，不使用 1px 横线切割。
 
 ### 5.11 `UnifiedInputBar`
@@ -355,10 +357,11 @@ UI 呈现规则：
 
 视觉与布局规则：
 
-1. 输入托盘采用 docked surface 处理，而不是简单的顶边线分隔；必须通过 tonal stacking、backdrop blur、内外表面层级来体现其与正文区的区分。
+1. 输入托盘采用 fixed 底部的嵌入式 surface 处理，而不是显式的外层 docked tray 包裹内层输入块；必须通过背景过渡、轻量 blur 与单层 tonal surface 体现其与正文区的区分。
 2. 不使用显式 `border-top` 作为主要分隔手段；若出于可访问性需要保留边界感，只能使用极弱的 ghost boundary、背景过渡或内阴影式处理，不能形成“硬切线”。
 3. 输入托盘本身仍是固定底部的页面级共享区域，`Collection Trace` / `Report Canvas` 的 max-height 计算必须扣除其实际占位与预留留白。
-4. 本次视觉调整只改变输入托盘表面语言，不改变 placeholder、禁用逻辑、提交热键、delivered 态新研究确认逻辑或澄清模式切换语义。
+4. 文本输入区与提交按钮必须保持同一视觉表面语言，避免出现“外层底栏 + 内层输入块”的双层托盘感；按钮固定宽高与现有交互语义保持不变。
+5. 本次视觉调整只改变输入托盘表面语言，不改变 placeholder、禁用逻辑、提交热键、delivered 态新研究确认逻辑或澄清模式切换语义。
 
 ### 5.6 `DeliveryActions`
 
