@@ -516,7 +516,6 @@ async def test_zhipu_summary_adapter_extracts_first_json_object_from_explanatory
                 additional_info="优先官方与高可信媒体。",
                 freshness_requirement=FreshnessRequirement.HIGH,
             ),
-            result_status="completed",
             search_queries=("中国 AI 搜索",),
             item_payloads=(
                 {
@@ -567,7 +566,6 @@ async def test_zhipu_summary_adapter_raises_traceable_error_for_invalid_json() -
                     additional_info="优先官方与高可信媒体。",
                     freshness_requirement=FreshnessRequirement.HIGH,
                 ),
-                result_status="completed",
                 search_queries=("中国 AI 搜索",),
                 item_payloads=(
                     {

@@ -3967,6 +3967,26 @@ Copy the template below for each completed session:
 
 ---
 
+## PROMPT-IMPACT Preserve Manual Planner/Summary Prompt Update
+
+- 日期: 2026-04-01
+- 分支: `prompt-update-04011445`
+- 目标: 保留当前分支手动更新的 planner / summary prompt 文案，补齐语义锁测试，并清理 summary prompt 不再消费 `result_status` 后留下的死实现链
+
+### 变更内容
+- 保留 `services/api/app/application/prompts/collection.py` 中当前分支的 prompt 文案更新，不回退到旧文案或 PRD 文案
+- 更新 `services/api/tests/unit/application/test_collection_prompts.py`，锁定 summary prompt 的新语义：强调客观信息压缩、禁止指引/建议、要求 markdown 无序列表输出、用户 prompt 中不再注入 `<搜集状态>`；同时补充 planner prompt 对“补充描述信息和背景 / 预设上下文” wording 的断言
+- 删除 `services/api/app/application/dto/research.py`、`services/api/app/application/services/collection.py` 与相关测试中仅用于 summary prompt 的 `result_status` 死字段，保持运行时行为不变
+
+### 验证
+- `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_collection_prompts.py -q`
+- `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/infrastructure/test_zhipu_adapters.py -k "planner or summary" -q`
+
+### 验收结论
+- accepted
+
+---
+
 ## CT-GUARD Plan Round Multi-Collect Guard
 
 - 日期: 2026-04-01

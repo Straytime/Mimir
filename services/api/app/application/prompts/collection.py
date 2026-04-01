@@ -37,7 +37,7 @@ def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
 
 注意事项
 1. 你并不需要一次性理清所有目标，而是根据已有信息进行动态规划。
-2. 发起 `collect_agent` 调用时保证目标与约束自包含，提供必要、精炼的补充描述信息，不能假设 agent 拥有任何预设信息。
+2. 发起 `collect_agent` 调用时保证目标与约束自包含，提供必要、精准的补充描述信息和背景，不能假设 agent 拥有任何预设上下文。
 3. 若串行执行能有效提升质量，优先进行串行执行，**尤其是在你还未搞清研究主体的时候**，记住质量比效率更重要。
 4. 若你决定同时发起多个工具调用：
     - 必须保证同时发起的多个`collect_agent`目标之间无逻辑顺序或依赖关系！
@@ -161,16 +161,18 @@ def build_summary_prompt(*, invocation: SummaryInvocation) -> PromptBundle:
 </背景与角色>
 
 <任务>
-分析搜集结果，寻找、提取和目标相关的关键发现摘要：
+分析搜集结果，寻找、提取和目标相关的关键发现摘要，执行原则如下：
 - 提取不超过10条关键发现
 - 必须与目标相关
+- 只做客观的信息总结与压缩
 - 如果搜集结果中有不相关内容，直接忽略，不要提及
+- 如果搜集结果中没有任何相关内容，如实声明
 
-注意：
-**必须遵循上述约束，输出有效内容，严禁给出高度抽象的一句话总结**
-**你专注于信息的提取、整理和压缩，严禁给出任何结论或建议**
+不要做：
+- **严禁给出高度抽象的一句话总结**
+- **严禁给出任何指引或建议**
 
-使用 markdown 格式直接输出，不要解释或询问。
+使用 markdown 无序列表格式直接输出，不要解释或询问。
 </任务>
 """.strip(),
         user_prompt=f"""
@@ -189,9 +191,5 @@ def build_summary_prompt(*, invocation: SummaryInvocation) -> PromptBundle:
 <信息搜集结果>
 {json.dumps(list(invocation.item_payloads), ensure_ascii=False, indent=2)}
 </信息搜集结果>
-
-<搜集状态>
-{invocation.result_status}
-</搜集状态>
 """.strip(),
     )

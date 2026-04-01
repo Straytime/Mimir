@@ -154,7 +154,6 @@ class SummaryInvocation:
     prompt_name: str
     subtask_id: str
     plan: CollectPlan
-    result_status: str
     search_queries: tuple[str, ...]
     item_payloads: tuple[dict[str, str], ...]
     now: datetime
