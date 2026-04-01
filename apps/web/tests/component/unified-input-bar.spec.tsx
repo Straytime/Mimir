@@ -37,7 +37,8 @@ test("shows correct placeholder when no task exists (snapshot=null)", () => {
 
   expect(textarea).toBeEnabled();
   expect(textarea).toHaveAttribute("placeholder", "输入你的研究主题...");
-  expect(inputTray).toHaveAttribute("data-research-input-surface", "docked");
+  expect(inputTray).toHaveAttribute("data-research-input-surface", "embedded");
+  expect(inputTray).not.toHaveAttribute("data-research-input-shell", "tray");
   expect(inputTray).not.toHaveClass("border-t");
 });
 
@@ -304,4 +305,36 @@ test("submit button keeps a fixed width and input-aligned height while submittin
     "self-stretch",
     "justify-center",
   );
+});
+
+test("uses a single embedded input surface while preserving placeholder and disabled behavior", () => {
+  const store = createResearchSessionStore(
+    makeResearchSessionState({
+      session: {
+        taskId: "tsk_stage0",
+        taskToken: "secret_stage0",
+      },
+      remote: {
+        snapshot: makeTaskSnapshot({
+          phase: "collecting",
+          status: "running",
+        }),
+      },
+    }),
+  );
+
+  renderWithStore(<UnifiedInputBar />, { store });
+
+  const textarea = screen.getByRole("textbox");
+  const button = screen.getByRole("button", { name: "提交" });
+  const inputBar = textarea.closest("[data-research-input-bar='true']");
+  const formSurface = button.parentElement?.parentElement;
+
+  expect(inputBar).toHaveAttribute("data-research-input-surface", "embedded");
+  expect(inputBar).not.toHaveAttribute("data-research-input-shell", "tray");
+  expect(formSurface).toHaveClass("bg-surface-container-low/85");
+  expect(formSurface).not.toHaveClass("shadow-[0_-20px_48px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(71,71,71,0.12)]");
+  expect(textarea).toBeDisabled();
+  expect(textarea).toHaveAttribute("placeholder", "研究进行中...");
+  expect(button).toHaveClass("h-12", "w-[120px]");
 });

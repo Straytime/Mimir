@@ -40,7 +40,7 @@ test("does not render when outlineReady is false", () => {
   expect(screen.queryByLabelText("报告大纲")).not.toBeInTheDocument();
 });
 
-test("renders title and indexed section groups when ready", () => {
+test("renders title and indexed section groups without section descriptions", () => {
   const store = createResearchSessionStore();
 
   const outline = makeResearchOutline({
@@ -89,7 +89,7 @@ test("renders title and indexed section groups when ready", () => {
   expect(screen.getByText("第一章")).toBeInTheDocument();
   expect(screen.getByText("第二章")).toBeInTheDocument();
   expect(screen.getByText("第三章")).toBeInTheDocument();
-  expect(screen.getByText("第一章描述")).toBeInTheDocument();
-  expect(screen.getByText("第二章描述")).toBeInTheDocument();
-  expect(screen.getByText("第三章描述")).toBeInTheDocument();
+  expect(screen.queryByText("第一章描述")).not.toBeInTheDocument();
+  expect(screen.queryByText("第二章描述")).not.toBeInTheDocument();
+  expect(screen.queryByText("第三章描述")).not.toBeInTheDocument();
 });

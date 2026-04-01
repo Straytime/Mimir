@@ -4478,3 +4478,29 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若近期继续处理 planner / collector transcript 问题，可补一条 integration 测试验证 stop round 的 reasoning 会进入下一轮 transcript
   - 若发现其他 adapter 对 `provider_finish_reason` 仍有“靠 content 猜语义”的分支，可按同样方式单独收敛
+
+## TP-20260401 Collection Trace Input Outline Polish
+
+- 日期时间: 2026-04-01 23:59:08 CST (+0800)
+- 任务包编号: TP-20260401
+- session 标识: codex-20260401-collection-trace-input-outline-polish
+- 目标摘要: 收紧 `Collection Trace`、`UnifiedInputBar` 与 `OutlineCard` 的前端呈现细节：为 plan/collect 头部状态徽标补单行稳定约束，移除 `collect completed` 行的重复完成徽标，调整底部输入区为更贴合页面的单层嵌入式表面，并让大纲卡片只展示章节编号与标题，不再暴露 section description。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/timeline-panel.spec.tsx`
+  - `apps/web/tests/component/outline-card.spec.tsx`
+  - `apps/web/tests/component/unified-input-bar.spec.tsx`
+  - `apps/web/features/research/components/timeline-panel.tsx`
+  - `apps/web/features/research/components/outline-card.tsx`
+  - `apps/web/features/research/components/unified-input-bar.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/timeline-panel.spec.tsx tests/component/outline-card.spec.tsx tests/component/unified-input-bar.spec.tsx`；`cd apps/web && pnpm test:component -- --run tests/component/timeline-panel.spec.tsx tests/component/outline-card.spec.tsx tests/component/unified-input-bar.spec.tsx`；`cd apps/web && pnpm typecheck`
+  - 未运行: 视觉截图回归或手动浏览器验收；本次任务包仅要求组件测试与类型检查
+- 验收结论: accepted；目标 UI 约束均已通过文档、组件测试与类型检查收口，且未改动数据契约、交互语义或输入行为逻辑。
+- blocker / 风险:
+  - `pnpm test:component` 现有全量组件套件仍会打印若干既有 MSW 未匹配 artifact 请求告警，但命令整体通过，本次改动未新增该问题
+  - 输入区的“嵌入式”视觉主要通过表面层级与类约束落地，最终观感仍建议在真实页面做一次人工确认
+- 下一步建议:
+  - 在真实 workspace 页面做一次桌面端长 collect target 与底部输入区的视觉 spot check
+  - 如需进一步削减测试噪音，可单独下发任务处理组件测试中的 MSW 未匹配告警

@@ -225,11 +225,11 @@ export function UnifiedInputBar() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-40 bg-[linear-gradient(180deg,rgba(19,19,19,0)_0%,rgba(19,19,19,0.76)_20%,rgba(19,19,19,0.94)_100%)] backdrop-blur-[20px]"
+      className="fixed bottom-0 left-0 right-0 z-40 bg-[linear-gradient(180deg,rgba(19,19,19,0)_0%,rgba(19,19,19,0.38)_34%,rgba(19,19,19,0.78)_100%)]"
       data-research-input-bar="true"
-      data-research-input-surface="docked"
+      data-research-input-surface="embedded"
     >
-      <div className="mx-auto max-w-[800px] px-sp-8 pb-4 pt-5">
+      <div className="mx-auto max-w-[800px] px-sp-8 pb-4 pt-4">
         {inputError.fieldError !== null ? (
           <p className="mb-2 text-sm text-[#FF6B6B]" role="alert">
             {inputError.fieldError}
@@ -253,11 +253,11 @@ export function UnifiedInputBar() {
             ) : null}
           </div>
         ) : null}
-        <div className="bg-surface-container-low/95 px-4 py-4 shadow-[0_-20px_48px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(71,71,71,0.12)]">
+        <div className="bg-surface-container-low/85 px-3 py-3 backdrop-blur-[18px] shadow-[inset_0_1px_0_rgba(71,71,71,0.12)]">
           <div className="flex items-stretch gap-3">
             <textarea
               aria-invalid={inputError.ariaInvalid}
-              className="min-h-[48px] flex-1 resize-none bg-surface-container-lowest px-4 py-3 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:opacity-70"
+              className="min-h-[48px] flex-1 resize-none bg-transparent px-4 py-3 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:opacity-70"
               disabled={!mode.enabled || isSubmitting}
               onChange={(event) => setDraftValue(event.target.value)}
               onKeyDown={handleKeyDown}
