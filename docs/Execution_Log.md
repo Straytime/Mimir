@@ -4568,3 +4568,36 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若后续继续调整 PRD 0.6 相关 prompt 文案，应同步优先更新 `docs/Architecture.md` 与 semantic lock tests，避免再次出现设计漂移
   - 在下一次相关后端改动中可顺带跑更大范围的 `services/api/tests/unit/infrastructure`，补一轮 provider 侧回归信心
+
+## Workspace Visibility + Status + Input Polish
+
+- 日期时间: 2026-04-02 16:39:10 CST (+0800)
+- 任务包编号: 未提供
+- session 标识: codex-20260402-workspace-visibility-status-input-polish
+- 目标摘要: 按 `docs/DESIGN.md` 的 The Lab Terminal / Surgical Minimalism 风格，收紧工作台卡片的空内容显隐规则，增强顶栏当前阶段的状态辨识度并弱化 `taskId`，同时将底部输入区改为单层嵌入式 surface，并为 `textarea` 增加带上限的动态高度。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/features/research/components/unified-input-bar.tsx`
+  - `apps/web/features/research/components/clarification-panels.tsx`
+  - `apps/web/features/research/components/requirement-summary-card.tsx`
+  - `apps/web/features/research/components/outline-card.tsx`
+  - `apps/web/features/research/components/delivery-actions.tsx`
+  - `apps/web/features/research/components/timeline-panel.tsx`
+  - `apps/web/tests/component/research-workspace-shell.spec.tsx`
+  - `apps/web/tests/component/session-status-bar.spec.tsx`
+  - `apps/web/tests/component/unified-input-bar.spec.tsx`
+  - `apps/web/tests/component/delivery-actions-visibility.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-workspace-shell.spec.tsx tests/component/session-status-bar.spec.tsx tests/component/unified-input-bar.spec.tsx`（目标红测转绿，27 passed）
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-workspace-shell.spec.tsx tests/component/session-status-bar.spec.tsx tests/component/unified-input-bar.spec.tsx tests/component/research-page-client.spec.tsx tests/component/clarification-detail-display.spec.tsx tests/component/delivery-actions-visibility.spec.tsx tests/component/outline-card.spec.tsx`（受影响组件回归，49 passed）
+  - 未运行: `apps/web` 其余 component/integration/e2e 全量测试；本任务包按最小必要范围回归
+- 验收结论: accepted；工作台主卡片已统一改为“内容 ready 后才出现”，顶栏改为更强的阶段主状态块且 `taskId` 降为弱 metadata，底部输入区改为单层嵌入式无边界 surface，并支持有上限的多行自动增高。
+- blocker / 风险:
+  - 本次只跑了与工作台显隐、顶栏、输入区直接相关的组件测试，未重跑更大范围的 integration / e2e
+  - `ReportCanvas` 仍保留自身内部 skeleton 能力，但当前工作台 shell 已不会在空 markdown 时挂载该卡片；若未来其他入口直接使用该组件，需要继续遵守同样的显隐口径
+- 下一步建议:
+  - 若后续继续细调工作台视觉，优先在 `docs/Frontend_IA.md` 与组件测试里锁定显隐和层级语义，避免再次回到 phase-only 占位
+  - 若要继续打磨输入区交互，可补一组针对真实 `scrollHeight` 与移动端视口的 component / e2e 测试

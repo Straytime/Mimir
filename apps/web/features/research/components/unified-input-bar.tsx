@@ -1,6 +1,11 @@
 "use client";
 
-import { type KeyboardEvent, useCallback, useRef } from "react";
+import {
+  type KeyboardEvent,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+} from "react";
 
 import type { TaskSnapshot } from "@/lib/contracts";
 
@@ -25,6 +30,22 @@ type InputMode = {
   placeholder: string;
   draftKey: "initial" | "clarification";
 };
+
+export const TEXTAREA_MIN_HEIGHT_PX = 48;
+export const TEXTAREA_MAX_HEIGHT_PX = 176;
+
+function syncTextareaHeight(textarea: HTMLTextAreaElement) {
+  textarea.style.height = `${TEXTAREA_MIN_HEIGHT_PX}px`;
+
+  const nextHeight = Math.min(
+    Math.max(textarea.scrollHeight, TEXTAREA_MIN_HEIGHT_PX),
+    TEXTAREA_MAX_HEIGHT_PX,
+  );
+
+  textarea.style.height = `${nextHeight}px`;
+  textarea.style.overflowY =
+    textarea.scrollHeight > TEXTAREA_MAX_HEIGHT_PX ? "auto" : "hidden";
+}
 
 export function resolveInputMode(args: {
   snapshot: TaskSnapshot | null;
@@ -142,6 +163,7 @@ export function UnifiedInputBar() {
   const submitClarification = useClarificationSubmit();
 
   const isSubmittingRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const mode = resolveInputMode({ snapshot, terminalReason });
   const inputError = useInputError(mode.draftKey);
@@ -153,6 +175,14 @@ export function UnifiedInputBar() {
   const isSubmitting =
     pendingAction === "creating_task" ||
     pendingAction === "submitting_clarification";
+
+  useLayoutEffect(() => {
+    if (textareaRef.current === null) {
+      return;
+    }
+
+    syncTextareaHeight(textareaRef.current);
+  }, [draftValue, mode.draftKey]);
 
   const handleSubmit = useCallback(async () => {
     if (!mode.enabled || isSubmittingRef.current || isSubmitting) {
@@ -225,7 +255,7 @@ export function UnifiedInputBar() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-40 bg-[linear-gradient(180deg,rgba(19,19,19,0)_0%,rgba(19,19,19,0.38)_34%,rgba(19,19,19,0.78)_100%)]"
+      className="fixed bottom-0 left-0 right-0 z-40"
       data-research-input-bar="true"
       data-research-input-surface="embedded"
     >
@@ -253,20 +283,24 @@ export function UnifiedInputBar() {
             ) : null}
           </div>
         ) : null}
-        <div className="bg-surface-container-low/85 px-3 py-3 backdrop-blur-[18px] shadow-[inset_0_1px_0_rgba(71,71,71,0.12)]">
-          <div className="flex items-stretch gap-3">
+        <div className="bg-surface-container-low/88 px-3 py-3 backdrop-blur-[20px] shadow-[inset_0_1px_0_rgba(71,71,71,0.12)] focus-within:shadow-[inset_2px_0_0_rgba(0,220,229,0.92)]">
+          <div className="flex items-end gap-3">
             <textarea
               aria-invalid={inputError.ariaInvalid}
-              className="min-h-[48px] flex-1 resize-none bg-transparent px-4 py-3 text-base leading-7 text-primary placeholder:text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:opacity-70"
+              className="min-h-[48px] flex-1 resize-none bg-transparent px-4 py-3 text-base leading-7 text-primary placeholder:text-tertiary outline-none disabled:cursor-not-allowed disabled:opacity-70"
               disabled={!mode.enabled || isSubmitting}
               onChange={(event) => setDraftValue(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={mode.placeholder}
+              ref={textareaRef}
               rows={1}
+              style={{
+                height: `${TEXTAREA_MIN_HEIGHT_PX}px`,
+              }}
               value={draftValue}
             />
             <button
-              className="flex h-12 w-[120px] shrink-0 items-center justify-center self-stretch bg-primary px-4 py-3 text-sm font-medium text-on-primary transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex h-12 w-[120px] shrink-0 items-center justify-center self-end bg-primary px-4 py-3 text-sm font-medium text-on-primary transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
               disabled={!mode.enabled || isSubmitting || draftValue.trim().length === 0}
               onClick={() => void handleSubmit()}
               type="button"

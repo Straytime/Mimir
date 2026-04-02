@@ -90,7 +90,7 @@ apps/web/
 2. `ActiveWorkspace`
    - 已创建任务，正在澄清 / 分析 / 搜集 / 撰写 / 等待反馈
    - 展示工作台三栏布局
-   - 工作台卡片按阶段和内容准备情况渲染，未开始的卡片不提前出现
+   - 工作台卡片按统一的“phase + content readiness”规则渲染：只有内容已就绪的卡片才出现；空内容卡片不得仅因 phase 已推进就提前占位
 3. `Terminal`
    - 任务 `terminated` / `failed` / `expired`
    - 展示终态说明、清理提示、重新开始入口
@@ -109,8 +109,8 @@ apps/web/
 
 - `Mimir` 标识
 - 当前连接状态
-- 当前 phase / status
-- 当前 `taskId`
+- 当前 phase / status，其中阶段主文案必须是顶栏最强信息
+- 当前 `taskId`，但仅作为弱化的附属标识
 - 任务控制按钮（运行中为“终止任务”，`delivered` 后切为“新研究”）
 
 ### 4.3 Tablet / Mobile 布局
@@ -192,9 +192,10 @@ apps/web/
 2. 倒计时仅为 UI 定时器；每次改选任意题目后重新开始 30 秒。
 3. 发生 `clarification.fallback_to_natural` 后，应清空选单状态并切到自然语言模式。
 4. 澄清详情卡片文案固定为“在开始之前，有一些问题需要你的反馈”。
-5. 提交初始需求后，页面必须通过工作台级共享 card anchor 规则滚动到澄清详情卡片，不依赖单个卡片自身的局部滚动逻辑。
-6. `clarification.delta` 文本或 `clarification.options.ready.question_set` 首次就绪时，即使仍处于同一 `clarifying` anchor key，也必须重新定位到澄清详情标题，使标题落在状态栏下方的统一留白区内。
-7. 选单澄清倒计时不得并入 `SessionStatusBar` 的 taskId-only 下排；若需要保持全局可见，必须作为独立的工作台级 sticky surface。
+5. `ClarificationDetailPanel` 仅在 `clarificationText` 非空或 `questionSet` 已就绪时渲染；`clarifying` phase 本身不足以触发空卡片占位。
+6. 提交初始需求后，页面必须通过工作台级共享 card anchor 规则滚动到澄清详情卡片，不依赖单个卡片自身的局部滚动逻辑。
+7. `clarification.delta` 文本或 `clarification.options.ready.question_set` 首次就绪时，即使仍处于同一 `clarifying` anchor key，也必须重新定位到澄清详情标题，使标题落在状态栏下方的统一留白区内。
+8. 选单澄清倒计时不得并入 `SessionStatusBar` 的 taskId-only 下排；若需要保持全局可见，必须作为独立的工作台级 sticky surface。
 
 ### 5.4 `ReportCanvas`
 
@@ -202,7 +203,7 @@ apps/web/
 
 - 渲染 `writer.delta` 拼接出的 markdown 正文
 - 渲染 markdown 中引用的任务图片
-- 在撰写前阶段提供占位态
+- 作为报告正文首次就绪后的主阅读卡片
 
 子区域：
 
@@ -219,6 +220,7 @@ apps/web/
 - 禁止原始 HTML
 - 只允许后端返回的 artifact URL
 - `outline.delta` 不直接渲染为正文
+- `ReportCanvas` 仅在 `reportMarkdown` 非空时挂载；`writing_report` / `delivered` phase 本身不足以触发空卡片占位
 - Web 预览必须保留原始 footnote 语义，不得重编号、不得删除 definition、不得合成占位来源；如需修复 `ref` / `def` 别名，仅允许保守修复确认为同一来源的 alias，不得改写已正常匹配的正文或文末列表
 - Web 预览可以隐藏 footnote backref 的可见符号与编号，但必须保留脚注编号列表、来源链接，以及正文中的 superscript 引用
 - 工作台内的卡片采用阶段驱动渲染，未开始的卡片不提前渲染为空占位卡片；仅在对应阶段或内容准备好后才出现。
@@ -265,7 +267,7 @@ apps/web/
 
 - `Collection Trace` 卡片自身是根节点；卡片内部只展示一级 `plan round` 节点与一级终点 `sources merged` 节点
 - 只消费 collection 相关事件：`planner.*`、`collector.*`、`summary.completed`、`sources.merged`
-- `phase.changed` 仅在进入 `planning_collection` 时用于开启这张卡片；`collecting`、`summarizing_collection`、`merging_sources` 是其可见范围的阶段锚点
+- `phase.changed` 只用于驱动阶段语义，不得单独作为空 `Collection Trace` 卡片的出现条件；卡片仅在 `stream.collectionTrace.nodes.length > 0` 时出现
 - 本节只定义结构与展示语义；事件写入 store 的权威规则见 §8
 
 建议的用户可读阶段文案：
@@ -285,7 +287,7 @@ apps/web/
 4. 当前前端设计预期中，planner 单轮一次最多同时发起 `3` 个 collect；若同一轮连续收到 `3` 个不同 `tool_call_id`，它们必须保留在同一个 `plan round` 内并按请求顺序显示。
 5. 每个 `collect group` 内必须包含两个同级块：`collect` 与 `summary`。`summary` 是 `collect` 的延续，但不是 `collect.entries` 的子项。
 6. `collect` 内部按时间顺序保留独立事件，不得把 reasoning、tool call、tool result 无边界地压扁成单个 `detail` 字符串。
-7. `Collection Trace` 卡片自进入 `planning_collection` 起出现，并在后续 `preparing_outline` / `writing_report` / `delivered` 阶段继续保留，作为历史卡片被上推显示。
+7. `Collection Trace` 卡片在 `stream.collectionTrace.nodes.length > 0` 后出现，并在后续 `preparing_outline` / `writing_report` / `delivered` 阶段继续保留，作为历史卡片被上推显示。
 8. 时间线默认始终自动滚动到最新事件，不提供手动暂停。
 
 前端轮次推断规则：
@@ -360,8 +362,10 @@ UI 呈现规则：
 1. 输入托盘采用 fixed 底部的嵌入式 surface 处理，而不是显式的外层 docked tray 包裹内层输入块；必须通过背景过渡、轻量 blur 与单层 tonal surface 体现其与正文区的区分。
 2. 不使用显式 `border-top` 作为主要分隔手段；若出于可访问性需要保留边界感，只能使用极弱的 ghost boundary、背景过渡或内阴影式处理，不能形成“硬切线”。
 3. 输入托盘本身仍是固定底部的页面级共享区域，`Collection Trace` / `Report Canvas` 的 max-height 计算必须扣除其实际占位与预留留白。
-4. 文本输入区与提交按钮必须保持同一视觉表面语言，避免出现“外层底栏 + 内层输入块”的双层托盘感；按钮固定宽高与现有交互语义保持不变。
-5. 本次视觉调整只改变输入托盘表面语言，不改变 placeholder、禁用逻辑、提交热键、delivered 态新研究确认逻辑或澄清模式切换语义。
+4. `textarea` 高度必须随输入行数增长，但需要设置明确上限；超过上限后改为内部滚动，不继续推高页面级底栏。
+5. 提交按钮在单行与多行输入下都必须保持稳定的固定尺寸与对齐方式，不因 `textarea` 增高而塌缩、拉伸或偏离点击热区。
+6. 文本输入区与提交按钮必须保持同一视觉表面语言，避免出现“外层底栏 + 内层输入块”的双层托盘感；按钮固定宽高与现有交互语义保持不变。
+7. 本次视觉调整只改变输入托盘表面语言与多行高度行为，不改变 placeholder、禁用逻辑、提交热键、delivered 态新研究确认逻辑或澄清模式切换语义。
 
 ### 5.6 `DeliveryActions`
 
@@ -402,9 +406,9 @@ v1 前端不开放 `FeedbackComposer`。
 最小占位策略：
 
 1. 任务创建成功但 SSE 尚未建立时，工作台显示三栏 skeleton。
-2. 澄清 LLM 正在生成时，`ClarificationPanel` 显示文本行 skeleton。
-3. 进入 `writing_report` 前，`ReportCanvas` 显示段落 skeleton，而不是空白区。
-4. `Collection Trace` 收到 `planning_collection` 但尚无后续细节时，插入一条轻量 skeleton row。
+2. 澄清、需求摘要、搜集轨迹、大纲、报告、交付这几类主工作台卡片都遵循“空内容不显示”的统一规则，不因为 phase 已进入就渲染空壳 card。
+3. 图片加载或报告正文内部的局部加载态可以使用 skeleton，但不得借此提前挂载尚无正文的 `ReportCanvas`。
+4. `Collection Trace` 只有在已有至少一个节点后才可见；若未来需要 skeleton，只能作为已出现卡片内部的局部行状态，而不是空卡片占位。
 5. 除以上明确的 skeleton 场景外，未开始的卡片不应以空卡片或占位文案提前占据版面。
 
 ### 5.9 `TerminalBanner`
@@ -431,8 +435,8 @@ v1 前端不开放 `FeedbackComposer`。
 
 展示规则：
 
-1. 顶栏下半部只展示 `taskId`，不展示阶段补充小字、`analysisText` 或搜集进度。
-2. 顶栏摘要的默认信息以当前阶段标题为准，`taskId` 作为唯一附加标识。
+1. 顶栏主状态区必须将当前阶段标题作为最强视觉锚点，并通过更高字级、字重或分层布局强化其辨识度。
+2. `taskId` 只作为弱化的技术标识出现，不展示阶段补充小字、`analysisText` 或搜集进度，也不得与阶段主状态共享同等视觉权重。
 3. `writing_report` 阶段标题固定为“正在生成研究内容”。
 4. 当 `snapshot.phase === delivered` 且任务未进入 terminal status 时，顶栏按钮文案切为“新研究”，点击直接调用 `reset`，不走 disconnect。
 5. 非 `delivered` 的非 terminal 任务继续显示“终止任务”，并保持原有 disconnect 行为不变。

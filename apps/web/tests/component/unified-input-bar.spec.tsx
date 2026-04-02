@@ -2,7 +2,10 @@ import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
-import { UnifiedInputBar } from "@/features/research/components/unified-input-bar";
+import {
+  TEXTAREA_MAX_HEIGHT_PX,
+  UnifiedInputBar,
+} from "@/features/research/components/unified-input-bar";
 import { createResearchSessionStore } from "@/features/research/store/research-session-store";
 import {
   makeCreateTaskResponse,
@@ -285,7 +288,7 @@ test("submit button keeps a fixed width and input-aligned height while submittin
   expect(button).toHaveClass(
     "h-12",
     "w-[120px]",
-    "self-stretch",
+    "self-end",
     "justify-center",
   );
 
@@ -302,7 +305,7 @@ test("submit button keeps a fixed width and input-aligned height while submittin
   expect(screen.getByRole("button", { name: "提交中..." })).toHaveClass(
     "h-12",
     "w-[120px]",
-    "self-stretch",
+    "self-end",
     "justify-center",
   );
 });
@@ -332,9 +335,52 @@ test("uses a single embedded input surface while preserving placeholder and disa
 
   expect(inputBar).toHaveAttribute("data-research-input-surface", "embedded");
   expect(inputBar).not.toHaveAttribute("data-research-input-shell", "tray");
-  expect(formSurface).toHaveClass("bg-surface-container-low/85");
+  expect(formSurface).toHaveClass("bg-surface-container-low/88");
   expect(formSurface).not.toHaveClass("shadow-[0_-20px_48px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(71,71,71,0.12)]");
   expect(textarea).toBeDisabled();
   expect(textarea).toHaveAttribute("placeholder", "研究进行中...");
-  expect(button).toHaveClass("h-12", "w-[120px]");
+  expect(button).toHaveClass("h-12", "w-[120px]", "self-end");
+});
+
+test("grows the textarea height for multiline input and keeps the submit button stable", async () => {
+  const user = userEvent.setup();
+  const store = createResearchSessionStore();
+
+  renderWithStore(<UnifiedInputBar />, { store });
+
+  const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+  const button = screen.getByRole("button", { name: "提交" });
+
+  Object.defineProperty(textarea, "scrollHeight", {
+    configurable: true,
+    get: () => 132,
+  });
+
+  await user.type(textarea, "第一行{Shift>}{Enter}{/Shift}第二行{Shift>}{Enter}{/Shift}第三行");
+
+  expect(textarea.style.height).toBe("132px");
+  expect(textarea.style.overflowY).toBe("hidden");
+  expect(button).toHaveClass("h-12", "w-[120px]", "shrink-0");
+});
+
+test("caps textarea height and enables internal scrolling after the max height", async () => {
+  const user = userEvent.setup();
+  const store = createResearchSessionStore();
+
+  renderWithStore(<UnifiedInputBar />, { store });
+
+  const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+
+  Object.defineProperty(textarea, "scrollHeight", {
+    configurable: true,
+    get: () => TEXTAREA_MAX_HEIGHT_PX + 120,
+  });
+
+  await user.type(
+    textarea,
+    "第一行{Shift>}{Enter}{/Shift}第二行{Shift>}{Enter}{/Shift}第三行{Shift>}{Enter}{/Shift}第四行",
+  );
+
+  expect(textarea.style.height).toBe(`${TEXTAREA_MAX_HEIGHT_PX}px`);
+  expect(textarea.style.overflowY).toBe("auto");
 });

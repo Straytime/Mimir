@@ -494,6 +494,10 @@ function PlanRoundCard(args: {
 }
 
 export function TimelinePanel({ trace }: TimelinePanelProps) {
+  if (trace.nodes.length === 0) {
+    return null;
+  }
+
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>(
     {},
