@@ -4504,3 +4504,41 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 在真实 workspace 页面做一次桌面端长 collect target 与底部输入区的视觉 spot check
   - 如需进一步削减测试噪音，可单独下发任务处理组件测试中的 MSW 未匹配告警
+
+## Production Collection Trace Playbook Update
+
+- 日期时间: 2026-04-02 00:57:44 CST (+0800)
+- 任务包编号: 未提供
+- session 标识: codex-20260402-production-collection-trace-playbook
+- 目标摘要: 将本次 production 上拉取 collection 阶段完整 LLM 历史的实战经验收敛进 `AGENTS.md` 的 `## Production 排查` 章节，重点减少对 `railway ssh` 交互方式、容器查询、导出回传、本地重定向与 schema 假设的反复试错，并补充 secret 脱敏与容器 `/tmp` 清理约束。
+- 修改文件:
+  - `AGENTS.md`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `git branch --show-current`（确认当前分支为 `codex/production-debug-playbook`）；`git diff -- AGENTS.md`（人工自检新增条目与既有 `Production 只读排查路径` / `Production 失败任务快速排查约定` 无冲突，且均为可执行命令/流程层面的增补）；`rg -n "payload_json|created_at|task_events|agent_runs|task_tool_calls|artifacts|research_tasks" services/api/app -g '*.py'`（交叉确认文档中引用的关键表/字段命名来自当前仓库实现，而非记忆假设）
+  - 未运行: 无自动化测试；本任务包仅允许文档更新，验收依赖针对新增流程条目的人工一致性检查
+- 验收结论: accepted；`AGENTS.md` 已补入 production 只读排查中的敏感变量脱敏、交互式 tty 要求、`/tmp` 临时脚本两段式导出、Postgres 交叉确认、schema 轻量确认、`railway ssh ... COMMAND` 叠加重定向/heredoc 的禁忌，以及容器 `/tmp` 清理约束，覆盖任务包要求的 7 条真实经验点且未改动其他章节。
+- blocker / 风险:
+  - 本次仅做文档收口，没有额外录入可直接复制的长脚本模板；后续若出现高频同类排查，可再单独下发任务包沉淀脚本化 playbook
+  - `AGENTS.md` 现有条目较长，后续继续增补 production 规范时需避免把不同故障类型的经验继续堆叠在同一层级
+- 下一步建议:
+  - 下次做 production 活体导出时，直接按新增的“两段式导出 + Postgres 交叉确认 + `/tmp` 清理”流程执行
+  - 若后续再次遇到 schema 误记或 one-shot `railway ssh` quoting 问题，应优先回填具体例子到单独排查文档，而不是继续在主规范里叠加泛化描述
+
+## Sync CLAUDE Production Debugging Playbook
+
+- 日期时间: 2026-04-02 09:02:30 CST (+0800)
+- 任务包编号: 未提供
+- session 标识: codex-20260402-sync-claude-production-playbook
+- 目标摘要: 将 `AGENTS.md` 中新增的 `## Production 排查` 经验同步到 `CLAUDE.md`，补齐只读排查与失败任务快速排查中的脱敏、两段式导出、tty/one-shot 区别、schema 轻量确认、Postgres 交叉确认和 `/tmp` 清理要求，并记录本次执行。
+- 修改文件:
+  - `CLAUDE.md`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `git branch --show-current`（确认当前分支为 `codex/production-debug-playbook`）；`sed -n '303,390p' AGENTS.md` 与 `sed -n '296,380p' CLAUDE.md`（编辑前人工比对缺失项）；编辑后将再次执行段落 diff/人工核对，确认 `CLAUDE.md` 已覆盖 secret 脱敏、两段式导出、tty/one-shot 区别、schema 轻量确认、Postgres 交叉确认、`/tmp` 清理等要求
+  - 未运行: 无自动化测试；本任务包仅要求文档同步与人工自检
+- 验收结论: accepted；`CLAUDE.md` 的 `## Production 排查` 已对齐 `AGENTS.md` 当前同主题内容，且本次变更仅限目标章节与 `docs/Execution_Log.md`
+- blocker / 风险:
+  - 本次为文档同步，未额外引入脚本模板或示例命令封装；后续若继续迭代 production 排查流程，仍需同步维护两份文档避免再次漂移
+- 下一步建议:
+  - 后续凡是继续增补 `AGENTS.md` 的 production 排查经验，应在同一任务里同步检查 `CLAUDE.md`，避免知识分叉

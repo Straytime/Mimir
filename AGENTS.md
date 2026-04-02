@@ -310,13 +310,27 @@ PR 应当：
   - `railway variable list --service mimir-api --environment production --json`
   - `railway ssh --service mimir-api --environment production`
   - `railway ssh --service Postgres --environment production`
+- `railway variable list --json` 会返回敏感变量：
+  - 排查记录、Execution Log、issue/PR、对外回报中不得直接粘贴 secret 原文
+  - 如需说明配置状态，只记录变量名、是否存在、是否为空和必要的脱敏片段
 - `mimir-api` 容器内的权威查询方式：
   - 使用 `/app/.venv/bin/python`
   - 通过 `from app.core.config import Settings; Settings.from_env().database_url` 解析运行时真实 DB URL
   - 再用 SQLAlchemy 做只读查询
+- 若需要导出 collection / planner / writer 的完整 LLM 历史或其他复杂结果，固定采用“两段式导出”：
+  - 先进入交互式 `railway ssh --service mimir-api --environment production`
+  - 在容器 `/tmp` 下创建临时 Python 脚本与导出目标文件
+  - 用 `/app/.venv/bin/python /tmp/<script>.py` 在容器内执行，只向容器内文件落盘，不直接把大段结果打到本机终端
+  - 导出完成后，再单独执行一次 `railway ssh --service mimir-api --environment production cat /tmp/<export-file> > <local-file>` 拉回本机
+- 若打算通过 stdin 持续向远端 shell 发送命令，必须保持 tty/交互式会话：
+  - 非 tty 的一次性 `railway ssh ... COMMAND` 只适合单次命令，不能假设后续还能继续写 stdin
+  - 需要多步查询、反复修脚本或继续导出时，优先重开交互式 shell，不要在 one-shot 命令上硬接后续输入
 - `Postgres` 容器内的交叉确认方式：
   - 使用 `psql -U postgres -d railway -P pager=off`
   - 只运行只读 SQL，用于确认 `research_tasks`、`task_events`、`agent_runs`、`task_tool_calls`、`artifacts`
+- 应用容器内导出完成后，再到 Postgres 容器做只读交叉确认：
+  - 至少确认目标 `task_id` / `revision_id` 的 `task_events`、`agent_runs`、`task_tool_calls`、`artifacts` 计数或主键集合是否与导出结果一致
+  - 未做交叉确认前，不把单容器导出结果当成最终定界依据
 - `railway connect` 只作为可选辅助路径：
   - 它依赖本机 `psql`
   - 若本机缺少 `psql`，不要把 `railway connect` 失败误判为 production DB 不可达
@@ -333,19 +347,28 @@ PR 应当：
   - 先抓 `task_events / agent_runs / task_tool_calls / artifacts / research_tasks`
   - 再抓 Railway 应用日志
   - 最后才做实现层推断
+- 对 production 原始 SQL / ORM 查询不要凭记忆假设 schema：
+  - 直接查表前，先对照当前仓库 models / repositories / migrations，或先做一次轻量 schema 确认
+  - 避免把真实字段 `payload_json`、`created_at`、`content_text` 等错写成并不存在的 `payload`、`status`、`timestamp`
 - `railway logs --json` 当前返回的是 **NDJSON**，不是 JSON array：
   - 先落盘到 `/tmp/*.ndjson`
   - 再用 Python 按行 `json.loads(line)` 解析
   - 不要直接对整文件 `json.load(...)`
 - 对 `mimir-api` 容器执行复杂查询时，优先使用：
   - `railway ssh --service mimir-api --environment production`
-  - 连进去后再运行交互式 `python - <<'PY'`
+  - 连进去后优先在 `/tmp` 下写临时脚本，再用 `/app/.venv/bin/python /tmp/<script>.py` 执行
+  - 复杂导出先落容器文件，再单独拉回本机，不要把大段 Python、SQL、shell 重定向混在一条本地命令里
 - 对 `Postgres` 容器执行复杂 SQL 时，优先使用：
   - `railway ssh --service Postgres --environment production`
   - 连进去后再运行交互式 `psql -U postgres -d railway -P pager=off`
 - 避免把复杂 heredoc、多层引号、包含 SQL/Python 代码的长命令直接塞进：
   - `railway ssh ... COMMAND`
   - 这类形式很容易被 shell quoting 打断，浪费活体任务窗口
+- 尤其避免把以下能力叠加到同一条本地 one-shot 命令里：
+  - `railway ssh ... COMMAND` + 本地重定向
+  - `railway ssh ... COMMAND` + heredoc
+  - `railway ssh ... COMMAND` + 多层引号 / 嵌套 Python / SQL
+  - 出现 Python REPL、空输出、半截脚本或命令被截断时，直接改走交互式 `/tmp` 脚本方案，不继续在原命令上试错
 - 若任务已被 cleanup 删除：
   - 立即停止继续尝试 DB 回补
   - 改为只基于已落盘的 Railway 日志做失败时序还原
@@ -353,3 +376,6 @@ PR 应当：
 - 若问题发生在 `delivery` 末段：
   - 优先先区分是 `writer`、`export(zip/pdf)`、`artifact_store.put` 还是 token/download 路径
   - 不要在尚未区分失败子阶段前笼统归因为”报告生成失败”
+- 所有临时排查产物都应在结束前清理：
+  - 删除容器 `/tmp` 下的临时脚本、查询输出和导出文件
+  - 本地若保存了含 production 原始数据的导出文件，应按最小暴露原则存放并在回合结束后按需清理
