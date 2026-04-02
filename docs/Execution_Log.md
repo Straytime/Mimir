@@ -4697,3 +4697,25 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若需要收紧品牌一致性，可在后续任务中补充 favicon/head 层的浏览器级断言
   - 若要消除测试噪音，可单独下发任务为 `heartbeat` 请求补 MSW handler
+
+## TP-2026-04-03 Example Prompts Polish
+
+- 日期时间: 2026-04-03 00:23:38 CST (+0800)
+- 任务包编号: TP-2026-04-03-example-prompts
+- session 标识: codex-20260403-example-prompts-polish
+- 目标摘要: 更新 idle 态示例研究主题前两条文案，保持第三条不变，并按 `DESIGN.md` 将 ExamplePrompts 的 hover / focus 收紧为 recessed / docked 的低幅 tonal shift，去除生硬的 glow、shadow 与漂浮感。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/example-prompts.spec.tsx`
+  - `apps/web/features/research/components/example-prompts.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/example-prompts.spec.tsx`；`cd apps/web && pnpm typecheck`
+  - 未运行: 全量 `pnpm test:component`、`pnpm lint` 与其余前端测试未重跑；本任务包验收仅要求 ExamplePrompts 组件测试与类型检查
+- 验收结论: accepted；前两条示例文案保持目标值，第三条保持现状，hover / focus contract 已明确限制为 `surface-container-lowest -> surface-container-low` 的低幅 tonal lift，并排除 glow、shadow、整块亮到 `surface` 与 `translateY` 漂浮感。
+- blocker / 风险:
+  - 最终视觉判断仍主要依赖 class contract 与测试，未在真实浏览器中补充人工目测截图
+  - `docs/Execution_Log.md` 现有同主题历史条目较多，后续若继续打磨同一区域，建议由 master-agent 合并为更小、更清晰的任务包
+- 下一步建议:
+  - 若需进一步验证观感，可在独立任务中做一次浏览器级 hover / focus 人工验收
+  - 若要统一 idle 区微交互语义，单独下发任务校准相邻组件，不在本组件内顺手扩散

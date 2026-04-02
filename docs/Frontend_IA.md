@@ -147,6 +147,7 @@ apps/web/
 - 限制 `500` 字/单词
 - 支持换行
 - 提交后立即进入任务创建流程
+- 提供 3 个可一键写入输入框的示例研究主题
 
 显示时机：
 
@@ -157,6 +158,12 @@ apps/web/
 - `Enter` 提交，`Shift + Enter` 换行
 - 任务创建中禁用输入与配置切换
 - `409 resource_busy`、`429 ip_quota_exceeded` 直接在面板内提示
+- 示例研究主题固定为：
+  - `从心理学角度解析 openclaw 爆火的原因`
+  - `一级方程式赛车 26 年新规的争议与影响`
+  - `新能源汽车电池技术路线对比：磷酸铁锂 vs 三元锂 vs 固态电池`
+- Idle 态示例卡片默认保持 recessed / docked 的低对比表面，基底固定为 `surface-container-lowest`；hover / focus 仅允许抬到 `surface-container-low` 一档，并配合左缘 `surface-tint` 细线 accent 与极轻 outline。
+- ExamplePrompts 禁止使用 `shadow-glow-*`、`shadow-ghost`、整块亮到 `surface`、大幅 `translateY` 或任何看起来像漂浮 CTA slab 的 hover / focus 写法。
 
 ### 5.2 `ResearchConfigPanel`
 
