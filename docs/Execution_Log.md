@@ -4601,3 +4601,22 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若后续继续细调工作台视觉，优先在 `docs/Frontend_IA.md` 与组件测试里锁定显隐和层级语义，避免再次回到 phase-only 占位
   - 若要继续打磨输入区交互，可补一组针对真实 `scrollHeight` 与移动端视口的 component / e2e 测试
+
+## Prompt Update 04021815 Prompt Contract Sync
+
+- 日期时间: 2026-04-02 18:15:00 CST (+0800)
+- 任务包编号: 未提供
+- session 标识: codex-20260402-prompt-update-04021815
+- 目标摘要: 对齐当前分支上用户已手工修改的 `planner` / `collector` / `writer` prompt 与 `python_interpreter` tool description 文案，只补最小必要文档与 unit semantic-lock 测试，不改动现有实现文案。
+- 修改文件:
+  - `docs/Execution_Log.md`
+  - `services/api/tests/unit/application/test_invocation_contracts.py`
+  - `services/api/tests/unit/application/test_collection_prompts.py`
+  - `services/api/tests/unit/application/test_delivery_prompts.py`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_invocation_contracts.py tests/unit/application/test_collection_prompts.py tests/unit/application/test_delivery_prompts.py -q`（目标单测；验证 prompt/tool contract 当前文案）
+  - 未运行: 其余 `services/api` unit / contract / integration 测试；本任务包仅涉及 prompt/tool wording 的最小同步
+- 验收结论: accepted；目标 unit tests 已对齐当前实现中的 planner/collector 停止语义、writer 篇幅约束与 `python_interpreter` tool description，新文案未再出现旧断言漂移。
+- blocker / 风险:
+  - 本次未新增 adapter / orchestrator 级验证；若后续 provider 侧对 prompt 拼接方式再调整，仍需补更高层回归
+  - 当前只同步了实现直接依赖的 unit semantic-lock 测试，其他二级文档若存在转述，后续仍可能单独漂移

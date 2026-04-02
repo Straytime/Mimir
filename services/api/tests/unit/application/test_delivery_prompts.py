@@ -118,7 +118,8 @@ def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() ->
     assert "使用标准 footnotes 语法插入角标" in prompt.system_prompt
     assert "`[^ref_n]`" in prompt.system_prompt
     assert "`[^ref_n]: [title](link)`" in prompt.system_prompt
-    assert "若用户需求未指定撰写字数或输出长度" in prompt.system_prompt
+    assert "在文末列出对应的来源" in prompt.system_prompt
+    assert "请根据研究复杂度和大纲，合理规划报告篇幅" in prompt.system_prompt
     assert "避免输出过长" in prompt.system_prompt
     assert "python_interpreter" in prompt.system_prompt
     assert "canonical_path" in prompt.system_prompt
