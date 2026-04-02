@@ -772,12 +772,13 @@ async def test_web_search_maps_non_risk_failures_to_retryable_operation_error() 
 
 
 @pytest.mark.asyncio
-async def test_jina_web_fetch_uses_reader_get_contract_and_truncates_content() -> None:
+async def test_jina_web_fetch_uses_reader_post_contract_with_fixed_params_and_truncates_content() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.method == "GET"
-        assert str(request.url) == "https://r.jina.ai/https://example.com/article"
+        assert request.method == "POST"
+        assert str(request.url) == "https://r.jina.ai/"
         assert request.headers["Authorization"] == "Bearer secret-key"
         assert request.headers["Accept"] == "text/plain"
+        assert request.content == b'{"url":"https://example.com/article","retainLinks":"none","retainImages":"none"}'
         return httpx.Response(
             status_code=200,
             text="# 标题\n\n" + ("a" * 12050),

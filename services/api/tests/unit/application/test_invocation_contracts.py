@@ -81,7 +81,10 @@ def test_tool_schemas_match_current_architecture_contract() -> None:
         "additional_info",
         "freshness_requirement",
     }
-    assert "尽可能自包含" in collect_agent.parameters["additional_info"]["description"]
+    assert (
+        collect_agent.parameters["additional_info"]["description"]
+        == "提供清晰的背景信息、边界、约束条件和其他必要的上下文，帮助 agent 更好地理解和执行信息收集任务"
+    )
     assert collect_agent.parameters["freshness_requirement"]["enum"] == ["low", "high"]
     assert "tool_call_id" not in collect_agent.parameters
     assert "revision_id" not in collect_agent.parameters
@@ -109,6 +112,9 @@ def test_tool_schemas_match_current_architecture_contract() -> None:
     assert web_fetch.name == "web_fetch"
     assert web_fetch.description == "网页读取工具，可读取 url 获取其内容"
     assert set(web_fetch.parameters) == {"url"}
+    assert web_fetch.required == ("url",)
+    assert "retainLinks" not in web_fetch.parameters
+    assert "retainImages" not in web_fetch.parameters
 
     python_interpreter = build_python_interpreter_tool_schema()
     assert python_interpreter.name == "python_interpreter"

@@ -1,6 +1,7 @@
 """Jina Reader web_fetch adapter.
 
-Uses https://r.jina.ai/<url> to fetch and convert web pages to plain text / markdown.
+Uses https://r.jina.ai/ with a JSON body to fetch and convert web pages to plain
+text / markdown.
 """
 
 import logging
@@ -15,6 +16,10 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE_URL = "https://r.jina.ai/"
 _DEFAULT_MAX_FETCH_CONTENT_CHARS = 5000
+_READER_REQUEST_FIXED_PARAMS = {
+    "retainLinks": "none",
+    "retainImages": "none",
+}
 
 
 class JinaWebFetchClient:
@@ -39,10 +44,15 @@ class JinaWebFetchClient:
         )
 
     async def fetch(self, url: str) -> FetchResponse:
-        reader_url = f"{self._base_url}{url}"
         logger.info("jina web_fetch starting: url=%s", url)
         try:
-            response = await self._client.get(reader_url)
+            response = await self._client.post(
+                self._base_url,
+                json={
+                    "url": url,
+                    **_READER_REQUEST_FIXED_PARAMS,
+                },
+            )
         except httpx.HTTPError:
             logger.error("jina web_fetch request failed: url=%s", url, exc_info=True)
             raise RetryableOperationError("web_fetch upstream request failed")

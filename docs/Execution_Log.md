@@ -4542,3 +4542,29 @@ Copy the template below for each completed session:
   - 本次为文档同步，未额外引入脚本模板或示例命令封装；后续若继续迭代 production 排查流程，仍需同步维护两份文档避免再次漂移
 - 下一步建议:
   - 后续凡是继续增补 `AGENTS.md` 的 production 排查经验，应在同一任务里同步检查 `CLAUDE.md`，避免知识分叉
+
+## Prompt Update 04021059 Planner Collector Lock + Jina Web Fetch Params
+
+- 日期时间: 2026-04-02 15:00:37 CST (+0800)
+- 任务包编号: 未提供
+- session 标识: codex-20260402-prompt-update-04021059
+- 目标摘要: 吸收当前分支上用户已手工修改的 planner / collector prompt 与 tool description 文案，修正文档中仍然漂移的 Jina `web_fetch` GET-only 设计，并将 real-mode Jina Reader 请求改为按 PRD 0.6 固定携带 `retainLinks="none"` 与 `retainImages="none"`，同时补齐相关 unit tests 与执行记录。
+- 修改文件:
+  - `docs/Architecture.md`
+  - `services/api/tests/unit/application/test_invocation_contracts.py`
+  - `services/api/tests/unit/application/test_collection_prompts.py`
+  - `services/api/tests/unit/infrastructure/test_jina_web_fetch.py`
+  - `services/api/tests/unit/infrastructure/test_zhipu_adapters.py`
+  - `services/api/app/infrastructure/research/jina.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/unit/application/test_invocation_contracts.py tests/unit/application/test_collection_prompts.py tests/unit/infrastructure/test_jina_web_fetch.py tests/unit/infrastructure/test_zhipu_adapters.py -k 'jina_web_fetch or semantic_lock or tool_schemas_match_current_architecture_contract'`（先红后绿；红测确认旧实现仍使用 GET contract，修复后 19 passed）
+  - 已运行: `rg -n "GET https://r\\.jina\\.ai|10000|retainLinks|retainImages|POST https://r\\.jina\\.ai/" docs/Architecture.md services/api/app/infrastructure/research/jina.py services/api/tests/unit/infrastructure/test_jina_web_fetch.py services/api/tests/unit/infrastructure/test_zhipu_adapters.py`（确认设计与实现中无旧 GET/10000 漂移残留）
+  - 未运行: 其余 `services/api` unit / contract / integration 全量测试；本任务包仅要求最小相关单测与文档一致性校验
+- 验收结论: accepted；当前 prompt/tool 测试已锁定分支上的手工文案，`web_fetch` 对模型仍仅暴露 `url`，real Jina adapter 已固定发送 `retainLinks=none` 与 `retainImages=none`，目标单测全部通过。
+- blocker / 风险:
+  - 本次只覆盖了与 Jina `web_fetch` contract 直接相关的 unit tests，未重新跑更大范围的 provider / orchestrator 回归
+  - `test_jina_web_fetch.py` / `test_zhipu_adapters.py` 目前通过精确 request body 字节串锁 contract，后续若仅调整 JSON 序列化细节也会触发测试更新
+- 下一步建议:
+  - 若后续继续调整 PRD 0.6 相关 prompt 文案，应同步优先更新 `docs/Architecture.md` 与 semantic lock tests，避免再次出现设计漂移
+  - 在下一次相关后端改动中可顺带跑更大范围的 `services/api/tests/unit/infrastructure`，补一轮 provider 侧回归信心

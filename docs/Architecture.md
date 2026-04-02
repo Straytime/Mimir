@@ -916,7 +916,7 @@ planner stop 语义约束：
 
 - 累计工具调用次数，达到 10 次则强制 stop
 - 保存 `search_query_list`
-- 截断 `web_fetch` 返回内容到前 10000 字符
+- 截断 `web_fetch` 返回内容到前 5000 字符
 - 工具 adapter 必须返回标准化成功/失败结果，避免 sub agent 因超时、空响应或非法响应而挂起
 - `search_recency_filter` 的模型可见枚举与真实 `web_search` 请求参数统一使用 PRD `oneDay | oneWeek | oneMonth | oneYear | noLimit`；adapter 只负责历史兼容归一化，不得擅自改写为另一套枚举
 
@@ -1124,17 +1124,20 @@ tool result 归一化规则：
 
 #### Jina Reader `web_fetch`
 
-PRD 当前把 `web_fetch` 写成 `POST https://r.jina.ai/` + JSON body `{"url": ...}`。设计层在此做一处有意识调整：
+PRD 0.6 当前把 `web_fetch` 定义为 `POST https://r.jina.ai/`，请求体如下：
 
-- 正式请求形态采用 `GET https://r.jina.ai/{url}`
+- JSON body:
+  - `url: <tool call 中的 url>`
+  - `retainLinks: "none"`
+  - `retainImages: "none"`
 - Header:
   - `Authorization: Bearer {JINA_API_KEY}`（当 `JINA_API_KEY` 非空时携带；为空时不携带，以免费无认证模式调用，受 RPM 限制）
   - `Accept: text/plain`
 
-调整理由：
+约束：
 
-1. Jina Reader 的稳定接入方式是“把目标 URL 直接拼到 reader base URL 后面”，这与现有 real adapter 和上游产品形态一致。
-2. 使用 path-based GET 比起自定义 POST body 更少歧义，也更适合通过 `respx` 与 contract tests 明确锁定。
+1. `retainLinks`、`retainImages` 属于固定 provider contract，不允许由模型显式传入，也不允许 adapter 调用方自由改写。
+2. collector 对模型可见的 `web_fetch` tool schema 仍只暴露 `url`；其余字段全部由 real adapter 固定补齐。
 
 结果处理规则：
 

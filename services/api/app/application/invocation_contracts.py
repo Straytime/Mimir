@@ -119,7 +119,7 @@ def build_collect_agent_tool_schema() -> ToolSchema:
             },
             "additional_info": {
                 "type": "string",
-                "description": "可辅助 sub agent、有助于其更快、更好达成收集目标的补充信息，尽可能自包含",
+                "description": "提供清晰的背景信息、边界、约束条件和其他必要的上下文，帮助 agent 更好地理解和执行信息收集任务",
             },
             "freshness_requirement": {
                 "type": "string",

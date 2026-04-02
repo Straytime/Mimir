@@ -55,9 +55,11 @@ def test_real_web_fetch_mode_allows_missing_jina_api_key() -> None:
 @pytest.mark.asyncio
 async def test_jina_success_maps_to_fetch_response() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert str(request.url) == "https://r.jina.ai/https://example.com/article"
+        assert request.method == "POST"
+        assert str(request.url) == "https://r.jina.ai/"
         assert request.headers["authorization"] == "Bearer jina-key"
         assert request.headers["accept"] == "text/plain"
+        assert request.content == b'{"url":"https://example.com/article","retainLinks":"none","retainImages":"none"}'
         return httpx.Response(
             status_code=200,
             text="Article Title\n\nSome interesting content about the topic.",
@@ -174,8 +176,11 @@ async def test_jina_extracts_title_from_first_line() -> None:
 @pytest.mark.asyncio
 async def test_jina_request_includes_auth_header_when_key_provided() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert str(request.url) == "https://r.jina.ai/"
         assert "authorization" in request.headers
         assert request.headers["authorization"] == "Bearer test-key"
+        assert request.content == b'{"url":"https://example.com/article","retainLinks":"none","retainImages":"none"}'
         return httpx.Response(status_code=200, text="# Title\n\nBody.")
 
     adapter = JinaWebFetchClient(
@@ -189,7 +194,10 @@ async def test_jina_request_includes_auth_header_when_key_provided() -> None:
 @pytest.mark.asyncio
 async def test_jina_request_omits_auth_header_when_key_is_none() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert str(request.url) == "https://r.jina.ai/"
         assert "authorization" not in request.headers
+        assert request.content == b'{"url":"https://example.com/article","retainLinks":"none","retainImages":"none"}'
         return httpx.Response(status_code=200, text="# Title\n\nBody.")
 
     adapter = JinaWebFetchClient(
@@ -203,7 +211,10 @@ async def test_jina_request_omits_auth_header_when_key_is_none() -> None:
 @pytest.mark.asyncio
 async def test_jina_request_omits_auth_header_when_key_is_empty_string() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert str(request.url) == "https://r.jina.ai/"
         assert "authorization" not in request.headers
+        assert request.content == b'{"url":"https://example.com/article","retainLinks":"none","retainImages":"none"}'
         return httpx.Response(status_code=200, text="# Title\n\nBody.")
 
     adapter = JinaWebFetchClient(
