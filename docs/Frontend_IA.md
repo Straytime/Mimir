@@ -196,6 +196,7 @@ apps/web/
 6. 提交初始需求后，页面必须通过工作台级共享 card anchor 规则滚动到澄清详情卡片，不依赖单个卡片自身的局部滚动逻辑。
 7. `clarification.delta` 文本或 `clarification.options.ready.question_set` 首次就绪时，即使仍处于同一 `clarifying` anchor key，也必须重新定位到澄清详情标题，使标题落在状态栏下方的统一留白区内。
 8. 选单澄清倒计时不得并入 `SessionStatusBar` 的 taskId-only 下排；若需要保持全局可见，必须作为独立的工作台级 sticky surface。
+9. 当 `clarification_mode === "options"` 且倒计时可见时，倒计时 surface 必须作为 `SessionStatusBar` 的紧邻下方 docked block 出现在同一全局 sticky top stack 中，两者之间不得再插入额外的留白 wrapper、stack gap 或分隔带；`TerminalBanner` 若存在，仍保持在该 top stack 的更下方。
 
 ### 5.4 `ReportCanvas`
 

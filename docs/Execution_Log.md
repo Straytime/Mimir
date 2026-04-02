@@ -4645,3 +4645,26 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若后续继续打磨顶栏，可补一条视觉回归截图用例，锁定 chip 与 `taskId` 的最终层级
   - 在下一个前端 polish 任务中统一复查工作台其余 sticky surface 的高度节奏
+
+## TP-20260402 Options Countdown Dock Tight
+
+- 日期时间: 2026-04-02 22:07:39 CST (+0800)
+- 任务包编号: TP-20260402
+- session 标识: codex-20260402-countdown-dock-tight
+- 目标摘要: 收紧 options clarification 模式下的顶部 sticky stack，使选单澄清倒计时作为独立 surface 继续停靠在全局 top stack 内，但与 `SessionStatusBar` 直接贴合无可见间隙，同时保持澄清详情卡片锚点行为不变，并将该布局约束补入前端 IA 文档与聚焦组件测试。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/clarification-countdown.spec.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm test:component -- --run apps/web/tests/component/clarification-countdown.spec.tsx`（命令实际会跑完整 component suite；其中本次新增 countdown 结构断言按预期先失败，同时暴露仓库内既有无关失败：`tests/component/copy-cleanup.spec.tsx`、`tests/component/timeline-panel.spec.tsx`）
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/clarification-countdown.spec.tsx tests/component/research-page-client.spec.tsx`
+  - 未运行: 完整前端 test matrix；本任务包只要求聚焦顶部堆叠布局修复与相关锚点回归验证
+- 验收结论: accepted；文档、聚焦测试与实现均已对齐，倒计时保留在全局 sticky top stack 中并直接 dock 在状态栏下方，聚焦测试通过。
+- blocker / 风险:
+  - `pnpm test:component` 当前存在与本任务无关的既有失败，尚未在本次任务范围内处理
+  - 终态 `TerminalBanner` 的垂直间距现在由其外层 `pt-3` 单独承担；若后续 top stack 再加入新 surface，需要继续显式管理相邻间距
+- 下一步建议:
+  - 如需恢复 component suite 全绿，可单独下发任务修复 `copy-cleanup` 与 `timeline-panel` 的空态测试漂移
+  - 若后续继续收紧顶部堆叠规则，可考虑为 top stack 相邻 surface 增加更明确的语义化 data attributes 以便测试
