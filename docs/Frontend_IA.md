@@ -435,11 +435,12 @@ v1 前端不开放 `FeedbackComposer`。
 
 展示规则：
 
-1. 顶栏主状态区必须将当前阶段标题作为最强视觉锚点，并通过更高字级、字重或分层布局强化其辨识度。
-2. `taskId` 只作为弱化的技术标识出现，不展示阶段补充小字、`analysisText` 或搜集进度，也不得与阶段主状态共享同等视觉权重。
-3. `writing_report` 阶段标题固定为“正在生成研究内容”。
-4. 当 `snapshot.phase === delivered` 且任务未进入 terminal status 时，顶栏按钮文案切为“新研究”，点击直接调用 `reset`，不走 disconnect。
-5. 非 `delivered` 的非 terminal 任务继续显示“终止任务”，并保持原有 disconnect 行为不变。
+1. 状态栏必须收紧为单层、薄而平的 docked terminal header，不再展示第二排的大号中文阶段标题。
+2. 当前阶段只以单个 stage chip 呈现；非 terminal 且未进入 `delivered` 的阶段，chip 尾部必须显示循环省略号动效，作为唯一持续活跃信号。
+3. `taskId` 只作为弱化的技术标识出现，并与 chip 同排或尾部贴靠排布；不得回退为独立强调行，也不得展示阶段补充小字、`analysisText` 或搜集进度。
+4. `writing_report` 阶段的阶段语义仍固定对应“正在生成研究内容”，但该文案不再作为大号独立标题行显示。
+5. 当 `snapshot.phase === delivered` 且任务未进入 terminal status 时，顶栏按钮文案切为“新研究”，点击直接调用 `reset`，不走 disconnect。
+6. 非 `delivered` 的非 terminal 任务继续显示“终止任务”，并保持原有 disconnect 行为不变。
 
 ## 6. 客户端状态模型
 

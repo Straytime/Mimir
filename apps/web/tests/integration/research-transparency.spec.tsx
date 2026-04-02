@@ -146,7 +146,13 @@ describe("Stage 5 timeline and transparency", () => {
       await flushAsyncWork();
     });
 
-    expect(screen.getByText("正在分析你的研究需求")).toBeInTheDocument();
+    const statusBar = screen.getByRole("region", { name: "会话状态" });
+    expect(
+      within(statusBar).getByText("Stage 02 / Analyzing"),
+    ).toBeInTheDocument();
+    expect(
+      within(statusBar).queryByText("正在分析你的研究需求"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("需求摘要已生成")).toBeInTheDocument();
     expect(
       screen.getByText("分析中国 AI 搜索产品竞争格局"),
@@ -327,10 +333,10 @@ describe("Stage 5 timeline and transparency", () => {
     expect(
       within(collectionTrace).getByRole("heading", { name: "Sources Merged" }),
     ).toBeInTheDocument();
-    expect(
-      within(collectionTrace).getAllByText("Search Started").length,
-    ).toBeGreaterThan(0);
-    expect(within(collectionTrace).getByText("Fetch Completed")).toBeInTheDocument();
+    expect(within(collectionTrace).getAllByText("Search").length).toBeGreaterThan(0);
+    expect(within(collectionTrace).getAllByText("Started").length).toBeGreaterThan(0);
+    expect(within(collectionTrace).getAllByText("Fetch").length).toBeGreaterThan(0);
+    expect(within(collectionTrace).getAllByText("已完成").length).toBeGreaterThan(0);
     expect(
       within(collectionTrace).queryByText('{ "outline": "raw debug delta" }'),
     ).not.toBeInTheDocument();
@@ -362,8 +368,11 @@ describe("Stage 5 timeline and transparency", () => {
 
     const statusBar = screen.getByRole("region", { name: "会话状态" });
     expect(
-      within(statusBar).getByText("正在构思报告结构"),
+      within(statusBar).getByText("Stage 07 / Outline"),
     ).toBeInTheDocument();
+    expect(
+      within(statusBar).queryByText("正在构思报告结构"),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
     expect(screen.queryByText('{ "outline": "raw debug delta" }')).not.toBeInTheDocument();
   });

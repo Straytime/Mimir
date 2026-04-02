@@ -113,8 +113,10 @@ export function SessionStatusBar() {
       : "Stage 00 / Idle";
 
   const isTerminal = terminalReason !== null;
-  const isDeliveredPhase =
-    snapshot?.phase === "delivered" && !isTerminal;
+  const isDeliveredPhase = snapshot?.phase === "delivered" && !isTerminal;
+  const showStageEllipsis =
+    snapshot !== null && !isTerminal && snapshot.phase !== "delivered";
+  const showTerminalLabel = isTerminal;
   const actionLabel = isDeliveredPhase
     ? "新研究"
     : pendingAction === "disconnecting"
@@ -125,29 +127,47 @@ export function SessionStatusBar() {
     <section
       aria-label="会话状态"
       data-research-status-bar="true"
-      className="bg-surface/70 px-4 py-4 font-ui text-sm backdrop-blur-[20px]"
+      className="bg-surface/70 px-4 py-3 font-ui text-sm backdrop-blur-[20px]"
       role="region"
     >
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),auto] md:items-start">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.15em]">
-            <span className="flex items-center gap-2 bg-surface-container-low px-3 py-2 text-secondary">
-              {sseState === "open" ? <PulseIndicator /> : null}
-              {SSE_STATE_LABELS[sseState]}
-            </span>
-            <span className="bg-surface-container-high px-3 py-2 text-surface-tint">
-              {stageTag}
-            </span>
-          </div>
-          <p
-            className="text-[20px] font-semibold leading-tight text-primary"
-            data-research-stage-title="true"
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr),auto] md:items-center">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.15em]">
+          <span className="flex items-center gap-2 bg-surface-container-low px-3 py-2 text-secondary">
+            {sseState === "open" ? <PulseIndicator /> : null}
+            {SSE_STATE_LABELS[sseState]}
+          </span>
+          <span
+            aria-label={`${stageTag} ${stageTitle}`}
+            className="inline-flex items-center gap-1.5 bg-surface-container-high px-3 py-2 text-surface-tint"
+            data-research-stage-chip="true"
           >
-            {stageTitle}
-          </p>
+            <span>{stageTag}</span>
+            {showStageEllipsis ? (
+              <span
+                aria-hidden="true"
+                className="research-stage-ellipsis inline-flex items-center"
+                data-research-stage-ellipsis="true"
+              >
+                <span>.</span>
+                <span>.</span>
+                <span>.</span>
+              </span>
+            ) : null}
+          </span>
+          {showTerminalLabel ? (
+            <span className="px-1 text-primary">{stageTitle}</span>
+          ) : null}
+          {taskId !== null ? (
+            <p
+              className="px-1 text-[10px] uppercase tracking-[0.18em] text-tertiary"
+              data-research-task-meta="true"
+            >
+              taskId: {taskId}
+            </p>
+          ) : null}
         </div>
 
-        <div className="flex flex-col items-start gap-3 md:items-end">
+        <div className="flex items-center justify-start md:justify-end">
           <button
             className="bg-surface-container-lowest px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:text-tertiary"
             disabled={isDeliveredPhase ? false : !canDisconnectTask}
@@ -163,17 +183,37 @@ export function SessionStatusBar() {
           >
             {actionLabel}
           </button>
-
-          {taskId !== null ? (
-            <p
-              className="text-[11px] uppercase tracking-[0.15em] text-tertiary"
-              data-research-task-meta="true"
-            >
-              taskId: {taskId}
-            </p>
-          ) : null}
         </div>
       </div>
+      <style>{`
+        .research-stage-ellipsis span {
+          animation: research-stage-ellipsis 1.2s infinite;
+          opacity: 0.25;
+        }
+
+        .research-stage-ellipsis span:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+
+        .research-stage-ellipsis span:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+
+        @keyframes research-stage-ellipsis {
+          0%,
+          20% {
+            opacity: 0.2;
+          }
+
+          50% {
+            opacity: 1;
+          }
+
+          100% {
+            opacity: 0.2;
+          }
+        }
+      `}</style>
     </section>
   );
 }

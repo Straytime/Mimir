@@ -4620,3 +4620,28 @@ Copy the template below for each completed session:
 - blocker / 风险:
   - 本次未新增 adapter / orchestrator 级验证；若后续 provider 侧对 prompt 拼接方式再调整，仍需补更高层回归
   - 当前只同步了实现直接依赖的 unit semantic-lock 测试，其他二级文档若存在转述，后续仍可能单独漂移
+
+## UI-2026-04-02 Status Bar Thin Ellipsis Polish
+
+- 日期时间: 2026-04-02 21:51:01 CST (+0800)
+- 任务包编号: UI-2026-04-02-status-bar-thin-ellipsis
+- session 标识: codex-20260402-status-bar-thin-ellipsis
+- 目标摘要: 按 `docs/DESIGN.md` 与 `docs/Frontend_IA.md` 将工作台顶栏收紧为更薄的单层状态条，移除原有大号中文阶段标题，把阶段展示收敛为 chip，并为所有进行中的阶段补充循环尾随省略号动效，同时把 `taskId` 重排为更弱的同排元信息且保持现有 disconnect / 新研究行为不变。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/tests/component/session-status-bar.spec.tsx`
+  - `apps/web/tests/component/session-status-bar-terminal.spec.tsx`
+  - `apps/web/tests/integration/research-transparency.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/session-status-bar.spec.tsx tests/component/session-status-bar-terminal.spec.tsx tests/integration/research-transparency.spec.tsx`
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 未运行: `pnpm lint`、其余 component / integration / e2e 测试；本任务包只要求状态栏相关聚焦验证与类型检查
+- 验收结论: accepted；状态栏已无第二排大号中文阶段标题，进行中阶段显示 chip + 循环省略号，`taskId` 保持弱化且重新排布，聚焦测试与类型检查通过。
+- blocker / 风险:
+  - 省略号动效通过组件内联 `<style>` 注入，后续若状态栏被服务端化或抽到共享样式层，需要同步迁移动画定义
+  - 本次未运行全量前端测试，仍存在未覆盖区域的回归风险
+- 下一步建议:
+  - 若后续继续打磨顶栏，可补一条视觉回归截图用例，锁定 chip 与 `taskId` 的最终层级
+  - 在下一个前端 polish 任务中统一复查工作台其余 sticky surface 的高度节奏
