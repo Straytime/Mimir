@@ -30,13 +30,13 @@ function ResearchPageContent() {
       className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 bg-radial-glow px-sp-8 pb-32 py-16"
       ref={mainRef}
     >
-      <div className="animate-fade-in-up space-y-4">
-        <p className="text-[11px] font-ui font-medium uppercase tracking-[0.15em] text-surface-tint">
+      <div className="animate-fade-in-up space-y-3">
+        <h1 className="max-w-[7ch] text-[72px] font-ui font-semibold leading-none tracking-[-0.08em] text-primary sm:text-[88px]">
           Mimir
-        </p>
-        <h1 className="text-[56px] font-ui font-semibold leading-tight tracking-tight text-primary">
-          AI 研究工作台
         </h1>
+        <p className="max-w-[20rem] pl-1 text-[12px] font-ui font-medium tracking-[0.28em] text-surface-tint/88 sm:max-w-none">
+          Draw from depth.
+        </p>
       </div>
 
       {isActiveWorkspace ? (

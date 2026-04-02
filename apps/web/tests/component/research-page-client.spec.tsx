@@ -18,7 +18,8 @@ import {
 test("renders the idle workspace shell before a task is created", () => {
   render(<ResearchPageClient />);
 
-  expect(screen.getByRole("heading", { name: "AI 研究工作台" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Mimir" })).toBeInTheDocument();
+  expect(screen.getByText("Draw from depth.")).toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的研究主题...")).toBeInTheDocument();
   expect(
     screen.getByText("系统生成结构化问题并预选默认答案，30 秒倒计时后自动提交。"),

@@ -159,10 +159,10 @@ export function SessionStatusBar() {
           ) : null}
           {taskId !== null ? (
             <p
-              className="px-1 text-[10px] uppercase tracking-[0.18em] text-tertiary"
+              className="px-1 text-[10px] tracking-[0.14em] text-tertiary/80"
               data-research-task-meta="true"
             >
-              taskId: {taskId}
+              {taskId}
             </p>
           ) : null}
         </div>

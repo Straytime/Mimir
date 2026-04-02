@@ -4668,3 +4668,32 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 如需恢复 component suite 全绿，可单独下发任务修复 `copy-cleanup` 与 `timeline-panel` 的空态测试漂移
   - 若后续继续收紧顶部堆叠规则，可考虑为 top stack 相邻 surface 增加更明确的语义化 data attributes 以便测试
+
+## TP-20260402 Frontend Branding Polish
+
+- 日期时间: 2026-04-02 23:08:50 CST (+0800)
+- 任务包编号: TP-20260402
+- session 标识: codex-20260402-branding-polish
+- 目标摘要: 收紧首页与工作台顶部品牌表达，将旧的 `AI 研究工作台` hero 替换为大号 `Mimir` wordmark 与 `Draw from depth.` slogan，同时将 `SessionStatusBar` 中的任务标识改为仅显示原始 `taskId` 值，并在 Next App Router 标准 icon 路径下补入给定黑白 SVG favicon；本次实现严格停留在品牌文案、弱化 task id 呈现与图标资源接入，不涉及任务流转、工作台排序或其他壳层改造。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/component/session-status-bar.spec.tsx`
+  - `apps/web/tests/integration/report-delivery-flow.spec.tsx`
+  - `apps/web/tests/e2e/specs/harness.spec.ts`
+  - `apps/web/tests/unit/app-icon.spec.ts`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/session-status-bar.tsx`
+  - `apps/web/app/icon.svg`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-page-client.spec.tsx tests/component/session-status-bar.spec.tsx tests/integration/report-delivery-flow.spec.tsx tests/unit/app-icon.spec.ts`
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 未运行: `pnpm test:e2e`；本任务包验收只要求聚焦测试与类型检查，e2e 规格已同步更新但未在本回合执行
+- 验收结论: accepted；文档、聚焦测试与实现已对齐，idle / reset 后 hero 均切换为 `Mimir` + `Draw from depth.`，状态栏去除 `taskId:` 前缀，且 favicon 资源已落在 `app/icon.svg`。
+- blocker / 风险:
+  - 聚焦 integration test 仍打印既有 heartbeat MSW 未命中告警，但不影响本次断言通过
+  - 本次未执行 e2e，浏览器层对 favicon 实际暴露路径的最终验证留待后续全量回归
+- 下一步建议:
+  - 若需要收紧品牌一致性，可在后续任务中补充 favicon/head 层的浏览器级断言
+  - 若要消除测试噪音，可单独下发任务为 `heartbeat` 请求补 MSW handler

@@ -34,7 +34,8 @@ test("shows SSE state, stage chip, weak taskId, and disconnect button in the sta
 
   expect(screen.getByText("已连接")).toBeInTheDocument();
   expect(screen.getByText("Stage 01 / Clarifying")).toBeInTheDocument();
-  expect(screen.getByText("taskId: tsk_stage0")).toBeInTheDocument();
+  expect(screen.getByText("tsk_stage0")).toBeInTheDocument();
+  expect(screen.queryByText(/taskId:/)).not.toBeInTheDocument();
   expect(
     document.querySelector('[data-research-stage-ellipsis="true"]'),
   ).not.toBeNull();
@@ -83,7 +84,7 @@ test("renders in-progress stage chip with looping ellipsis and keeps taskId visu
 
   const stageChipText = screen.getByText("Stage 04 / Collecting");
   const stageChip = stageChipText.closest('[data-research-stage-chip="true"]');
-  const taskIdMeta = screen.getByText("taskId: tsk_stage0");
+  const taskIdMeta = screen.getByText("tsk_stage0");
 
   expect(stageChip).toHaveAttribute("data-research-stage-chip", "true");
   expect(stageChip).toHaveClass("text-surface-tint");
@@ -94,7 +95,7 @@ test("renders in-progress stage chip with looping ellipsis and keeps taskId visu
     screen.queryByText("正在搜索与读取资料"),
   ).not.toBeInTheDocument();
   expect(taskIdMeta).toHaveAttribute("data-research-task-meta", "true");
-  expect(taskIdMeta).toHaveClass("text-[10px]", "uppercase", "text-tertiary");
+  expect(taskIdMeta).toHaveClass("text-[10px]", "text-tertiary/80");
 });
 
 test("does not expose revision transition badges in the status bar", () => {
@@ -307,7 +308,8 @@ test("keeps taskId present in the thin header and omits description, collect pro
   renderWithStore(<SessionStatusBar />, { store });
 
   expect(screen.getByText("Stage 03 / Planning")).toBeInTheDocument();
-  expect(screen.getByText("taskId: tsk_stage0")).toBeInTheDocument();
+  expect(screen.getByText("tsk_stage0")).toBeInTheDocument();
+  expect(screen.queryByText(/taskId:/)).not.toBeInTheDocument();
   expect(
     screen.queryByText("正在规划研究路径"),
   ).not.toBeInTheDocument();
