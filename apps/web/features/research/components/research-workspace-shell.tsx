@@ -49,6 +49,20 @@ function isPhaseAtOrAfter(
   return PHASE_ORDER.indexOf(phase) >= PHASE_ORDER.indexOf(targetPhase);
 }
 
+function hasClarificationContent(args: {
+  clarificationText: string;
+  questionCount: number;
+}) {
+  return args.clarificationText.trim().length > 0 || args.questionCount > 0;
+}
+
+function hasOutlineContent(args: {
+  outlineReady: boolean;
+  sectionCount: number;
+}) {
+  return args.outlineReady && args.sectionCount > 0;
+}
+
 export function ResearchWorkspaceShell() {
   useTaskStream();
   useHeartbeatLoop();
@@ -72,6 +86,7 @@ export function ResearchWorkspaceShell() {
   const reportMarkdown = useResearchSessionStore(
     (state) => state.stream.reportMarkdown,
   );
+  const delivery = useResearchSessionStore((state) => state.remote.delivery);
   const clarificationRef = useRef<HTMLDivElement | null>(null);
   const requirementSummaryRef = useRef<HTMLDivElement | null>(null);
   const collectionTraceRef = useRef<HTMLDivElement | null>(null);
@@ -82,22 +97,33 @@ export function ResearchWorkspaceShell() {
     return null;
   }
 
-  const shouldShowRequirementSummary = isPhaseAtOrAfter(
-    snapshot.phase,
-    "analyzing_requirement",
-  );
-  const shouldShowCollectionTrace = isPhaseAtOrAfter(
-    snapshot.phase,
-    "planning_collection",
-  );
+  const clarificationQuestionCount = questionSet?.questions.length ?? 0;
+  const outlineSectionCount = outline?.sections.length ?? 0;
+  const shouldShowClarification =
+    snapshot.phase === "clarifying" &&
+    hasClarificationContent({
+      clarificationText,
+      questionCount: clarificationQuestionCount,
+    });
+  const shouldShowRequirementSummary =
+    isPhaseAtOrAfter(snapshot.phase, "analyzing_requirement") &&
+    requirementDetail !== null;
+  const shouldShowCollectionTrace =
+    isPhaseAtOrAfter(snapshot.phase, "planning_collection") &&
+    collectionTrace.nodes.length > 0;
   const shouldShowOutline =
     isPhaseAtOrAfter(snapshot.phase, "preparing_outline") &&
-    outlineReady &&
-    outline !== null;
-  const shouldShowReport = isPhaseAtOrAfter(snapshot.phase, "writing_report");
-  const shouldShowDelivery = snapshot.phase === "delivered";
+    hasOutlineContent({
+      outlineReady,
+      sectionCount: outlineSectionCount,
+    });
+  const shouldShowReport =
+    isPhaseAtOrAfter(snapshot.phase, "writing_report") &&
+    reportMarkdown.trim().length > 0;
+  const shouldShowDelivery =
+    snapshot.phase === "delivered" && delivery !== null;
   const activeCardAnchor = useMemo<WorkspaceCardAnchor | null>(() => {
-    if (snapshot.phase === "clarifying") {
+    if (shouldShowClarification) {
       return "clarification";
     }
 
@@ -120,10 +146,10 @@ export function ResearchWorkspaceShell() {
     return null;
   }, [
     shouldShowCollectionTrace,
+    shouldShowClarification,
     shouldShowOutline,
     shouldShowReport,
     shouldShowRequirementSummary,
-    snapshot.phase,
   ]);
   const cardAnchorRefs = useMemo(
     () => ({
@@ -156,8 +182,9 @@ export function ResearchWorkspaceShell() {
       case "clarification":
         return [
           snapshot.phase,
+          shouldShowClarification ? "card-visible" : "card-hidden",
           clarificationText.trim().length > 0 ? "text-ready" : "text-pending",
-          questionSet?.questions.length ?? 0,
+          clarificationQuestionCount,
         ].join(":");
       case "requirementSummary":
         return [
@@ -184,13 +211,14 @@ export function ResearchWorkspaceShell() {
     }
   }, [
     activeCardAnchor,
+    clarificationQuestionCount,
     clarificationText,
     collectionTrace.nodes.length,
     outline,
     outlineReady,
-    questionSet,
     reportMarkdown,
     requirementDetail,
+    shouldShowClarification,
     shouldShowDelivery,
     snapshot.phase,
   ]);
@@ -214,13 +242,15 @@ export function ResearchWorkspaceShell() {
       </div>
 
       <div className="space-y-sp-10">
-        <div
-          className="animate-fade-in-up"
-          data-research-card-anchor="clarification"
-          ref={clarificationRef}
-        >
-          <ClarificationDetailPanel />
-        </div>
+        {shouldShowClarification ? (
+          <div
+            className="animate-fade-in-up"
+            data-research-card-anchor="clarification"
+            ref={clarificationRef}
+          >
+            <ClarificationDetailPanel />
+          </div>
+        ) : null}
         {shouldShowRequirementSummary ? (
           <div
             className="animate-fade-in-up stagger-1"

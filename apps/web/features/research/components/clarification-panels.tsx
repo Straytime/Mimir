@@ -92,8 +92,15 @@ export function ClarificationDetailPanel() {
   const setOptionAnswer = useResearchSessionStore((state) => state.setOptionAnswer);
   const submitClarification = useClarificationSubmit();
   const isSubmitting = pendingAction === "submitting_clarification";
+  const hasClarificationContent =
+    clarificationText.trim().length > 0 ||
+    (questionSet?.questions.length ?? 0) > 0;
 
-  if (snapshot === null || snapshot.phase !== "clarifying") {
+  if (
+    snapshot === null ||
+    snapshot.phase !== "clarifying" ||
+    !hasClarificationContent
+  ) {
     return null;
   }
 

@@ -33,8 +33,7 @@ test("shows SSE state, stage title, taskId, and disconnect button in the status 
   renderWithStore(<SessionStatusBar />, { store });
 
   expect(screen.getByText("已连接")).toBeInTheDocument();
-  // clarifying falls through to default title in getStageStatusCopy
-  expect(screen.getByText("工作台已接管当前任务")).toBeInTheDocument();
+  expect(screen.getByText("等待你的澄清反馈")).toBeInTheDocument();
   expect(screen.getByText("taskId: tsk_stage0")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "终止任务" })).toBeInTheDocument();
 
@@ -53,6 +52,33 @@ test("shows SSE state, stage title, taskId, and disconnect button in the status 
   });
 
   expect(screen.getByText("正在分析你的研究需求")).toBeInTheDocument();
+});
+
+test("renders the current stage as the dominant status block and demotes taskId metadata", () => {
+  const store = createResearchSessionStore(
+    makeResearchSessionState({
+      session: {
+        sseState: "open",
+        taskId: "tsk_stage0",
+      },
+      remote: {
+        snapshot: makeTaskSnapshot({
+          phase: "collecting",
+          status: "running",
+        }),
+      },
+    }),
+  );
+
+  renderWithStore(<SessionStatusBar />, { store });
+
+  const stageTitle = screen.getByText("正在搜索与读取资料");
+  const taskIdMeta = screen.getByText("taskId: tsk_stage0");
+
+  expect(stageTitle).toHaveAttribute("data-research-stage-title", "true");
+  expect(stageTitle).toHaveClass("text-[20px]", "font-semibold", "text-primary");
+  expect(taskIdMeta).toHaveAttribute("data-research-task-meta", "true");
+  expect(taskIdMeta).toHaveClass("text-[11px]", "uppercase", "text-tertiary");
 });
 
 test("does not expose revision transition badges in the status bar", () => {

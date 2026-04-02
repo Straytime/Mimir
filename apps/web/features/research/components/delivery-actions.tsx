@@ -98,7 +98,7 @@ export function DeliveryActions() {
 
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
-  if (phase !== "delivered") {
+  if (phase !== "delivered" || delivery === null) {
     return null;
   }
 

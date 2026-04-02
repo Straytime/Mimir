@@ -46,7 +46,10 @@ test("renders when phase is delivered", () => {
           status: "awaiting_feedback",
           available_actions: ["download_markdown", "download_pdf", "submit_feedback"],
         }),
-        delivery: makeDeliverySummary(),
+        delivery: makeDeliverySummary({
+          artifact_count: 0,
+          artifacts: [],
+        }),
       },
     }),
   );

@@ -11,6 +11,10 @@ export function OutlineCard() {
     return null;
   }
 
+  if (outline.sections.length === 0) {
+    return null;
+  }
+
   const orderedSections = [...outline.sections].sort((left, right) => {
     return left.order - right.order;
   });
