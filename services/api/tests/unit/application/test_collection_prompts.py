@@ -122,16 +122,18 @@ def test_collector_prompt_semantic_lock_matches_current_wording_and_transcript()
     )
 
     assert "你是一个信息搜集 agent" in prompt.system_prompt
-    assert "负责根据信息获取目标和补充信息进行信息的搜集和整理" in prompt.system_prompt
+    assert "负责进行信息的搜集以达成特定的信息获取目标，并将搜集结果进行整理输出" in prompt.system_prompt
+    assert "你的输出将被用于深度研究内容撰写" in prompt.system_prompt
     assert "`web_search` 和 `web_fetch`" in prompt.system_prompt
+    assert "你最多只能调用 10 次工具" in prompt.system_prompt
     assert "1. 仔细观察信息获取目标、补充信息和工具返回的执行结果" in prompt.system_prompt
     assert "2.1 若无法支撑：" in prompt.system_prompt
     assert "规划接下来要执行的信息搜集行为" in prompt.system_prompt
     assert "调用 `web_search` 或 `web_fetch` 工具执行" in prompt.system_prompt
     assert "2.2 若能够支撑" in prompt.system_prompt
-    assert "total_max_tool_calls = 10" in prompt.system_prompt
-    assert "停止工具调用，基于已有信息输出整理后的信息搜集结果" in prompt.system_prompt
-    assert "高质量的关键信息和数据" in prompt.system_prompt
+    assert "只要 total_tool_calls = 10" in prompt.system_prompt
+    assert "停止搜集，基于已有信息输出整理后的信息搜集结果" in prompt.system_prompt
+    assert "尽最大可能保留和目标相关的高质量信息和数据" in prompt.system_prompt
     assert "原始网页 link 和 title" in prompt.system_prompt
     assert "<最终输出格式>" in prompt.system_prompt
     assert '"info":""' in prompt.system_prompt

@@ -20,6 +20,7 @@
   • 调整 func_8_搜集目标执行中，web_fetch 工具的读取内容截断限制，从一万调整到五千
   • 将 func_7 中 `collect_agent.freshness_requirement` 保持为枚举语义，与当前实现一致 | 2026.03.23 | 郑翰文 |
 | 0.5 |   • func_4 & func_5 需求澄清环节，为 LLM 新增搜索工具，调整 prompt | 2026.03.25 | 郑翰文 |
+| 0.6 |   • func_8，新增两个 web_fetch 工具执行时的固定参数 | 2026.04.02 | 郑翰文 |
 
 # 产品背景
 
@@ -913,7 +914,9 @@ stateDiagram-v2
     
     ```json
     {
-      "url": ""  \\由搜集目标 agent tool call 提供
+      "url": "",  //由搜集目标 agent tool call 提供
+      "retainLinks": "none",  //固定值
+      "retainImages": "none"  //固定值
     }
     ```
     
