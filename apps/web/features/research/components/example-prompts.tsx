@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
+
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 
 const EXAMPLES = [
-  "2025 年全球 AI 搜索产品竞争格局：主要玩家、商业模式与市场趋势",
-  "远程办公对企业生产力的影响：最新研究综述与管理建议",
+  "从心理学角度解析 openclaw 爆火的原因",
+  "一级方程式赛车 26 年新规的争议与影响",
   "新能源汽车电池技术路线对比：磷酸铁锂 vs 三元锂 vs 固态电池",
 ] as const;
 
@@ -12,6 +14,7 @@ export function ExamplePrompts() {
   const setInitialPromptDraft = useResearchSessionStore(
     (state) => state.setInitialPromptDraft,
   );
+  const [activeExample, setActiveExample] = useState<string | null>(null);
 
   return (
     <div className="space-y-3">
@@ -21,9 +24,16 @@ export function ExamplePrompts() {
       <div className="grid gap-3 sm:grid-cols-3">
         {EXAMPLES.map((example) => (
           <button
-            className="bg-surface-container-lowest px-4 py-4 text-left text-sm leading-6 text-secondary shadow-ghost transition hover:bg-surface-container-high hover:shadow-glow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+            className="relative overflow-hidden bg-surface-container-lowest px-4 py-4 text-left text-sm leading-6 text-secondary outline outline-1 outline-transparent transition-[background-color,color,outline-color] duration-150 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-surface-tint before:opacity-0 before:transition-opacity before:duration-150 hover:bg-surface-container-low hover:text-primary hover:outline-outline-variant/15 hover:before:opacity-100 focus-visible:bg-surface-container-low focus-visible:text-primary focus-visible:outline-surface-tint/25 focus-visible:before:opacity-100 data-[active=true]:before:opacity-100"
+            data-active={activeExample === example}
             key={example}
+            onBlur={() => setActiveExample((current) => (current === example ? null : current))}
             onClick={() => setInitialPromptDraft(example)}
+            onFocus={() => setActiveExample(example)}
+            onMouseEnter={() => setActiveExample(example)}
+            onMouseLeave={() =>
+              setActiveExample((current) => (current === example ? null : current))
+            }
             type="button"
           >
             {example}
