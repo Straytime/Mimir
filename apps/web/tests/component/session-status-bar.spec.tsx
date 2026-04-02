@@ -14,7 +14,7 @@ import {
 } from "@/tests/fixtures/builders";
 import { renderWithStore } from "@/tests/fixtures/render";
 
-test("shows SSE state, stage title, taskId, and disconnect button in the status bar", () => {
+test("shows SSE state, stage chip, weak taskId, and disconnect button in the status bar", () => {
   const store = createResearchSessionStore(
     makeResearchSessionState({
       session: {
@@ -33,8 +33,14 @@ test("shows SSE state, stage title, taskId, and disconnect button in the status 
   renderWithStore(<SessionStatusBar />, { store });
 
   expect(screen.getByText("已连接")).toBeInTheDocument();
-  expect(screen.getByText("等待你的澄清反馈")).toBeInTheDocument();
+  expect(screen.getByText("Stage 01 / Clarifying")).toBeInTheDocument();
   expect(screen.getByText("taskId: tsk_stage0")).toBeInTheDocument();
+  expect(
+    document.querySelector('[data-research-stage-ellipsis="true"]'),
+  ).not.toBeNull();
+  expect(
+    screen.queryByText("等待你的澄清反馈"),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "终止任务" })).toBeInTheDocument();
 
   act(() => {
@@ -51,10 +57,13 @@ test("shows SSE state, stage title, taskId, and disconnect button in the status 
     );
   });
 
-  expect(screen.getByText("正在分析你的研究需求")).toBeInTheDocument();
+  expect(screen.getByText("Stage 02 / Analyzing")).toBeInTheDocument();
+  expect(
+    screen.queryByText("正在分析你的研究需求"),
+  ).not.toBeInTheDocument();
 });
 
-test("renders the current stage as the dominant status block and demotes taskId metadata", () => {
+test("renders in-progress stage chip with looping ellipsis and keeps taskId visually weak", () => {
   const store = createResearchSessionStore(
     makeResearchSessionState({
       session: {
@@ -72,13 +81,20 @@ test("renders the current stage as the dominant status block and demotes taskId 
 
   renderWithStore(<SessionStatusBar />, { store });
 
-  const stageTitle = screen.getByText("正在搜索与读取资料");
+  const stageChipText = screen.getByText("Stage 04 / Collecting");
+  const stageChip = stageChipText.closest('[data-research-stage-chip="true"]');
   const taskIdMeta = screen.getByText("taskId: tsk_stage0");
 
-  expect(stageTitle).toHaveAttribute("data-research-stage-title", "true");
-  expect(stageTitle).toHaveClass("text-[20px]", "font-semibold", "text-primary");
+  expect(stageChip).toHaveAttribute("data-research-stage-chip", "true");
+  expect(stageChip).toHaveClass("text-surface-tint");
+  expect(
+    document.querySelector('[data-research-stage-ellipsis="true"]'),
+  ).not.toBeNull();
+  expect(
+    screen.queryByText("正在搜索与读取资料"),
+  ).not.toBeInTheDocument();
   expect(taskIdMeta).toHaveAttribute("data-research-task-meta", "true");
-  expect(taskIdMeta).toHaveClass("text-[11px]", "uppercase", "text-tertiary");
+  expect(taskIdMeta).toHaveClass("text-[10px]", "uppercase", "text-tertiary");
 });
 
 test("does not expose revision transition badges in the status bar", () => {
@@ -109,7 +125,7 @@ test("does not expose revision transition badges in the status bar", () => {
   expect(screen.queryByText(/等待第 2 轮/)).not.toBeInTheDocument();
 });
 
-test("uses '正在生成研究内容' copy during writing_report", () => {
+test("uses the writing stage chip and keeps the large Chinese title hidden during writing_report", () => {
   const store = createResearchSessionStore(
     makeResearchSessionState({
       session: {
@@ -129,7 +145,11 @@ test("uses '正在生成研究内容' copy during writing_report", () => {
 
   renderWithStore(<SessionStatusBar />, { store });
 
-  expect(screen.getByText("正在生成研究内容")).toBeInTheDocument();
+  expect(screen.getByText("Stage 08 / Writing")).toBeInTheDocument();
+  expect(
+    document.querySelector('[data-research-stage-ellipsis="true"]'),
+  ).not.toBeNull();
+  expect(screen.queryByText("正在生成研究内容")).not.toBeInTheDocument();
   expect(
     screen.queryByText("正在撰写报告与生成配图"),
   ).not.toBeInTheDocument();
@@ -223,7 +243,13 @@ test("switches the delivered action button to '新研究' and resets without dis
     store,
   });
 
-  expect(screen.getByText("报告已完成并进入交付阶段")).toBeInTheDocument();
+  expect(screen.getByText("Stage 09 / Delivered")).toBeInTheDocument();
+  expect(
+    document.querySelector('[data-research-stage-ellipsis="true"]'),
+  ).toBeNull();
+  expect(
+    screen.queryByText("报告已完成并进入交付阶段"),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "新研究" })).toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: "终止任务" }),
@@ -235,7 +261,7 @@ test("switches the delivered action button to '新研究' and resets without dis
   expect(disconnectTask).not.toHaveBeenCalled();
 });
 
-test("shows taskId only in the lower row and omits description, collect progress, and analysisText", () => {
+test("keeps taskId present in the thin header and omits description, collect progress, and analysisText", () => {
   const store = createResearchSessionStore(
     makeResearchSessionState({
       session: {
@@ -280,8 +306,11 @@ test("shows taskId only in the lower row and omits description, collect progress
 
   renderWithStore(<SessionStatusBar />, { store });
 
-  expect(screen.getByText("正在规划研究路径")).toBeInTheDocument();
+  expect(screen.getByText("Stage 03 / Planning")).toBeInTheDocument();
   expect(screen.getByText("taskId: tsk_stage0")).toBeInTheDocument();
+  expect(
+    screen.queryByText("正在规划研究路径"),
+  ).not.toBeInTheDocument();
   expect(
     screen.queryByText("规划器正在拆解搜集目标，规划后续子任务的执行路径。"),
   ).not.toBeInTheDocument();
@@ -290,4 +319,31 @@ test("shows taskId only in the lower row and omits description, collect progress
   expect(
     screen.queryByText(/用户希望研究量子计算的最新进展/),
   ).not.toBeInTheDocument();
+});
+
+test("does not render the looping ellipsis for delivered or terminal states", () => {
+  const store = createResearchSessionStore(
+    makeResearchSessionState({
+      session: {
+        sseState: "closed",
+        taskId: "tsk_stage0",
+      },
+      remote: {
+        snapshot: makeTaskSnapshot({
+          phase: "delivered",
+          status: "expired",
+        }),
+      },
+      ui: {
+        terminalReason: "expired",
+      },
+    }),
+  );
+
+  renderWithStore(<SessionStatusBar />, { store });
+
+  expect(screen.getByText("Terminal / Expired")).toBeInTheDocument();
+  expect(
+    document.querySelector('[data-research-stage-ellipsis="true"]'),
+  ).toBeNull();
 });

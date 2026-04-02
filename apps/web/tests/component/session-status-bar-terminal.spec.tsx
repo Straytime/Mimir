@@ -31,7 +31,8 @@ test("displays phase label when terminalReason is null", () => {
 
   renderWithStore(<SessionStatusBar />, { store });
 
-  expect(screen.getByText("正在搜索与读取资料")).toBeInTheDocument();
+  expect(screen.getByText("Stage 04 / Collecting")).toBeInTheDocument();
+  expect(screen.queryByText("正在搜索与读取资料")).not.toBeInTheDocument();
 });
 
 test('displays "任务已失败" when terminalReason is "failed"', () => {
@@ -58,7 +59,7 @@ test('displays "任务已失败" when terminalReason is "failed"', () => {
   renderWithStore(<SessionStatusBar />, { store });
 
   expect(screen.getByText("任务已失败")).toBeInTheDocument();
-  expect(screen.queryByText("正在搜索与读取资料")).not.toBeInTheDocument();
+  expect(screen.queryByText("Stage 04 / Collecting")).not.toBeInTheDocument();
 });
 
 test('displays "任务已终止" when terminalReason is "terminated"', () => {
@@ -86,6 +87,7 @@ test('displays "任务已终止" when terminalReason is "terminated"', () => {
 
   expect(screen.getByText("任务已终止")).toBeInTheDocument();
   expect(screen.queryByText("正在撰写报告与生成配图")).not.toBeInTheDocument();
+  expect(screen.queryByText("Stage 08 / Writing")).not.toBeInTheDocument();
 });
 
 test('displays "任务已过期" when terminalReason is "expired"', () => {
@@ -112,5 +114,5 @@ test('displays "任务已过期" when terminalReason is "expired"', () => {
   renderWithStore(<SessionStatusBar />, { store });
 
   expect(screen.getByText("任务已过期")).toBeInTheDocument();
-  expect(screen.queryByText("报告已完成并进入交付阶段")).not.toBeInTheDocument();
+  expect(screen.queryByText("Stage 09 / Delivered")).not.toBeInTheDocument();
 });
