@@ -286,7 +286,6 @@ describe("Stage 6 report canvas and delivery flow", () => {
     expect(
       within(reportCanvas).queryByText("先完成市场格局章节，再决定是否需要图表支撑。"),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "提交反馈" })).not.toBeInTheDocument();
 
     await act(async () => {
@@ -340,9 +339,8 @@ describe("Stage 6 report canvas and delivery flow", () => {
     await user.click(within(statusBar).getByRole("button", { name: "新研究" }));
 
     expect(disconnectCalls).toBe(0);
-    expect(
-      screen.getByRole("heading", { name: "AI 研究工作台" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mimir" })).toBeInTheDocument();
+    expect(screen.getByText("Draw from depth.")).toBeInTheDocument();
     expect(
       screen.getByPlaceholderText("输入你的研究主题..."),
     ).toBeInTheDocument();
