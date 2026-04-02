@@ -165,3 +165,21 @@ test("options countdown stays in a global sticky surface outside the clarificati
   ).toBeNull();
   expect(screen.getByText("问题 12")).toBeInTheDocument();
 });
+
+test("options countdown docks directly under the status bar inside the sticky top stack", () => {
+  vi.setSystemTime(new Date("2026-03-26T12:00:00Z"));
+  const store = createCountdownStore(30);
+
+  render(<ResearchPageClient store={store} />);
+
+  const countdownSurface = screen.getByRole("status", {
+    name: "选单澄清倒计时",
+  });
+  const statusBar = screen.getByRole("region", { name: "会话状态" });
+  const topStack = countdownSurface.closest("[data-research-top-stack='true']");
+
+  expect(topStack).not.toBeNull();
+  expect(topStack).not.toHaveClass("space-y-3");
+  expect(statusBar.nextElementSibling).toBe(countdownSurface);
+  expect(countdownSurface.previousElementSibling).toBe(statusBar);
+});
