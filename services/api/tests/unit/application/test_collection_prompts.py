@@ -78,6 +78,8 @@ def test_planner_prompt_semantic_lock_keeps_role_limits_and_transcript_order() -
     assert "尤其是在你还未搞清研究主体的时候" in prompt.system_prompt
     assert "避免多个目标之间存在交叉和重叠" in prompt.system_prompt
     assert "最多只能同时发起 3 个`collect_agent`工具调用。" in prompt.system_prompt
+    assert "必须主动停止搜集" in prompt.system_prompt
+    assert "**绝不能超过 9 次工具调用**" in prompt.system_prompt
     assert "collect_agent" in prompt.system_prompt
     assert "2026-03-16T15:00:00+00:00" in prompt.system_prompt
     assert "分析中国 AI 搜索产品的竞争格局与机会" in prompt.user_prompt
@@ -132,9 +134,11 @@ def test_collector_prompt_semantic_lock_matches_current_wording_and_transcript()
     assert "调用 `web_search` 或 `web_fetch` 工具执行" in prompt.system_prompt
     assert "2.2 若能够支撑" in prompt.system_prompt
     assert "只要 total_tool_calls = 10" in prompt.system_prompt
+    assert "必须主动停止搜集" in prompt.system_prompt
     assert "停止搜集，基于已有信息输出整理后的信息搜集结果" in prompt.system_prompt
     assert "尽最大可能保留和目标相关的高质量信息和数据" in prompt.system_prompt
     assert "原始网页 link 和 title" in prompt.system_prompt
+    assert "**绝不能超过 10 次工具调用。**" in prompt.system_prompt
     assert "<最终输出格式>" in prompt.system_prompt
     assert '"info":""' in prompt.system_prompt
     assert '"title":""' in prompt.system_prompt

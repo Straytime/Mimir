@@ -33,7 +33,7 @@ def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
     2.2 若能够支撑
         - 输出信息收集完成的简短通知
     2.3 若已经多次使用 `collect_agent` 工具（max tool calls=9），仍无有效进展
-        - 避免资源浪费，输出信息收集完成但不完整的简短通知
+        - 避免资源浪费，必须主动停止搜集，输出信息收集完成但不完整的简短通知
 
 注意事项
 1. 你并不需要一次性理清所有目标，而是根据已有信息进行动态规划。
@@ -44,6 +44,7 @@ def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
     - 使用孤立的、相互独立的目标进行并行调用，避免多个目标之间存在交叉和重叠，以免引起信息冗余和混乱。
     - 最多只能同时发起 3 个`collect_agent`工具调用。
 5. `collect_agent` 工具会将完整搜集结果暂存，供后续 agent 使用，因此信息搜集全部完成后无需提供任何结果信息，仅声明通知即可。
+6. **绝不能超过 9 次工具调用**
 </任务>
 """.strip(),
         user_prompt=f"""
@@ -125,13 +126,14 @@ def build_collector_prompt(*, invocation: CollectorInvocation) -> PromptBundle:
         - 调用 `web_search` 或 `web_fetch` 工具执行
     2.2 若能够支撑
         - 输出整理后的完整信息搜集结果
-    2.3 无论何时，只要 total_tool_calls = {invocation.tool_call_limit}，停止搜集，基于已有信息输出整理后的信息搜集结果
+    2.3 无论何时，只要 total_tool_calls = {invocation.tool_call_limit}，必须主动停止搜集，基于已有信息输出整理后的信息搜集结果
 
 注意事项：
 - 注意信息获取目标的时效性要求，在检索时进行相关限制，在最终输出时只整理提供符合时效要求的内容。
 - 关注信源可信度和信息质量，忽略明显存在漏洞的信息和低可信度网站。
 - 若串行工具调用能有效提升质量，优先进行串行执行，谨慎使用并行调用，记住质量比效率更重要。
 - 最终输出搜集结果时，**尽最大可能保留和目标相关的高质量信息和数据**，并且必须提供原始网页 link 和 title。
+- **绝不能超过 {invocation.tool_call_limit} 次工具调用。**
 </任务>
 
 <最终输出格式>
