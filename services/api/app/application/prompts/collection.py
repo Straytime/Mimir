@@ -6,6 +6,7 @@ from app.application.dto.research import (
     PlannerInvocation,
     SummaryInvocation,
 )
+from app.core.date_utils import format_date_cn
 
 
 def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
@@ -15,7 +16,7 @@ def build_planner_prompt(*, invocation: PlannerInvocation) -> PromptBundle:
     return PromptBundle(
         system_prompt=f"""
 <背景>
-你是一个 deep research 团队中的信息搜集调度 agent，你负责根据用户的深度研究需求详情，和已经获得的信息摘要，规划调度接下来的信息收集目标，现在是{invocation.now.isoformat()}。
+你是一个 deep research 团队中的信息搜集调度 agent，你负责根据用户的深度研究需求详情，和已经获得的信息摘要，规划调度接下来的信息收集目标，现在是{format_date_cn(invocation.now)}。
 </背景>
 
 <工具>
@@ -108,7 +109,7 @@ def build_collector_prompt(*, invocation: CollectorInvocation) -> PromptBundle:
     return PromptBundle(
         system_prompt=f"""
 <背景>
-你是一个信息搜集 agent，负责进行信息的搜集以达成特定的信息获取目标，并将搜集结果进行整理输出，你的输出将被用于深度研究内容撰写，现在是{invocation.now.isoformat()}。
+你是一个信息搜集 agent，负责进行信息的搜集以达成特定的信息获取目标，并将搜集结果进行整理输出，你的输出将被用于深度研究内容撰写，现在是{format_date_cn(invocation.now)}。
 </背景>
 
 <工具>
@@ -168,7 +169,7 @@ def build_summary_prompt(*, invocation: SummaryInvocation) -> PromptBundle:
     return PromptBundle(
         system_prompt=f"""
 <背景与角色>
-你是一个关键信息总结助手，负责从搜索结果中提取关键信息与发现摘要，现在是{invocation.now.isoformat()}。
+你是一个关键信息总结助手，负责从搜索结果中提取关键信息与发现摘要，现在是{format_date_cn(invocation.now)}。
 </背景与角色>
 
 <任务>

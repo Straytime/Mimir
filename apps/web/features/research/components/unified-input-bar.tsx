@@ -300,7 +300,7 @@ export function UnifiedInputBar() {
               value={draftValue}
             />
             <button
-              className="flex h-12 w-[120px] shrink-0 items-center justify-center self-end bg-primary px-4 py-3 text-sm font-medium text-on-primary transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex shrink-0 items-center justify-center self-end bg-primary px-6 py-2.5 font-ui text-xs font-medium uppercase tracking-[0.08em] text-on-primary transition-colors hover:bg-surface hover:text-primary disabled:cursor-not-allowed disabled:opacity-70"
               disabled={!mode.enabled || isSubmitting || draftValue.trim().length === 0}
               onClick={() => void handleSubmit()}
               type="button"

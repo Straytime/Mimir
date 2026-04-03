@@ -127,7 +127,7 @@ export function SessionStatusBar() {
     <section
       aria-label="会话状态"
       data-research-status-bar="true"
-      className="bg-surface/70 px-4 py-3 font-ui text-sm backdrop-blur-[20px]"
+      className="bg-surface/70 py-3 font-ui text-sm backdrop-blur-[20px]"
       role="region"
     >
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr),auto] md:items-center">

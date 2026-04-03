@@ -4,6 +4,7 @@ import json
 
 from app.application.dto.feedback import FeedbackAnalysisInput
 from app.application.dto.invocation import PromptBundle
+from app.core.date_utils import format_date_cn
 
 
 def build_feedback_analysis_prompt(
@@ -23,7 +24,7 @@ def build_feedback_analysis_prompt(
     return PromptBundle(
         system_prompt=f"""
 <背景>
-你是一个研究报告撰写智能体中的需求分析器，，现在是{now.isoformat()}。
+你是一个研究报告撰写智能体中的需求分析器，，现在是{format_date_cn(now)}。
 <上一轮研究需求></上一轮研究需求>中是用户上一轮的研究报告需求；
 <本次调整意见></本次调整意见>中是用户本轮的最新消息。
 </背景>

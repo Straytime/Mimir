@@ -286,10 +286,9 @@ test("submit button keeps a fixed width and input-aligned height while submittin
 
   expect(textarea).toHaveClass("min-h-[48px]");
   expect(button).toHaveClass(
-    "h-12",
-    "w-[120px]",
     "self-end",
     "justify-center",
+    "shrink-0",
   );
 
   act(() => {
@@ -303,10 +302,9 @@ test("submit button keeps a fixed width and input-aligned height while submittin
   });
 
   expect(screen.getByRole("button", { name: "提交中..." })).toHaveClass(
-    "h-12",
-    "w-[120px]",
     "self-end",
     "justify-center",
+    "shrink-0",
   );
 });
 
@@ -339,7 +337,7 @@ test("uses a single embedded input surface while preserving placeholder and disa
   expect(formSurface).not.toHaveClass("shadow-[0_-20px_48px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(71,71,71,0.12)]");
   expect(textarea).toBeDisabled();
   expect(textarea).toHaveAttribute("placeholder", "研究进行中...");
-  expect(button).toHaveClass("h-12", "w-[120px]", "self-end");
+  expect(button).toHaveClass("self-end", "shrink-0");
 });
 
 test("grows the textarea height for multiline input and keeps the submit button stable", async () => {
@@ -360,7 +358,7 @@ test("grows the textarea height for multiline input and keeps the submit button 
 
   expect(textarea.style.height).toBe("132px");
   expect(textarea.style.overflowY).toBe("hidden");
-  expect(button).toHaveClass("h-12", "w-[120px]", "shrink-0");
+  expect(button).toHaveClass("shrink-0", "self-end");
 });
 
 test("caps textarea height and enables internal scrolling after the max height", async () => {
