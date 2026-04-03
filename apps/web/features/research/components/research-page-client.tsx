@@ -34,7 +34,7 @@ function ResearchPageContent() {
         <h1 className="max-w-[7ch] text-[72px] font-ui font-semibold leading-none tracking-[-0.08em] text-primary sm:text-[88px]">
           Mimir
         </h1>
-        <p className="max-w-[20rem] pl-1 text-[12px] font-ui font-medium tracking-[0.28em] text-surface-tint/88 sm:max-w-none">
+        <p className="max-w-[20rem] pl-1 text-[12px] font-ui font-medium tracking-[0.28em] text-primary/88 sm:max-w-none">
           Draw from depth.
         </p>
       </div>

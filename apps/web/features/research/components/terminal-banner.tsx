@@ -59,7 +59,7 @@ export function TerminalBanner() {
       <h2 className="text-base font-semibold">{content.title}</h2>
       <p className="mt-2 leading-6">{content.detail}</p>
       <button
-        className="mt-4 bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+        className="mt-4 bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
         onClick={reset}
         type="button"
       >

@@ -37,9 +37,9 @@ test("example prompt cards use the refined docked hover and focus treatment", ()
   expect(firstCard).toHaveClass("hover:before:opacity-100");
   expect(firstCard).toHaveClass("focus-visible:bg-surface-container-low");
   expect(firstCard).toHaveClass("focus-visible:text-primary");
-  expect(firstCard).toHaveClass("focus-visible:outline-surface-tint/25");
+  expect(firstCard).toHaveClass("focus-visible:outline-primary/25");
   expect(firstCard).toHaveClass("focus-visible:before:opacity-100");
-  expect(firstCard).toHaveClass("before:bg-surface-tint");
+  expect(firstCard).toHaveClass("before:bg-primary");
   expect(firstCard).not.toHaveClass("shadow-glow-sm");
   expect(firstCard).not.toHaveClass("shadow-glow-md");
   expect(firstCard).not.toHaveClass("shadow-ghost");

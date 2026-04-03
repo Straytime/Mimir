@@ -68,7 +68,7 @@ test("countdown > 10s uses default tint color and no pulse-fast animation", () =
   renderWithStore(<OptionsClarificationCountdownSurface />, { store });
 
   const countdownEl = screen.getByText(/剩余 \d+ 秒/);
-  expect(countdownEl).toHaveClass("text-surface-tint");
+  expect(countdownEl).toHaveClass("text-primary");
   expect(countdownEl).not.toHaveClass("animate-pulse-fast");
   expect(countdownEl).not.toHaveClass("text-[#FF6B6B]");
 });
@@ -82,7 +82,7 @@ test("countdown <= 10s uses red color and pulse-fast animation", () => {
   const countdownEl = screen.getByText(/剩余 \d+ 秒/);
   expect(countdownEl).toHaveClass("text-[#FF6B6B]");
   expect(countdownEl).toHaveClass("animate-pulse-fast");
-  expect(countdownEl).not.toHaveClass("text-surface-tint");
+  expect(countdownEl).not.toHaveClass("text-primary");
 });
 
 test("countdown > 10s shows '剩余 XX 秒' without urgency prefix", () => {

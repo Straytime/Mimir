@@ -1,97 +1,76 @@
-# Design System Specification: The Lab Terminal
+# Design System: Industrial Precision / Lab Terminal
 
-## 1. Overview & Creative North Star
-**The Creative North Star: "The Digital Autopsy"**
+## 1. Overview & Creative North Star: "The Kinetic Monolith"
+This design system is a radical departure from the "soft" web. Our Creative North Star is **The Kinetic Monolith**. It envisions the interface not as a website, but as a high-precision instrument—a piece of laboratory hardware carved from obsidian and powered by cold logic.
 
-This design system rejects the "friendly" clutter of modern SaaS in favor of a sterile, high-precision environment. It is built for deep focus and linear intelligence. We are moving away from the horizontal fragmentation of sidebars and dashboards toward a singular, vertical narrative—a "storytelling" scroll that mimics the output of a high-end research terminal.
+To achieve this, we move beyond the "template" look by embracing **Absolute Angularity**. By stripping away every curve, shadow, and decorative line, we create an environment of extreme focus. Complexity is managed through "Tonal Architecture" rather than structural borders. The result is a high-end, editorial-grade research platform that feels authoritative, clinical, and uncompromisingly technical.
 
-The aesthetic is **Surgical Minimalism**. By utilizing a hyper-focused, single-column layout, we force the user into a state of immersion. There is no "interface" to navigate; there is only the data. To achieve this, we rely on intentional asymmetry within the center column and a radical commitment to flat, docked elements.
+## 2. Colors: Tonal Architecture
+We do not use lines to define space; we use light and mass. The palette is rooted in deep, light-absorbing charcoals, punctuated by a high-intensity Amber signal.
 
----
+### The "No-Line" Rule
+**Explicit Instruction:** 1px solid borders are prohibited for sectioning. Structural boundaries must be defined solely through background color shifts.
+* Place a `surface-container-high` module inside a `surface` layout to create a "recessed" or "elevated" zone.
+* The eye should perceive the change in density, not a stroke.
 
-## 2. Colors
-Our palette is a study in clinical precision. We use "surgical" black and white to define the environment, with a single, high-frequency kinetic accent.
+### Surface Hierarchy & Nesting
+Treat the UI as a physical stack of technical plates.
+* **Base Layer:** `surface-container-lowest` (#000000) for the primary workspace.
+* **Intermediate Modules:** `surface-container` (#1a1919) for sidebars or secondary utilities.
+* **Active Overlays:** `surface-bright` (#2c2c2c) for momentary focus areas.
 
-### The Palette
-- **Background (`#131313`):** A deep, infinite black. This is the "Lab Floor."
-- **Primary (`#FFFFFF`):** Pure light. Used for critical data and primary actions.
-- **Surface Tint / Primary Accent (`#00DCE5`):** A sharp, electric cyan. This is the "Laser." Use it sparingly for active states, data highlights, and progress indicators.
-- **Grayscale (Secondary/Tertiary):** Strictly monochromatic (`#C6C6C7`, `#454747`). Used for metadata and de-emphasized UI.
+### Signature "Amber Glow"
+The `primary` (#ffad3a) and `primary_container` (#f59e0a) tokens are high-visibility signals. Use them only for:
+1. Critical Action States (Active buttons)
+2. Data Points of Interest 
+3. Active Cursor/Focus States (A subtle 2px outer glow using `primary` at 20% opacity is the only "shadow" permitted).
 
-### The Rules of Engagement
-- **The No-Line Rule:** 1px solid borders for sectioning are strictly prohibited. In a laboratory environment, boundaries are defined by light and shadow, not ink. Separate sections using background shifts (e.g., transitioning from `surface` to `surface-container-low`).
-- **Surface Hierarchy:** Depth is "docked," not floating. Use `surface-container-lowest` (`#0E0E0E`) for recessed input areas and `surface-container-high` (`#2A2A2A`) for active data blocks.
-- **Signature Textures:** For high-priority CTAs, use a subtle gradient transition from `surface-tint` (`#00DCE5`) to `primary-container` (`#31EAF3`). This provides a "glowing filament" effect that feels alive.
+## 3. Typography: Technical Authority
+Our type system pairs the mathematical precision of **Space Grotesk** with the invisible clarity of **Inter**.
 
----
+* **Space Grotesk (Headers/Technical Labels):** Used for `display`, `headline`, and `label` roles. It conveys a "terminal" aesthetic. Set letter-spacing to `-0.02em` for headers and `+0.05em` for small labels to mimic printed industrial plates.
+* **Inter (Data/Body):** Used for `title` and `body` roles. In an LLM-driven context, readability of long-form analysis is paramount. Inter provides the neutral, high-legibility counterpoint to the aggressive headers.
 
-## 3. Typography
-The system utilizes a dual-engine typographic approach to balance technical precision with academic rigor.
+**Typographic Hierarchy:**
+* **Display-LG (3.5rem):** Reserved for singular, high-impact data points or terminal IDs.
+* **Label-SM (0.6875rem, All Caps):** Used for metadata, timestamps, and "System Status" indicators.
 
-### The Engines
-- **Space Grotesk (The Technical Layer):** Used for UI elements, labels, data points, and code. It conveys the "Terminal" aspect of the brand.
-- **Newsreader (The Narrative Layer):** Used for long-form research and editorial content. This is the "Human" element within the machine.
+## 4. Elevation & Depth: Tonal Layering
+Traditional depth (shadows) is forbidden. We achieve hierarchy through **Density and Light Extraction.**
 
-### Hierarchy & Scale
-- **Display LG (56px, Space Grotesk):** For major section breaks in the infinite scroll.
-- **Title MD (18px, Newsreader):** For analytical insights and research summaries.
-- **Label SM (11px, Space Grotesk, All Caps):** For technical metadata and timestamps.
+* **The Layering Principle:** Depth is achieved by "stacking." A `surface-container-highest` panel floating over a `surface_dim` background creates a natural lift.
+* **The "Ghost Border" Fallback:** In extreme cases where contrast is required between identical tones, use a `outline_variant` (#494847) at **15% opacity**. This should feel like a faint etch on glass, not a drawn line.
+* **Active "Glow" State:** Instead of lifting a card on hover, increase the background brightness by one tier (e.g., `surface-container` to `surface-container-high`) and apply a subtle `primary` glow to the left-hand edge (2px width).
 
-**Mixed-Language Handling:** For Chinese/English mixed text, maintain a 1.6x line-height for `body-md` to ensure that complex characters do not feel "cramped" against the sterile Latin glyphs of Newsreader.
-
----
-
-## 4. Elevation & Depth
-In "The Lab Terminal," there are no shadows. Objects do not "float" above the surface; they are integrated into it.
-
-- **The Layering Principle:** Depth is achieved through **Tonal Stacking**. 
-    - Base: `surface` (`#131313`)
-    - Inset Content: `surface-container-low` (`#1B1B1B`)
-    - Highlighted Data: `surface-container-high` (`#2A2A2A`)
-- **Glassmorphism:** To maintain immersion during the infinite scroll, use `backdrop-blur` (20px) on the top navigation header with a 70% opacity `surface` color. This allows the "data" to ghost behind the header as it passes.
-- **The Ghost Border:** If a boundary is required for accessibility, use `outline-variant` (`#474747`) at 15% opacity. It should be felt, not seen.
-
----
-
-## 5. Components
+## 5. Components: Precision Primitive
 
 ### Buttons
-- **Primary:** Sharp `0px` corners. Background: `primary` (#FFFFFF), Text: `on-primary` (#002021). 
-- **Active State:** A 2px bottom-glow using `surface-tint` (#00DCE5).
-- **Secondary:** Transparent background with a `ghost-border`. Text: `primary`.
+* **Style:** Zero border-radius. No gradients.
+* **Primary:** `primary` background, `on_primary_fixed` text. High-contrast, maximum visibility.
+* **Secondary:** `surface-variant` background, `on_surface` text. For auxiliary actions.
+* **Interaction:** On hover, primary buttons should "invert" (text becomes Amber, background becomes black) to mimic a flickering terminal screen.
 
-### Input Fields
-- **The Inset Look:** Inputs must be docked into the page. Use `surface-container-lowest` with `0px` border-radius.
-- **Focus State:** Change the background to `surface-container-high` and add a `surface-tint` vertical "caret" on the left edge.
+### Input Fields (The "Terminal" Input)
+* **Style:** No background fill. Only a bottom-aligned `outline` (#777575) 2px thick.
+* **Focus:** The bottom-bar shifts to `primary` (#ffad3a) with a 4px "block" cursor at the end of the text string.
 
-### Data Chips
-- Small, `0px` radius containers. Use `secondary-container` for the background. Text must be `label-sm` in Space Grotesk.
+### Cards & Lists
+* **Constraint:** Forbid divider lines.
+* **Execution:** Use the `Spacing Scale`. A `12` (2.75rem) gap between content blocks provides enough "air" for the eye to distinguish sections without needing a line.
+* **Nesting:** Nested LLM responses should use a `surface_container_low` background to distinguish them from the main thread.
 
-### The "Infinite" List
-- Forbid all horizontal dividers. Separate list items using `spacing-6` (2rem) of vertical white space. If items need grouping, use a subtle background shift to `surface-container-low`.
-
-### Pulse Indicator (Custom Component)
-- A 4px square of `surface-tint` that slowly pulses. Place this next to "Live" or "Processing" data to signify the terminal is active.
-
----
+### Technical Micro-Components
+* **Data Monoliths:** Small, high-density blocks of info using `label-sm` in `primary` color to highlight.
+* **Terminal Scrim:** A 5% opacity scan-line pattern (linear-gradient) can be applied to the `surface` layer to enhance the "Lab Terminal" feel.
 
 ## 6. Do's and Don'ts
 
-### Do
-- **Do** use `0px` border-radius for everything. The lab is a place of hard edges.
-- **Do** center-align the main content column (max-width: 800px) to create a focused, cinematic experience.
-- **Do** use "leading zeros" for all numbers (e.g., `01`, `02`) to maintain the technical terminal vibe.
+### Do:
+* **Embrace Asymmetry:** Align technical metadata to the far right while keeping primary text left-aligned to create a "control panel" feel.
+* **Use Mono-spacing Logic:** Even though Inter isn't a mono font, treat layouts as if they are on a grid of cells. Align everything to the 0.2rem/0.4rem spacing increments.
+* **Trust the Amber:** Let the Vivid Amber do the heavy lifting. If the screen feels "boring," don't add more colors—add more Amber signal markers.
 
-### Don't
-- **Don't** use sidebars. The user should never be distracted from the vertical flow.
-- **Don't** use standard "Drop Shadows." Use tonal shifts or nothing at all.
-- **Don't** use "Dirty" colors. If it's not pure grayscale or the specific Primary Accent, it doesn't belong in the lab.
-- **Don't** use icons with rounded caps. All iconography must be sharp-edged and linear.
-
----
-
-## 7. Spacing Scale
-Precision is maintained through a rigid adherence to the spacing scale.
-- **Content Gaps:** Use `spacing-10` (3.5rem) between major story blocks.
-- **Data Grouping:** Use `spacing-2` (0.7rem) for related technical metadata.
-- **Margin:** Always maintain a minimum of `spacing-8` (2.75rem) horizontal padding on mobile to ensure the "column" feel is preserved.```
+### Don't:
+* **Never use a Border Radius:** Even 1px of rounding destroys the "Industrial Precision" aesthetic.
+* **No Soft Shadows:** If it looks like it’s "floating" on a cloud, it’s wrong. It should look like it’s "mounted" on a rack.
+* **Avoid "Web" Patterns:** No rounded "Pill" chips. Use rectangular blocks. No "standard" blue links. Use Amber underlines or chevrons `>`.

@@ -67,7 +67,7 @@ export function OptionsClarificationCountdownSurface() {
       className={`bg-surface-container-high px-4 py-3 text-[11px] font-ui font-medium uppercase tracking-[0.15em] ${
         remainingSeconds <= 10
           ? "text-[#FF6B6B] animate-pulse-fast"
-          : "text-surface-tint"
+          : "text-primary"
       }`}
       role="status"
     >
@@ -153,7 +153,7 @@ export function ClarificationDetailPanel() {
                   >
                     <input
                       checked={optionAnswers[question.question_id] === option.option_id}
-                      className="mt-1 accent-surface-tint"
+                      className="mt-1 accent-primary"
                       name={question.question_id}
                       onChange={() =>
                         setOptionAnswer({
@@ -178,7 +178,7 @@ export function ClarificationDetailPanel() {
           ) : null}
 
           <button
-            className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
+            className="bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:bg-tertiary disabled:text-surface"
             disabled={!canSubmitClarification || isSubmitting}
             onClick={() => {
               void submitClarification();
@@ -214,7 +214,7 @@ export function RequirementAnalysisPanel() {
       </div>
 
       {analysisText.length > 0 ? (
-        <div className="bg-surface-container-high px-4 py-4 text-sm leading-7 text-surface-tint">
+        <div className="bg-surface-container-high px-4 py-4 text-sm leading-7 text-primary">
           正在分析需求：{analysisText}
         </div>
       ) : null}

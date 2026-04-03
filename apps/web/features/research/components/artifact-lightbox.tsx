@@ -62,7 +62,7 @@ export function ArtifactLightbox({ artifact, onClose }: ArtifactLightboxProps) {
       <div className="relative max-h-[90vh] max-w-[90vw] bg-surface-container-low p-6">
         <button
           aria-label="关闭"
-          className="absolute right-3 top-3 px-2 py-1 text-lg text-secondary transition hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+          className="absolute right-3 top-3 px-2 py-1 text-lg text-secondary transition hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           onClick={onClose}
           type="button"
         >
@@ -87,7 +87,7 @@ export function ArtifactLightbox({ artifact, onClose }: ArtifactLightboxProps) {
         </div>
 
         <button
-          className="mt-4 bg-transparent px-4 py-3 text-sm font-semibold text-primary shadow-ghost transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+          className="mt-4 bg-transparent px-4 py-3 text-sm font-semibold text-primary shadow-ghost transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           onClick={() => {
             void downloadArtifact(artifact);
           }}

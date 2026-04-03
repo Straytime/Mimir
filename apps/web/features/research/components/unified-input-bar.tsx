@@ -283,7 +283,7 @@ export function UnifiedInputBar() {
             ) : null}
           </div>
         ) : null}
-        <div className="bg-surface-container-low/88 px-3 py-3 backdrop-blur-[20px] shadow-[inset_0_1px_0_rgba(71,71,71,0.12)] focus-within:shadow-[inset_2px_0_0_rgba(0,220,229,0.92)]">
+        <div className="bg-surface-container-low/88 px-3 py-3 backdrop-blur-[20px] shadow-[inset_0_1px_0_rgba(71,71,71,0.12)] focus-within:shadow-[inset_2px_0_0_rgba(255,173,58,0.92)]">
           <div className="flex items-end gap-3">
             <textarea
               aria-invalid={inputError.ariaInvalid}

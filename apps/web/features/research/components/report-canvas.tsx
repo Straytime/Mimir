@@ -181,13 +181,13 @@ export function ReportCanvas() {
           {shouldShowSkeleton ? (
             <div className="space-y-3">
               <div className="relative h-4 w-2/3 overflow-hidden bg-surface-container-high">
-                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-surface-tint/10 to-transparent" />
+                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-primary/10 to-transparent" />
               </div>
               <div className="relative h-4 w-full overflow-hidden bg-surface-container-high">
-                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-surface-tint/10 to-transparent" />
+                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-primary/10 to-transparent" />
               </div>
               <div className="relative h-4 w-5/6 overflow-hidden bg-surface-container-high">
-                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-surface-tint/10 to-transparent" />
+                <div className="absolute inset-0 animate-scan bg-gradient-to-b from-transparent via-primary/10 to-transparent" />
               </div>
               <p className="pt-3 text-sm leading-6 text-secondary">
                 报告正文将在撰写开始后逐步显示。
@@ -214,7 +214,7 @@ export function ReportCanvas() {
 
         {showScrollToBottom ? (
           <button
-            className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint"
+            className="absolute bottom-4 right-4 bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:shadow-glow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             onClick={scrollToBottom}
             type="button"
           >
