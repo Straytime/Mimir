@@ -1850,6 +1850,12 @@ async def test_sub_agent_tool_call_limit_blocks_eleventh_tool_and_finalizes_with
         and '"error_code": "tool_call_limit_exceeded"' in message.content
         for message in collector.invocations_by_tool_call["call_1"][-1].transcript
     )
+    # Verify user reminder message is in transcript after tool rejection
+    assert any(
+        message.role == "user"
+        and "你已触发了工具次数限制" in message.content
+        for message in collector.invocations_by_tool_call["call_1"][-1].transcript
+    )
     assert summarizer.invocations[0].item_payloads == (
         {
             "title": "封顶后的最终来源",
@@ -1857,6 +1863,167 @@ async def test_sub_agent_tool_call_limit_blocks_eleventh_tool_and_finalizes_with
             "info": "collector 最终整理后的信息",
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_tool_limit_reminder_ignored_triggers_hard_fallback(
+    make_stage5_client,
+    db_session: Session,
+) -> None:
+    """When collector ignores the user reminder after tool limit, hard fallback is triggered."""
+    planner = ScriptedPlannerAgent(
+        rounds=[
+            PlannerDecision(
+                reasoning_deltas=("开始搜集。",),
+                plans=(
+                    CollectPlan(
+                        tool_call_id="call_1",
+                        revision_id="rev_placeholder",
+                        collect_target="工具上限 hard fallback 测试",
+                        additional_info="collector 无视提醒后 hard fallback",
+                        freshness_requirement=FreshnessRequirement.HIGH,
+                    ),
+                ),
+                stop=False,
+            ),
+            PlannerDecision(
+                reasoning_deltas=("进入 merge。",),
+                plans=(),
+                stop=True,
+            ),
+        ]
+    )
+    collector = ScriptedCollectorAgent(
+        rounds_by_tool_call={
+            "call_1": (
+                # Round 1: search
+                _collector_search_round(
+                    tool_call_id="call_search_dense",
+                    query="q_dense",
+                    reasoning="先做密集搜索。",
+                ),
+                # Rounds 2-10: fetch 9 pages
+                *tuple(
+                    _collector_fetch_round(
+                        tool_call_id=f"call_fetch_dense_{index}",
+                        url=f"https://example.com/{index}",
+                        reasoning=f"读取来源 {index}。",
+                    )
+                    for index in range(1, 10)
+                ),
+                # Round 11: blocked by tool limit + user reminder
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_blocked_11",
+                    url="https://example.com/blocked-11",
+                    reasoning="继续请求第十一次工具调用。",
+                ),
+                # Round 12: ignores reminder, requests another tool → hard fallback
+                _collector_fetch_round(
+                    tool_call_id="call_fetch_blocked_12",
+                    url="https://example.com/blocked-12",
+                    reasoning="无视提醒，继续请求工具。",
+                ),
+                # No stop round — agent never cooperates
+            ),
+        }
+    )
+    summarizer = ScriptedSummaryAgent()
+    search = ScriptedWebSearchClient(
+        SearchScenario(
+            results_by_query={
+                "q_dense": tuple(
+                    SearchHit(
+                        title=f"来源 {index}",
+                        link=f"https://example.com/{index}",
+                        snippet=f"snippet {index}",
+                    )
+                    for index in range(1, 11)
+                ),
+            }
+        )
+    )
+    fetch = ScriptedWebFetchClient(
+        content_by_url={
+            f"https://example.com/{index}": FetchResponse(
+                url=f"https://example.com/{index}",
+                success=True,
+                title=f"来源 {index}",
+                content=f"内容 {index}",
+            )
+            for index in range(1, 10)
+        }
+    )
+    client = await make_stage5_client(
+        planner_agent=planner,
+        collector_agent=collector,
+        summary_agent=summarizer,
+        web_search_client=search,
+        web_fetch_client=fetch,
+    )
+
+    async with client:
+        create_body, (stream_context, response, _lines) = await _start_collection_flow(client)
+        await _wait_until(lambda: len(summarizer.invocations) == 1)
+        await _close_stream(stream_context, response)
+
+    db_session.expire_all()
+    collector_completed_event = db_session.scalar(
+        select(TaskEventRecord)
+        .where(
+            TaskEventRecord.task_id == create_body["task_id"],
+            TaskEventRecord.event == "collector.completed",
+        )
+        .order_by(TaskEventRecord.seq.desc())
+    )
+    tool_calls = list(
+        db_session.scalars(
+            select(TaskToolCallRecord)
+            .where(TaskToolCallRecord.task_id == create_body["task_id"])
+            .order_by(TaskToolCallRecord.id.asc())
+        )
+    )
+    merged_event = db_session.scalar(
+        select(TaskEventRecord)
+        .where(
+            TaskEventRecord.task_id == create_body["task_id"],
+            TaskEventRecord.event == "sources.merged",
+        )
+        .order_by(TaskEventRecord.seq.desc())
+    )
+
+    # 1. collector.completed exists with status partial
+    assert collector_completed_event is not None
+    assert collector_completed_event.payload_json["status"] == "partial"
+
+    # 2. Only 10 tool calls were actually executed (1 search + 9 fetch)
+    assert len(tool_calls) == 10
+
+    # 3. Collector was invoked 12 times (10 normal + 1 blocked+reminder + 1 blocked+fallback)
+    assert len(collector.invocations_by_tool_call["call_1"]) == 12
+
+    # 4. Round 12 input transcript contains rejection message for blocked tool from round 11
+    round_12_transcript = collector.invocations_by_tool_call["call_1"][11].transcript
+    assert any(
+        message.role == "tool"
+        and message.tool_call_id == "call_fetch_blocked_11"
+        and '"error_code": "tool_call_limit_exceeded"' in message.content
+        for message in round_12_transcript
+    )
+
+    # 5. Round 12 input transcript contains user reminder (added after round 11 rejection)
+    assert any(
+        message.role == "user"
+        and "你已触发了工具次数限制" in message.content
+        for message in round_12_transcript
+    )
+
+    # 6. User reminder is the last message in round 12 input transcript (after rejection)
+    last_msg = round_12_transcript[-1]
+    assert last_msg.role == "user"
+    assert "你已触发了工具次数限制" in last_msg.content
+
+    # 7. sources.merged event exists (fallback used collected items from 10 tool calls)
+    assert merged_event is not None
 
 
 @pytest.mark.asyncio
