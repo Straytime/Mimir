@@ -34,14 +34,14 @@ function getStatusLabel(status: "running" | "completed" | "failed") {
 
 function getStatusClassName(status: "running" | "completed" | "failed") {
   if (status === "completed") {
-    return "bg-surface-container-high text-surface-tint";
+    return "bg-surface-container-high text-primary";
   }
 
   if (status === "failed") {
     return "bg-surface-container-high text-[#FF6B6B]";
   }
 
-  return "bg-surface-container-high text-surface-tint";
+  return "bg-surface-container-high text-primary";
 }
 
 function getPreviewLine(detail: string | undefined) {
@@ -239,7 +239,7 @@ function ExpandableText({
       {expandable ? (
         <button
           aria-label={`${isExpanded ? "收起" : "展开"} ${label}`}
-          className="text-xs font-ui font-semibold uppercase tracking-[0.15em] text-surface-tint"
+          className="text-xs font-ui font-semibold uppercase tracking-[0.15em] text-primary"
           onClick={() => onToggle(blockId)}
           type="button"
         >

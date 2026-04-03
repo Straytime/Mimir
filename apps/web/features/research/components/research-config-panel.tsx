@@ -28,7 +28,7 @@ export function ResearchConfigPanel() {
       <label className="flex cursor-pointer items-start gap-3 bg-surface-container-lowest px-4 py-3 transition hover:bg-surface-container-high">
         <input
           checked={clarificationModeDraft === "natural"}
-          className="mt-1 accent-surface-tint"
+          className="mt-1 accent-primary"
           name="clarification_mode"
           onChange={() => setClarificationModeDraft("natural")}
           type="radio"
@@ -47,7 +47,7 @@ export function ResearchConfigPanel() {
       <label className="flex cursor-pointer items-start gap-3 bg-surface-container-lowest px-4 py-3 transition hover:bg-surface-container-high">
         <input
           checked={clarificationModeDraft === "options"}
-          className="mt-1 accent-surface-tint"
+          className="mt-1 accent-primary"
           name="clarification_mode"
           onChange={() => setClarificationModeDraft("options")}
           type="radio"

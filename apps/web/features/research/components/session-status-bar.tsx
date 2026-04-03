@@ -138,7 +138,7 @@ export function SessionStatusBar() {
           </span>
           <span
             aria-label={`${stageTag} ${stageTitle}`}
-            className="inline-flex items-center gap-1.5 bg-surface-container-high px-3 py-2 text-surface-tint"
+            className="inline-flex items-center gap-1.5 bg-surface-container-high px-3 py-2 text-primary"
             data-research-stage-chip="true"
           >
             <span>{stageTag}</span>
@@ -169,7 +169,7 @@ export function SessionStatusBar() {
 
         <div className="flex items-center justify-start md:justify-end">
           <button
-            className="bg-surface-container-lowest px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-surface-tint disabled:cursor-not-allowed disabled:text-tertiary"
+            className="bg-surface-container-lowest px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:text-tertiary"
             disabled={isDeliveredPhase ? false : !canDisconnectTask}
             onClick={() => {
               if (isDeliveredPhase) {

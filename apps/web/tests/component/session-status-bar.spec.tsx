@@ -87,7 +87,7 @@ test("renders in-progress stage chip with looping ellipsis and keeps taskId visu
   const taskIdMeta = screen.getByText("tsk_stage0");
 
   expect(stageChip).toHaveAttribute("data-research-stage-chip", "true");
-  expect(stageChip).toHaveClass("text-surface-tint");
+  expect(stageChip).toHaveClass("text-primary");
   expect(
     document.querySelector('[data-research-stage-ellipsis="true"]'),
   ).not.toBeNull();

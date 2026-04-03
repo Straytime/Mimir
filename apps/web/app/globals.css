@@ -13,7 +13,7 @@ body {
 
 body {
   margin: 0;
-  background: #131313;
+  background: #000000;
   color: #ffffff;
   font-family: var(--font-ui), "Space Grotesk", sans-serif;
 }
@@ -51,34 +51,34 @@ body {
 .prose-lab {
   --tw-prose-body: #C6C6C7;
   --tw-prose-headings: #FFFFFF;
-  --tw-prose-links: #00DCE5;
+  --tw-prose-links: #ffad3a;
   --tw-prose-bold: #FFFFFF;
-  --tw-prose-code: #31EAF3;
+  --tw-prose-code: #f59e0a;
   --tw-prose-quotes: #C6C6C7;
-  --tw-prose-quote-borders: #00DCE5;
+  --tw-prose-quote-borders: #ffad3a;
   --tw-prose-counters: #454747;
   --tw-prose-bullets: #454747;
-  --tw-prose-hr: #2A2A2A;
-  --tw-prose-th-borders: #2A2A2A;
-  --tw-prose-td-borders: #1B1B1B;
+  --tw-prose-hr: #2c2c2c;
+  --tw-prose-th-borders: #2c2c2c;
+  --tw-prose-td-borders: #1a1919;
   --tw-prose-captions: #454747;
-  --tw-prose-pre-bg: #0E0E0E;
+  --tw-prose-pre-bg: #000000;
   --tw-prose-pre-code: #C6C6C7;
 }
 
 .prose-lab :where(a):not(:where([class~="not-prose"] *)) {
-  text-decoration-color: rgba(0, 220, 229, 0.3);
+  text-decoration-color: rgba(255, 173, 58, 0.3);
   text-underline-offset: 3px;
   transition: text-decoration-color 0.2s;
 }
 .prose-lab :where(a:hover):not(:where([class~="not-prose"] *)) {
-  text-decoration-color: #00DCE5;
+  text-decoration-color: #ffad3a;
 }
 
 .prose-lab :where(blockquote):not(:where([class~="not-prose"] *)) {
   border-left-width: 2px;
   font-style: normal;
-  font-family: var(--font-narrative), Newsreader, serif;
+  font-family: var(--font-narrative), Inter, sans-serif;
 }
 
 .prose-lab :where(code):not(:where([class~="not-prose"] *)):not(pre code) {

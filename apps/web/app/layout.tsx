@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Space_Grotesk, Newsreader } from "next/font/google";
+import { Space_Grotesk, Inter } from "next/font/google";
 
 import "./globals.css";
 
@@ -11,10 +11,9 @@ const spaceGrotesk = Space_Grotesk({
   display: "swap",
 });
 
-const newsreader = Newsreader({
+const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
   variable: "--font-narrative",
   display: "swap",
 });
@@ -32,7 +31,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html
       lang="zh-CN"
-      className={`${spaceGrotesk.variable} ${newsreader.variable}`}
+      className={`${spaceGrotesk.variable} ${inter.variable}`}
     >
       <body className="grain-overlay">{children}</body>
     </html>
