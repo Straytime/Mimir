@@ -434,7 +434,7 @@ class CollectionOrchestrator:
         tool_call_count = 0
         partial = False
         tool_limit_reached = False
-        tool_limit_notice_sent = False
+        tool_limit_reminder_sent = False
 
         while True:
             invocation = CollectorInvocation(
@@ -696,39 +696,11 @@ class CollectionOrchestrator:
             )
 
             tool_messages: list[PromptMessage] = []
-            if tool_limit_reached and tool_limit_notice_sent:
-                result = CollectResult(
-                    subtask_id=subtask_id,
-                    tool_call_id=plan.tool_call_id,
-                    collect_target=plan.collect_target,
-                    status=CollectSummaryStatus.PARTIAL,
-                    search_queries=tuple(search_queries),
-                    tool_call_count=tool_call_count,
-                    items=tuple(collected_items),
-                )
-                await self._persist_collect_result(
-                    task_id=task_id,
-                    revision_id=revision_id,
-                    result=result,
-                )
-                await self._append_event(
-                    task_id=task_id,
-                    event="collector.completed",
-                    payload={
-                        "subtask_id": subtask_id,
-                        "tool_call_id": plan.tool_call_id,
-                        "status": result.status.value,
-                        "item_count": len(result.items),
-                        "search_queries": list(result.search_queries),
-                    },
-                )
-                return result
 
             blocked_by_tool_limit = False
             for index, tool_call in enumerate(decision.tool_calls):
                 if tool_call_count >= self._settings.subtask_tool_call_limit:
                     tool_limit_reached = True
-                    tool_limit_notice_sent = True
                     partial = True
                     blocked_by_tool_limit = True
                     for blocked_tool_call in decision.tool_calls[index:]:
@@ -769,8 +741,44 @@ class CollectionOrchestrator:
 
             transcript.extend(tool_messages)
             if blocked_by_tool_limit:
-                call_index += 1
-                continue
+                if not tool_limit_reminder_sent:
+                    # Phase 1: first time exceeding limit — send user reminder
+                    tool_limit_reminder_sent = True
+                    transcript.append(
+                        PromptMessage(
+                            role="user",
+                            content="你已触发了工具次数限制，请停止搜集，基于已有信息输出整理后的搜集结果。",
+                        )
+                    )
+                    call_index += 1
+                    continue
+                # Phase 2: agent ignored reminder — hard fallback
+                result = CollectResult(
+                    subtask_id=subtask_id,
+                    tool_call_id=plan.tool_call_id,
+                    collect_target=plan.collect_target,
+                    status=CollectSummaryStatus.PARTIAL,
+                    search_queries=tuple(search_queries),
+                    tool_call_count=tool_call_count,
+                    items=tuple(collected_items),
+                )
+                await self._persist_collect_result(
+                    task_id=task_id,
+                    revision_id=revision_id,
+                    result=result,
+                )
+                await self._append_event(
+                    task_id=task_id,
+                    event="collector.completed",
+                    payload={
+                        "subtask_id": subtask_id,
+                        "tool_call_id": plan.tool_call_id,
+                        "status": result.status.value,
+                        "item_count": len(result.items),
+                        "search_queries": list(result.search_queries),
+                    },
+                )
+                return result
 
             call_index += 1
 
