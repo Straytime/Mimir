@@ -858,21 +858,24 @@ describe("Stage 3 task stream lifecycle", () => {
     {
       name: "task.failed",
       event: makeTaskFailedEvent(),
+      bannerRole: "text",
       banner: "任务已失败，旧任务操作已禁用。",
     },
     {
       name: "task.terminated",
       event: makeTaskTerminatedEvent(),
-      banner: "任务已终止，旧任务操作已禁用。",
+      bannerRole: "heading",
+      banner: "任务已终止",
     },
     {
       name: "task.expired",
       event: makeTaskExpiredEvent(),
+      bannerRole: "text",
       banner: "任务已过期，旧任务操作已禁用。",
     },
   ])(
     "disables old operations when %s arrives",
-    async ({ event, banner }) => {
+    async ({ event, banner, bannerRole }) => {
       const taskEventSource = new ControlledTaskEventSource<EventEnvelope>();
       const store = createActiveStore();
 
@@ -889,7 +892,11 @@ describe("Stage 3 task stream lifecycle", () => {
         await flushAsyncWork();
       });
 
-      await screen.findByText(banner);
+      if (bannerRole === "heading") {
+        await screen.findByRole("heading", { level: 2, name: banner });
+      } else {
+        await screen.findByText(banner);
+      }
 
       expect(screen.getByRole("button", { name: "终止任务" })).toBeDisabled();
       expect(store.getState().remote.snapshot?.available_actions).toEqual([]);

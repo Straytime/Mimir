@@ -1404,7 +1404,7 @@ async def test_risk_control_threshold_terminates_task_after_two_risk_blocked_sum
         await _close_stream(stream_context, response)
 
     assert terminated_name == "task.terminated"
-    assert terminated_payload["payload"] == {"reason": "risk_control_threshold_exceeded"}
+    assert terminated_payload["payload"] == {"reason": "risk_control_limit"}
 
 
 @pytest.mark.asyncio

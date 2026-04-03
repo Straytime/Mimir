@@ -43,7 +43,9 @@ test("renders banner with '开始新研究' button when terminalReason is 'termi
   const store = createTerminalStore("terminated");
   renderWithStore(<TerminalBanner />, { store });
 
-  expect(screen.getByText("任务已终止，旧任务操作已禁用。")).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { level: 2, name: "任务已终止" }),
+  ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "开始新研究" })).toBeInTheDocument();
 });
 

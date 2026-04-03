@@ -32,6 +32,10 @@ test("natural mode — text container has whitespace-pre-line to preserve newlin
 
   renderWithStore(<ClarificationDetailPanel />, { store });
 
+  expect(screen.getByRole("heading", { name: "需求澄清" })).toBeInTheDocument();
+  expect(
+    screen.queryByText("在开始之前，有一些问题需要你的反馈"),
+  ).not.toBeInTheDocument();
   const container = screen.getByText("第一段", { exact: false });
   expect(container.className).toContain("whitespace-pre-line");
 });

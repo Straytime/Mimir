@@ -27,7 +27,9 @@ function ResearchPageContent() {
 
   return (
     <main
-      className="mx-auto flex min-h-screen w-full max-w-[800px] flex-col gap-sp-10 bg-radial-glow px-sp-8 pb-32 py-16"
+      className={`mx-auto flex min-h-screen w-full max-w-[800px] flex-col bg-radial-glow px-sp-8 pt-16 ${
+        isActiveWorkspace ? "gap-sp-10 pb-32" : "gap-sp-8 pb-16"
+      }`}
       ref={mainRef}
     >
       <div className="animate-fade-in-up space-y-3">
@@ -40,19 +42,25 @@ function ResearchPageContent() {
       </div>
 
       {isActiveWorkspace ? (
-        <ResearchWorkspaceShell />
+        <>
+          <ResearchWorkspaceShell />
+          <UnifiedInputBar />
+        </>
       ) : (
-        <section className="space-y-sp-10">
-          <div className="animate-fade-in-up stagger-1">
-            <ResearchConfigPanel />
-          </div>
-          <div className="animate-fade-in-up stagger-2">
-            <ExamplePrompts />
+        <section className="flex flex-1 flex-col justify-center">
+          <div className="mx-auto flex w-full max-w-[680px] flex-col gap-4">
+            <div className="animate-fade-in-up stagger-1">
+              <ExamplePrompts />
+            </div>
+            <div className="animate-fade-in-up stagger-2">
+              <UnifiedInputBar />
+            </div>
+            <div className="animate-fade-in-up stagger-3">
+              <ResearchConfigPanel />
+            </div>
           </div>
         </section>
       )}
-
-      <UnifiedInputBar />
     </main>
   );
 }

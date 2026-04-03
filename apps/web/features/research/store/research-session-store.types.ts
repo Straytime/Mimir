@@ -288,7 +288,7 @@ export function createResearchSessionState(): ResearchSessionState {
       clarificationDraft: "",
       feedbackDraft: "",
       createTask: {
-        clarificationModeDraft: "natural",
+        clarificationModeDraft: "options",
         initialQueryError: null,
         submitError: null,
         errorCode: null,

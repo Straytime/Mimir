@@ -56,7 +56,7 @@ export function resolveInputMode(args: {
   if (snapshot === null) {
     return {
       enabled: true,
-      placeholder: "输入你的研究主题...",
+      placeholder: "想研究些什么？",
       draftKey: "initial",
     };
   }
@@ -138,6 +138,7 @@ function useInputError(draftKey: "initial" | "clarification"): InputError {
 }
 
 export function UnifiedInputBar() {
+  const taskId = useResearchSessionStore((state) => state.session.taskId);
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
   const terminalReason = useResearchSessionStore(
     (state) => state.ui.terminalReason,
@@ -175,6 +176,7 @@ export function UnifiedInputBar() {
   const isSubmitting =
     pendingAction === "creating_task" ||
     pendingAction === "submitting_clarification";
+  const isIdleStage = taskId === null && snapshot === null && terminalReason === null;
 
   useLayoutEffect(() => {
     if (textareaRef.current === null) {
@@ -255,11 +257,14 @@ export function UnifiedInputBar() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-40"
+      className={isIdleStage ? "w-full" : "fixed bottom-0 left-0 right-0 z-40"}
       data-research-input-bar="true"
+      data-research-input-placement={isIdleStage ? "idle-stage" : "workspace-tray"}
       data-research-input-surface="embedded"
     >
-      <div className="mx-auto max-w-[800px] px-sp-8 pb-4 pt-4">
+      <div
+        className={isIdleStage ? "w-full" : "mx-auto max-w-[800px] px-sp-8 pb-4 pt-4"}
+      >
         {inputError.fieldError !== null ? (
           <p className="mb-2 text-sm text-[#FF6B6B]" role="alert">
             {inputError.fieldError}
@@ -283,7 +288,13 @@ export function UnifiedInputBar() {
             ) : null}
           </div>
         ) : null}
-        <div className="bg-surface-container-low/88 px-3 py-3 backdrop-blur-[20px] shadow-[inset_0_1px_0_rgba(71,71,71,0.12)] focus-within:shadow-[inset_2px_0_0_rgba(255,173,58,0.92)]">
+        <div
+          className={
+            isIdleStage
+              ? "bg-surface-container-low px-3 py-3 focus-within:outline focus-within:outline-1 focus-within:outline-primary/30"
+              : "bg-surface-container-low/88 px-3 py-3 backdrop-blur-[20px] shadow-[inset_0_1px_0_rgba(71,71,71,0.12)] focus-within:shadow-[inset_2px_0_0_rgba(255,173,58,0.92)]"
+          }
+        >
           <div className="flex items-end gap-3">
             <textarea
               aria-invalid={inputError.ariaInvalid}
@@ -300,12 +311,13 @@ export function UnifiedInputBar() {
               value={draftValue}
             />
             <button
-              className="flex shrink-0 items-center justify-center self-end bg-primary px-6 py-2.5 font-ui text-xs font-medium uppercase tracking-[0.08em] text-on-primary transition-colors hover:bg-surface hover:text-primary disabled:cursor-not-allowed disabled:opacity-70"
+              aria-label={isSubmitting ? "提交中" : "提交"}
+              className="flex h-12 w-12 shrink-0 items-center justify-center self-end bg-primary font-ui text-lg font-medium text-on-primary transition-colors hover:bg-surface hover:text-primary disabled:cursor-not-allowed disabled:opacity-70"
               disabled={!mode.enabled || isSubmitting || draftValue.trim().length === 0}
               onClick={() => void handleSubmit()}
               type="button"
             >
-              {isSubmitting ? "提交中..." : "提交"}
+              <span aria-hidden="true">{isSubmitting ? "..." : "⏎"}</span>
             </button>
           </div>
         </div>

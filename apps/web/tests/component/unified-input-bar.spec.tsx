@@ -39,10 +39,9 @@ test("shows correct placeholder when no task exists (snapshot=null)", () => {
   const inputTray = textarea.closest("[data-research-input-bar='true']");
 
   expect(textarea).toBeEnabled();
-  expect(textarea).toHaveAttribute("placeholder", "输入你的研究主题...");
-  expect(inputTray).toHaveAttribute("data-research-input-surface", "embedded");
-  expect(inputTray).not.toHaveAttribute("data-research-input-shell", "tray");
-  expect(inputTray).not.toHaveClass("border-t");
+  expect(textarea).toHaveAttribute("placeholder", "想研究些什么？");
+  expect(inputTray).toHaveAttribute("data-research-input-placement", "idle-stage");
+  expect(inputTray).not.toHaveClass("fixed");
 });
 
 test("shows correct placeholder in natural clarification mode", () => {
@@ -301,11 +300,12 @@ test("submit button keeps a fixed width and input-aligned height while submittin
     }));
   });
 
-  expect(screen.getByRole("button", { name: "提交中..." })).toHaveClass(
+  expect(screen.getByRole("button", { name: "提交中" })).toHaveClass(
     "self-end",
     "justify-center",
     "shrink-0",
   );
+  expect(screen.queryByText("提交")).not.toBeInTheDocument();
 });
 
 test("uses a single embedded input surface while preserving placeholder and disabled behavior", () => {
@@ -331,8 +331,9 @@ test("uses a single embedded input surface while preserving placeholder and disa
   const inputBar = textarea.closest("[data-research-input-bar='true']");
   const formSurface = button.parentElement?.parentElement;
 
+  expect(inputBar).toHaveAttribute("data-research-input-placement", "workspace-tray");
   expect(inputBar).toHaveAttribute("data-research-input-surface", "embedded");
-  expect(inputBar).not.toHaveAttribute("data-research-input-shell", "tray");
+  expect(inputBar).toHaveClass("fixed");
   expect(formSurface).toHaveClass("bg-surface-container-low/88");
   expect(formSurface).not.toHaveClass("shadow-[0_-20px_48px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(71,71,71,0.12)]");
   expect(textarea).toBeDisabled();
@@ -359,6 +360,16 @@ test("grows the textarea height for multiline input and keeps the submit button 
   expect(textarea.style.height).toBe("132px");
   expect(textarea.style.overflowY).toBe("hidden");
   expect(button).toHaveClass("shrink-0", "self-end");
+});
+
+test("submit button keeps an accessible name without showing visible submit text", () => {
+  const store = createResearchSessionStore();
+
+  renderWithStore(<UnifiedInputBar />, { store });
+
+  const button = screen.getByRole("button", { name: "提交" });
+  expect(button).toHaveAttribute("aria-label", "提交");
+  expect(screen.queryByText("提交")).not.toBeInTheDocument();
 });
 
 test("caps textarea height and enables internal scrolling after the max height", async () => {

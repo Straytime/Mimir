@@ -86,7 +86,7 @@ apps/web/
 
 1. `Idle`
    - 尚未创建任务
-   - 展示输入区、配置区、产品价值说明
+   - 展示居中的主舞台输入区、示例研究主题、轻量澄清模式配置
    - 顶部 hero 固定为大号 `Mimir` wordmark 与 slogan `Draw from depth.`，不再使用“小号品牌 overline + AI 研究工作台”组合
 2. `ActiveWorkspace`
    - 已创建任务，正在澄清 / 分析 / 搜集 / 撰写 / 等待反馈
@@ -158,10 +158,15 @@ apps/web/
 - `Enter` 提交，`Shift + Enter` 换行
 - 任务创建中禁用输入与配置切换
 - `409 resource_busy`、`429 ip_quota_exceeded` 直接在面板内提示
+- Idle 态输入区必须位于主舞台视觉中心，placeholder 固定为 `想研究些什么？`
+- 提交按钮不再显示文字 label，改为终端感回车符或抽象 icon，但必须保留可访问名称
+- 输入区下方直接停靠轻量配置组件；配置组件与输入区属于同一主舞台堆叠，不再出现独立的“研究配置”大块
+- 任务创建成功并进入 active workspace 后，输入区整体回到底部 fixed 输入托盘
 - 示例研究主题固定为：
   - `从心理学角度解析 openclaw 爆火的原因`
   - `一级方程式赛车 26 年新规的争议与影响`
   - `新能源汽车电池技术路线对比：磷酸铁锂 vs 三元锂 vs 固态电池`
+- 示例区域不再显示 `示例研究主题` 标题文案，仅保留主题按钮本身
 - Idle 态示例卡片默认保持 recessed / docked 的低对比表面，基底固定为 `surface-container-lowest`；hover / focus 仅允许抬到 `surface-container-low` 一档，并配合左缘 `surface-tint` 细线 accent 与极轻 outline。
 - ExamplePrompts 禁止使用 `shadow-glow-*`、`shadow-ghost`、整块亮到 `surface`、大幅 `translateY` 或任何看起来像漂浮 CTA slab 的 hover / focus 写法。
 
@@ -177,7 +182,12 @@ apps/web/
 
 交互规则：
 
-- 默认 `natural`
+- 配置组件直接可见文案固定为 `你喜欢什么样的需求沟通方式？`
+- 选项名称固定为 `问答`、`选项`
+- 默认 `options`
+- hover / focus 到某个模式时，只显示该模式自己的提示文案：
+  - `问答`: `通过自然对话，开放式地向我反馈需求细节，适合复杂、需要详细说明的研究任务`
+  - `选项`: `通过自动生成的选单直接向我提供预设建议，适合快速启动`
 - 任务创建后锁定，不允许在当前 Task 中变更
 
 ### 5.3 `ClarificationPanel`
@@ -199,8 +209,8 @@ apps/web/
 1. 不解析原始 markdown 选单。
 2. 倒计时仅为 UI 定时器；每次改选任意题目后重新开始 30 秒。
 3. 发生 `clarification.fallback_to_natural` 后，应清空选单状态并切到自然语言模式。
-4. 澄清详情卡片文案固定为“在开始之前，有一些问题需要你的反馈”。
-5. `ClarificationDetailPanel` 仅在 `clarificationText` 非空或 `questionSet` 已就绪时渲染；`clarifying` phase 本身不足以触发空卡片占位。
+4. 澄清详情标题固定为“需求澄清”，不再显示“在开始之前，有一些问题需要你的反馈”引导文案。
+5. `ClarificationDetailPanel` 在进入 `clarifying` phase 后即渲染，至少显示标题与生成中占位；当 `clarificationText` 或 `questionSet` 就绪后再补齐具体内容。
 6. 提交初始需求后，页面必须通过工作台级共享 card anchor 规则滚动到澄清详情卡片，不依赖单个卡片自身的局部滚动逻辑。
 7. `clarification.delta` 文本或 `clarification.options.ready.question_set` 首次就绪时，即使仍处于同一 `clarifying` anchor key，也必须重新定位到澄清详情标题，使标题落在状态栏下方的统一留白区内。
 8. 选单澄清倒计时不得并入 `SessionStatusBar` 的 taskId-only 下排；若需要保持全局可见，必须作为独立的工作台级 sticky surface。
@@ -363,18 +373,19 @@ UI 呈现规则：
 
 职责：
 
-- 作为页面唯一底部输入托盘，统一承接初始需求与自然语言澄清输入
-- 在 active workspace 中始终固定停靠底部，不改变现有提交与禁用语义
+- 统一承接初始需求与自然语言澄清输入
+- 在 `Idle` 时作为主舞台中央输入区显示；进入 active workspace 后固定停靠底部
 
 视觉与布局规则：
 
-1. 输入托盘采用 fixed 底部的嵌入式 surface 处理，而不是显式的外层 docked tray 包裹内层输入块；必须通过背景过渡、轻量 blur 与单层 tonal surface 体现其与正文区的区分。
+1. `Idle` 态输入区不得以底部 fixed tray 形式出现；active workspace 中才采用 fixed 底部的嵌入式 surface 处理，而不是显式的外层 docked tray 包裹内层输入块。
 2. 不使用显式 `border-top` 作为主要分隔手段；若出于可访问性需要保留边界感，只能使用极弱的 ghost boundary、背景过渡或内阴影式处理，不能形成“硬切线”。
-3. 输入托盘本身仍是固定底部的页面级共享区域，`Collection Trace` / `Report Canvas` 的 max-height 计算必须扣除其实际占位与预留留白。
+3. 输入区在 active workspace 中仍是固定底部的页面级共享区域，`Collection Trace` / `Report Canvas` 的 max-height 计算必须扣除其实际占位与预留留白。
 4. `textarea` 高度必须随输入行数增长，但需要设置明确上限；超过上限后改为内部滚动，不继续推高页面级底栏。
 5. 提交按钮在单行与多行输入下都必须保持稳定的固定尺寸与对齐方式，不因 `textarea` 增高而塌缩、拉伸或偏离点击热区。
-6. 文本输入区与提交按钮必须保持同一视觉表面语言，避免出现“外层底栏 + 内层输入块”的双层托盘感；按钮固定宽高与现有交互语义保持不变。
-7. 本次视觉调整只改变输入托盘表面语言与多行高度行为，不改变 placeholder、禁用逻辑、提交热键、delivered 态新研究确认逻辑或澄清模式切换语义。
+6. 文本输入区与提交按钮必须保持同一视觉表面语言，避免出现“外层底栏 + 内层输入块”的双层托盘感；按钮固定宽高与现有交互语义保持不变，且不显示文字 `提交`。
+7. `Idle` 态 placeholder 固定为 `想研究些什么？`；其余 phase 仍按既有任务状态语义切换 placeholder 与禁用状态。
+8. 本次视觉调整不改变提交热键、delivered 态新研究确认逻辑或澄清模式切换语义。
 
 ### 5.6 `DeliveryActions`
 
@@ -430,9 +441,19 @@ v1 前端不开放 `FeedbackComposer`。
 
 文案要求：
 
-- `terminated`: 明确告知因用户显式终止或确认离开页面导致任务结束
-- `failed`: 明确显示错误摘要
-- `expired`: 明确告知报告已过期并被清理
+- `terminated` 主标题固定为 `任务已终止`
+- `terminated` 次要文案必须只根据后端 `payload.reason` 做稳定映射；不得再通过单独标题分支表达不同终止原因
+- `terminated` 的 `reason` 映射固定为：
+  - `sendbeacon_received`: `系统已收到页面关闭信号，当前任务已停止。旧任务操作不可恢复，请重新创建研究。`
+  - `client_disconnected`: `当前页面已主动断开连接，任务已停止。旧任务操作不可恢复，请重新创建研究。`
+  - `heartbeat_timeout`: `任务因长时间未收到心跳而停止。旧任务操作不可恢复，请重新创建研究。`
+  - `sse_connect_timeout`: `任务因长时间未建立事件连接而停止。旧任务操作不可恢复，请重新创建研究。`
+  - `server_shutdown`: `服务端连接已中断，当前任务被终止。旧任务操作不可恢复，请重新创建研究。`
+  - `risk_control_limit`: `研究内容触发了平台内容安全策略，当前任务已停止。请调整研究主题后重新创建研究。`
+- `terminated` 若缺少 `reason` 或 reason 不在映射表内，回退到通用文案：`当前任务已停止，旧任务操作不可恢复，请重新创建研究。`
+- `failed` 当前只展示统一失败 error summary 路径，不新增细粒度 reason 状态
+- `expired` 当前只基于 `expired_at` 告知报告已过期并被清理
+- 所有“旧任务操作已禁用”类信息只允许出现在次要文案中，不再出现在主标题中
 
 ### 5.10 `SessionStatusBar`
 
@@ -519,6 +540,14 @@ type ResearchSessionStore = {
     };
     reportAutoScrollEnabled: boolean;
     terminalReason: "terminated" | "failed" | "expired" | null;
+    terminationDetail:
+      | "sendbeacon_received"
+      | "client_disconnected"
+      | "heartbeat_timeout"
+      | "sse_connect_timeout"
+      | "server_shutdown"
+      | "risk_control_limit"
+      | null;
   };
   deliveryUi: {
     refreshingDelivery: boolean;
@@ -775,8 +804,8 @@ v1 前端不开放 feedback/revision 交互，因此主流程不进入前端 rev
 | `artifact.ready` | 追加 artifact | 在报告与图库中可见，不进入 `Collection Trace` |
 | `report.completed` | 更新 `delivery` | 下载区准备就绪，不进入 `Collection Trace` |
 | `task.awaiting_feedback` | 更新 `snapshot` 与 `expires_at` | 保持下载按钮可用，但不展示反馈输入 |
-| `task.failed` | 设置 `terminalReason = failed` | 切换失败态 |
-| `task.terminated` | 设置 `terminalReason = terminated` | 切换终止态 |
+| `task.failed` | 设置 `terminalReason = failed` | 切换失败态；当前只走统一失败摘要路径 |
+| `task.terminated` | 设置 `terminalReason = terminated` 与 `terminationDetail = payload.reason ?? null` | 切换终止态，并驱动终止次要文案映射 |
 | `task.expired` | 设置 `terminalReason = expired` | 切换过期态 |
 
 额外约束：

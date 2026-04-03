@@ -12,8 +12,8 @@ const TERMINAL_CONTENT = {
     tone: "bg-surface-container-high text-[#FF6B6B]",
   },
   terminated: {
-    title: "任务已终止，旧任务操作已禁用。",
-    detail: "只有手动终止或确认离开页面后，任务才会结束。v1 不支持恢复旧任务。",
+    title: "任务已终止",
+    detail: "当前任务已停止，旧任务操作不可恢复，请重新创建研究。",
     tone: "bg-surface-container-high text-[#FFB86C]",
   },
   expired: {
@@ -23,24 +23,36 @@ const TERMINAL_CONTENT = {
   },
 } as const;
 
-const RISK_CONTROL_CONTENT = {
-  title: "任务因内容安全审查被终止",
-  detail: "研究内容触发了平台内容安全策略，当前任务已停止。请调整研究主题后重试。",
-  tone: "bg-surface-container-high text-[#FFB86C]",
+const TERMINATED_DETAIL_BY_REASON: Record<TerminationReason, string> = {
+  sendbeacon_received:
+    "系统已收到页面关闭信号，当前任务已停止。旧任务操作不可恢复，请重新创建研究。",
+  client_disconnected:
+    "当前页面已主动断开连接，任务已停止。旧任务操作不可恢复，请重新创建研究。",
+  heartbeat_timeout:
+    "任务因长时间未收到心跳而停止。旧任务操作不可恢复，请重新创建研究。",
+  risk_control_limit:
+    "研究内容触发了平台内容安全策略，当前任务已停止。请调整研究主题后重新创建研究。",
+  sse_connect_timeout:
+    "任务因长时间未建立事件连接而停止。旧任务操作不可恢复，请重新创建研究。",
+  server_shutdown:
+    "服务端连接已中断，当前任务被终止。旧任务操作不可恢复，请重新创建研究。",
 } as const;
 
 function resolveTerminalContent(
   terminalReason: Exclude<TerminalReason, null>,
   terminationDetail: TerminationReason | null,
 ) {
-  if (
-    terminalReason === "terminated" &&
-    terminationDetail === "risk_control_limit"
-  ) {
-    return RISK_CONTROL_CONTENT;
+  if (terminalReason !== "terminated") {
+    return TERMINAL_CONTENT[terminalReason];
   }
 
-  return TERMINAL_CONTENT[terminalReason];
+  return {
+    ...TERMINAL_CONTENT.terminated,
+    detail:
+      terminationDetail === null
+        ? TERMINAL_CONTENT.terminated.detail
+        : TERMINATED_DETAIL_BY_REASON[terminationDetail],
+  };
 }
 
 export function TerminalBanner() {

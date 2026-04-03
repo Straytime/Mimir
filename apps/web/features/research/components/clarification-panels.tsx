@@ -92,31 +92,19 @@ export function ClarificationDetailPanel() {
   const setOptionAnswer = useResearchSessionStore((state) => state.setOptionAnswer);
   const submitClarification = useClarificationSubmit();
   const isSubmitting = pendingAction === "submitting_clarification";
-  const hasClarificationContent =
-    clarificationText.trim().length > 0 ||
-    (questionSet?.questions.length ?? 0) > 0;
 
-  if (
-    snapshot === null ||
-    snapshot.phase !== "clarifying" ||
-    !hasClarificationContent
-  ) {
+  if (snapshot === null || snapshot.phase !== "clarifying") {
     return null;
   }
 
   return (
     <div className="space-y-5">
-      <div className="space-y-2">
-        <h3
-          className="text-lg font-semibold text-primary"
-          data-research-anchor-target="clarification-title"
-        >
-          澄清详情
-        </h3>
-        <p className="text-sm leading-6 text-secondary">
-          在开始之前，有一些问题需要你的反馈
-        </p>
-      </div>
+      <h3
+        className="text-lg font-semibold text-primary"
+        data-research-anchor-target="clarification-title"
+      >
+        需求澄清
+      </h3>
 
       {questionSet !== null ? (
         (() => {
