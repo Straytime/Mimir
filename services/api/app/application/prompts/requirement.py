@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from app.application.dto.invocation import PromptBundle
+from app.core.date_utils import format_date_cn
 
 if TYPE_CHECKING:
     from app.application.services.clarification import AnalysisInput
@@ -16,7 +17,7 @@ def build_requirement_analysis_prompt(
     return PromptBundle(
         system_prompt=f"""
 <背景>
-你是一个研究报告撰写智能体中的需求分析器，<历史需求沟通></历史需求沟通>中是研究助手和用户的需求沟通记录，现在是{now.isoformat()}。
+你是一个研究报告撰写智能体中的需求分析器，<历史需求沟通></历史需求沟通>中是研究助手和用户的需求沟通记录，现在是{format_date_cn(now)}。
 </背景>
 <任务>
 请根据历史需求沟通中的内容，深入分析然后汇总输出具体的用户需求。

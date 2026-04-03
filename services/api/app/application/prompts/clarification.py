@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from app.application.dto.invocation import PromptBundle
+from app.core.date_utils import format_date_cn
 
 
 def build_natural_clarification_prompt(
@@ -22,7 +23,7 @@ def build_natural_clarification_prompt(
 # 用户输入需求：
 {initial_query}
 # 当前时间：
-{now.isoformat()}
+{format_date_cn(now)}
 """.strip(),
     )
 
@@ -50,6 +51,6 @@ def build_options_clarification_prompt(
 # 用户输入：
 {initial_query}
 # 当前时间：
-{now.isoformat()}
+{format_date_cn(now)}
 """.strip(),
     )

@@ -32,7 +32,7 @@ def test_feedback_prompt_matches_prd_literal_system_user_split() -> None:
 
     assert "<背景>" in prompt.system_prompt
     assert "你是一个研究报告撰写智能体中的需求分析器" in prompt.system_prompt
-    assert "现在是2026-03-16T18:30:00+00:00。" in prompt.system_prompt
+    assert "现在是2026-03-17。" in prompt.system_prompt
     assert "<上一轮研究需求></上一轮研究需求>中是用户上一轮的研究报告需求" in prompt.system_prompt
     assert "<本次调整意见></本次调整意见>中是用户本轮的最新消息" in prompt.system_prompt
     assert '"研究目标"' in prompt.system_prompt

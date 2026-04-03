@@ -3,13 +3,14 @@ from dataclasses import asdict
 
 from app.application.dto.delivery import OutlineInvocation, WriterInvocation
 from app.application.dto.invocation import PromptBundle
+from app.core.date_utils import format_date_cn
 
 
-def _build_outline_system_prompt(now_iso: str) -> str:
+def _build_outline_system_prompt(now_date: str) -> str:
     return f"""
 <背景与任务>
 你是一个深度研究架构师，请基于用户研究需求和信息获取结果，规划深度研究的实体约束和大纲结构。
-你的任务是定义“写什么”和“怎么写”，你**绝对不能**撰写具体内容，你的产出将作为指令发送给下游的“撰写员”，当前时间是{now_iso}。
+你的任务是定义“写什么”和“怎么写”，你**绝对不能**撰写具体内容，你的产出将作为指令发送给下游的“撰写员”，当前时间是{now_date}。
 1. 紧密围绕用户需求设计大纲，保证研究内容前后逻辑合理、通畅无前后冲突。
 1.1 正文内部结构仅下探一级。
 1.2 其中章节描述内容**必须**满足以下要求
@@ -46,7 +47,7 @@ def _build_outline_system_prompt(now_iso: str) -> str:
 
 def build_outline_prompt(*, invocation: OutlineInvocation) -> PromptBundle:
     return PromptBundle(
-        system_prompt=_build_outline_system_prompt(invocation.now.isoformat()),
+        system_prompt=_build_outline_system_prompt(format_date_cn(invocation.now)),
         user_prompt=(
             "<用户研究需求>\n"
             + json.dumps(
@@ -78,7 +79,7 @@ def build_writer_prompt(*, invocation: WriterInvocation) -> PromptBundle:
     return PromptBundle(
         system_prompt=f"""
 ## 背景与任务
-现在是{invocation.now.isoformat()}，你是一个资深研究员，你负责利用已获取信息和你自身的世界知识，基于研究大纲撰写一篇满足用户研究需求的深度研究内容。
+现在是{format_date_cn(invocation.now)}，你是一个资深研究员，你负责利用已获取信息和你自身的世界知识，基于研究大纲撰写一篇满足用户研究需求的深度研究内容。
 
 ## 正文撰写
 - 你的分析与研究应该深入细致，避免直接使用已获取信息中的原文。

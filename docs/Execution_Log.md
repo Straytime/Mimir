@@ -4719,3 +4719,47 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 若需进一步验证观感，可在独立任务中做一次浏览器级 hover / focus 人工验收
   - 若要统一 idle 区微交互语义，单独下发任务校准相邻组件，不在本组件内顺手扩散
+
+## TP-2026-04-03 Prompt Date Format UTC+8
+
+- 日期时间: 2026-04-03 16:00 CST (+0800)
+- 任务包编号: TP-2026-04-03-prompt-date-format-utc8
+- session 标识: fix/prompt-date-format-utc8
+- 目标摘要: 将所有 LLM prompt 中的时间变量注入从完整 ISO 8601 格式统一为 UTC+8 时区的 YYYY-MM-DD 日期字符串
+- 修改文件:
+  - `services/api/app/core/date_utils.py` — 新增辅助函数 `format_date_cn(dt) -> str`
+  - `services/api/app/application/prompts/clarification.py` — 2 处 `.isoformat()` 替换为 `format_date_cn()`
+  - `services/api/app/application/prompts/requirement.py` — 1 处替换
+  - `services/api/app/application/prompts/collection.py` — 3 处替换
+  - `services/api/app/application/prompts/delivery.py` — 3 处替换（含参数重命名 `now_iso` -> `now_date`）
+  - `services/api/app/application/prompts/feedback.py` — 1 处替换
+  - `services/api/tests/unit/core/test_date_utils.py` — 新增辅助函数单元测试（6 个）
+  - `services/api/tests/unit/application/test_prompts.py` — 更新 3 处时间断言
+  - `services/api/tests/unit/application/test_collection_prompts.py` — 更新 1 处时间断言
+  - `services/api/tests/unit/application/test_delivery_prompts.py` — 更新 2 处时间断言
+  - `services/api/tests/unit/application/test_feedback_prompts.py` — 更新 1 处时间断言
+  - `docs/execution_log.md` — 本条目
+- 测试/验证:
+  - `uv run --group dev pytest tests/unit` — 223 passed
+- 验收结论: accepted；所有 prompt 文件中不再有 `.isoformat()` 用于时间注入，时间格式统一为 YYYY-MM-DD，时区固定 UTC+8
+- blocker / 风险: 无
+- 下一步建议: 无
+
+## TP-2026-04-03 Frontend TopBar Alignment & Submit Button Style
+
+- 日期时间: 2026-04-03 16:06 CST (+0800)
+- 任务包编号: TP-2026-04-03-frontend-style-fix
+- session 标识: fix/prompt-date-format-utc8
+- 目标摘要: 修复顶栏元素多余内边距导致与内容区不对齐的问题；优化提交按钮为紧凑终端风格并实现设计宪法要求的 hover 反色效果
+- 修改文件:
+  - `apps/web/features/research/components/session-status-bar.tsx` — 去掉根 `<section>` 的 `px-4`，消除与内容区的 16px 内缩偏差
+  - `apps/web/features/research/components/unified-input-bar.tsx` — 按钮样式：去掉 `h-12 w-[120px]`，改用 `px-6 py-2.5` 紧凑内边距；字体改为 `font-ui text-xs font-medium uppercase tracking-[0.08em]`；hover 从 `hover:bg-primary/90` 改为 `hover:bg-surface hover:text-primary`（反色）；过渡改为 `transition-colors`
+  - `apps/web/tests/component/unified-input-bar.spec.tsx` — 更新 3 处按钮 class 断言，去掉对已移除的 `h-12` / `w-[120px]` 的检查
+  - `docs/Execution_Log.md` — 本条目
+- 测试/验证:
+  - `pnpm typecheck` — passed
+  - `pnpm test:unit` — 63 passed
+  - `pnpm test:component` — 124 passed, 3 failed (pre-existing failures in copy-cleanup.spec.tsx / timeline-panel.spec.tsx，与本次变更无关)
+- 验收结论: accepted；顶栏与内容区对齐，按钮符合设计宪法终端风格及 hover 反色规则
+- blocker / 风险: 无
+- 下一步建议: 无

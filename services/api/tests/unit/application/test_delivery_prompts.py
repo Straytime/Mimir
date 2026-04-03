@@ -91,7 +91,7 @@ def test_outline_prompt_semantic_lock_keeps_role_and_output_constraints() -> Non
     assert '"section_1"' in prompt.system_prompt
     assert '"entities": []' in prompt.system_prompt
     assert '"参考来源"' not in prompt.system_prompt
-    assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
+    assert "2026-03-17" in prompt.system_prompt
     assert "<用户研究需求>" in prompt.user_prompt
     assert "分析中国 AI 搜索产品的竞争格局与未来机会" in prompt.user_prompt
     assert "ref_1" in prompt.user_prompt
@@ -125,7 +125,7 @@ def test_writer_prompt_semantic_lock_keeps_markdown_tool_and_footnote_rules() ->
     assert "canonical_path" in prompt.system_prompt
     assert "GitHub Flavored Markdown 标准语法" in prompt.system_prompt
     assert "不要在最终输出中添加任何无关解释" in prompt.system_prompt
-    assert "2026-03-16T16:30:00+00:00" in prompt.system_prompt
+    assert "2026-03-17" in prompt.system_prompt
     assert "<参考信息>" in prompt.user_prompt
     assert "ref_1" in prompt.user_prompt
     assert "中国 AI 搜索产品竞争格局研究" in prompt.user_prompt

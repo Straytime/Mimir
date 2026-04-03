@@ -37,7 +37,7 @@ def test_natural_clarification_prompt_matches_prd_literal_contract() -> None:
         # 用户输入需求：
         帮我研究中国 AI 搜索产品竞争格局和未来机会
         # 当前时间：
-        2026-03-16T09:30:00+00:00
+        2026-03-16
         """
     )
     assert len(prompt.messages) == 2
@@ -72,7 +72,7 @@ def test_options_clarification_prompt_matches_prd_literal_contract() -> None:
         # 用户输入：
         帮我研究中国 AI 搜索产品竞争格局和未来机会
         # 当前时间：
-        2026-03-16T09:30:00+00:00
+        2026-03-16
         """
     )
     assert len(prompt.messages) == 2
@@ -109,7 +109,7 @@ def test_requirement_analysis_prompt_matches_prd_literal_system_user_split() -> 
     assert "<背景>" in prompt.system_prompt
     assert "你是一个研究报告撰写智能体中的需求分析器" in prompt.system_prompt
     assert "<历史需求沟通></历史需求沟通>中是研究助手和用户的需求沟通记录" in prompt.system_prompt
-    assert "现在是2026-03-16T09:30:00+00:00。" in prompt.system_prompt
+    assert "现在是2026-03-16。" in prompt.system_prompt
     assert "<输出格式>" in prompt.system_prompt
     assert '"研究目标"' in prompt.system_prompt
     assert '"时效需求"' in prompt.system_prompt

@@ -81,7 +81,7 @@ def test_planner_prompt_semantic_lock_keeps_role_limits_and_transcript_order() -
     assert "必须主动停止搜集" in prompt.system_prompt
     assert "**绝不能超过 9 次工具调用**" in prompt.system_prompt
     assert "collect_agent" in prompt.system_prompt
-    assert "2026-03-16T15:00:00+00:00" in prompt.system_prompt
+    assert "2026-03-16" in prompt.system_prompt
     assert "分析中国 AI 搜索产品的竞争格局与机会" in prompt.user_prompt
     assert [message.role for message in prompt.transcript] == ["assistant", "tool", "tool"]
     assistant_msg = prompt.transcript[0]
