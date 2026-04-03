@@ -20,10 +20,15 @@ test("renders the idle workspace shell before a task is created", () => {
 
   expect(screen.getByRole("heading", { name: "Mimir" })).toBeInTheDocument();
   expect(screen.getByText("Draw from depth.")).toBeInTheDocument();
-  expect(screen.getByPlaceholderText("输入你的研究主题...")).toBeInTheDocument();
+  expect(screen.getByPlaceholderText("想研究些什么？")).toBeInTheDocument();
   expect(
-    screen.getByText("系统生成结构化问题并预选默认答案，30 秒倒计时后自动提交。"),
+    screen.getByText("从心理学角度解析 openclaw 爆火的原因"),
   ).toBeInTheDocument();
+  expect(
+    screen.getByText("你喜欢什么样的需求沟通方式？"),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("研究配置")).not.toBeInTheDocument();
+  expect(screen.queryByText("示例研究主题")).not.toBeInTheDocument();
 });
 
 test("renders the clarification copy and keeps the collection trace hidden before collection starts", () => {
@@ -48,10 +53,10 @@ test("renders the clarification copy and keeps the collection trace hidden befor
 
   render(<ResearchPageClient store={store} />);
 
+  expect(screen.getByText("需求澄清")).toBeInTheDocument();
   expect(
-    screen.getByText("在开始之前，有一些问题需要你的反馈"),
-  ).toBeInTheDocument();
-  expect(screen.getByText("澄清详情")).toBeInTheDocument();
+    screen.queryByText("在开始之前，有一些问题需要你的反馈"),
+  ).not.toBeInTheDocument();
   expect(screen.queryByText("Requirement Summary")).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Collection Trace" })).not.toBeInTheDocument();
   expect(screen.queryByLabelText("报告大纲")).not.toBeInTheDocument();

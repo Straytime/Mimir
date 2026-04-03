@@ -4763,3 +4763,83 @@ Copy the template below for each completed session:
 - 验收结论: accepted；顶栏与内容区对齐，按钮符合设计宪法终端风格及 hover 反色规则
 - blocker / 风险: 无
 - 下一步建议: 无
+
+## Active Task Package 1 Idle Clarification Terminal Polish
+
+- 日期时间: 2026-04-03 18:06:14 CST (+0800)
+- 任务包编号: Active Task Package 1
+- session 标识: codex/home-shell-clarification-terminal-polish
+- 目标摘要: 重做 idle 首页主舞台与输入提交流程，将示例主题和输入区上移到视觉中心，改为 `options` 默认澄清模式，删除旧的“研究配置”与“示例研究主题”文案，改成吸附在输入框下方的轻量配置组件，并将澄清详情标题统一为“需求澄清”，同时保持 active workspace 底部 fixed 输入托盘与现有任务流转语义。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/example-prompts.tsx`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `apps/web/features/research/components/unified-input-bar.tsx`
+  - `apps/web/features/research/components/clarification-panels.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/store/research-session-store.types.ts`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/component/research-config-panel.spec.tsx`
+  - `apps/web/tests/component/unified-input-bar.spec.tsx`
+  - `apps/web/tests/component/clarification-detail-display.spec.tsx`
+  - `apps/web/tests/integration/create-task-flow.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-page-client.spec.tsx tests/component/research-config-panel.spec.tsx tests/component/unified-input-bar.spec.tsx tests/component/clarification-detail-display.spec.tsx tests/integration/create-task-flow.spec.tsx`
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 未运行: 其余 `apps/web` 全量测试；本任务包验收只要求指定 component/integration 集合与 typecheck
+- 验收结论: accepted；idle 态输入区已回到主舞台中央、active workspace 恢复底部 fixed 托盘、默认澄清模式切为 `options`、配置文案与 hover 提示落地、澄清标题与旧引导文案替换完成。
+- blocker / 风险:
+  - `apps/web/features/research/components/research-workspace-shell.tsx` 为直接相关补充变更，不在原始清单内，但为了让任务创建后立即渲染“需求澄清”卡片占位而最小化引入
+  - 当前仅验证了任务包要求的 targeted tests；若后续有依赖旧 copy 的快照或 e2e，需要在下一轮全量回归中确认
+- 下一步建议:
+  - 如需继续 polish，可在独立任务包中补 idle 主舞台的视觉微调与移动端 spacing 回归
+  - 合并前执行一次 `apps/web` 更大范围组件回归，确认没有遗漏旧文案依赖
+
+## Active Task Package 1 ResearchConfigPanel Hint Scope Rework
+
+- 日期时间: 2026-04-03 18:06:14 CST (+0800)
+- 任务包编号: Active Task Package 1
+- session 标识: codex/home-shell-clarification-terminal-polish
+- 目标摘要: 收紧 `ResearchConfigPanel` 的 hover / focus 提示范围，改为只显示当前悬浮或聚焦选项对应的一条说明，避免同时展开两种模式说明，保持 idle 配置组件的低存在感。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `apps/web/tests/component/research-config-panel.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-config-panel.spec.tsx`
+  - 未运行: 其余前端测试；本次返工仅覆盖单组件提示行为
+- 验收结论: accepted；提示区已按当前 hover / focus 目标单条切换，不再同时显示两种模式说明。
+- blocker / 风险:
+  - 无当前 blocker
+- 下一步建议:
+  - 无
+
+## Active Task Package 2 Terminated Banner Copy + Risk Control Reason Alignment
+
+- 日期时间: 2026-04-03 18:33:40 CST (+0800)
+- 任务包编号: Active Task Package 2
+- session 标识: codex/home-shell-clarification-terminal-polish
+- 目标摘要: 收紧 `task.terminated` 终态提示，统一 banner 主标题为“任务已终止”，将次要文案改为按后端 `termination reason` 的稳定产品化映射并补缺省回退，同时修复 collection 风控终止事件 reason 与前端/contracts 的契约漂移，统一为 `risk_control_limit`。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/features/research/components/terminal-banner.tsx`
+  - `apps/web/tests/component/terminal-banner.spec.tsx`
+  - `apps/web/tests/component/terminal-banner-detail.spec.tsx`
+  - `apps/web/tests/integration/task-stream-lifecycle.spec.tsx`
+  - `services/api/app/application/services/collection.py`
+  - `services/api/tests/integration/collection/test_collection_engine.py`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/terminal-banner.spec.tsx tests/component/terminal-banner-detail.spec.tsx tests/integration/task-stream-lifecycle.spec.tsx`
+  - 已运行: `cd services/api && UV_CACHE_DIR=/tmp/uv-cache uv run --no-sync --group dev pytest tests/integration/collection/test_collection_engine.py -k risk_control -q`
+  - 未运行: 其余前后端测试；本任务包验收仅要求上述 targeted verification
+- 验收结论: accepted；`terminated` banner 已改为固定主标题并按 reason 输出稳定 detail，reason 缺失时会回退到通用说明，collection 风控终止事件 payload 已统一为 `risk_control_limit`。
+- blocker / 风险:
+  - `packages/contracts/src/index.ts` 本轮未修改，因为仓库内前端/contracts 已经是 `risk_control_limit`；漂移点仅在后端 collection 终止 reason
+  - 当前只验证了任务包要求的 targeted tests；若其他前端用例仍对旧终止 copy 有隐式依赖，需要在后续更大范围回归中确认
+- 下一步建议:
+  - 如需继续 polish，可在独立任务包中检查其他终态相关 UI 是否仍残留“旧任务操作已禁用”旧文案
+  - 合并前执行更大范围前后端回归，确认没有遗漏旧 reason 文案依赖

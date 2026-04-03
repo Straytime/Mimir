@@ -130,17 +130,17 @@ test("creates a task, writes session context, and immediately starts the SSE con
       />,
     );
 
-    await user.type(screen.getByPlaceholderText("输入你的研究主题..."), "研究中国 AI 搜索产品竞争格局");
+    await user.type(screen.getByPlaceholderText("想研究些什么？"), "研究中国 AI 搜索产品竞争格局");
     await user.click(screen.getByRole("button", { name: "提交" }));
 
     expect(store.getState().ui.pendingAction).toBe("creating_task");
-    expect(screen.getByPlaceholderText("输入你的研究主题...")).toBeDisabled();
-    expect(screen.getByRole("radio", { name: /自然澄清/i })).toBeDisabled();
-    expect(screen.getByRole("radio", { name: /选单澄清/i })).toBeDisabled();
+    expect(screen.getByPlaceholderText("想研究些什么？")).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "问答" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "选项" })).toBeDisabled();
 
     deferred.resolve();
 
-    await screen.findByText("在开始之前，有一些问题需要你的反馈");
+    await screen.findByText("需求澄清");
 
     expect(scrollToSpy).toHaveBeenCalledWith({
       behavior: "smooth",
@@ -150,7 +150,7 @@ test("creates a task, writes session context, and immediately starts the SSE con
     expect(recordedBodies[0]).toMatchObject({
       initial_query: "研究中国 AI 搜索产品竞争格局",
       config: {
-        clarification_mode: "natural",
+        clarification_mode: "options",
       },
     });
     expect(store.getState().session).toMatchObject({
@@ -212,7 +212,7 @@ test("shows an inline validation error for 422 responses and keeps the draft", a
     <ResearchPageClient runtime={createIntegrationRuntime()} store={store} />,
   );
 
-  const textarea = screen.getByPlaceholderText("输入你的研究主题...");
+  const textarea = screen.getByPlaceholderText("想研究些什么？");
   await user.type(textarea, "保留这段输入");
   await user.click(screen.getByRole("button", { name: "提交" }));
 
@@ -239,7 +239,7 @@ test("shows the contract message for 409 resource_busy", async () => {
     <ResearchPageClient runtime={createIntegrationRuntime()} store={store} />,
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的研究主题..."), "研究另一个主题");
+  await user.type(screen.getByPlaceholderText("想研究些什么？"), "研究另一个主题");
   await user.click(screen.getByRole("button", { name: "提交" }));
 
   await screen.findByText("当前已有一个研究任务正在进行中。请等待其完成或终止后再创建新任务。");
@@ -266,7 +266,7 @@ test("shows quota timing copy for 429 ip_quota_exceeded", async () => {
     <ResearchPageClient runtime={createIntegrationRuntime()} store={store} />,
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的研究主题..."), "研究配额错误提示");
+  await user.type(screen.getByPlaceholderText("想研究些什么？"), "研究配额错误提示");
   await user.click(screen.getByRole("button", { name: "提交" }));
 
   await screen.findByText("24 小时内创建任务次数已达上限，请稍后再试。");

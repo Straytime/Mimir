@@ -1,6 +1,13 @@
 "use client";
 
+import { type FocusEvent, useState } from "react";
+
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
+
+const NATURAL_HINT =
+  "通过自然对话，开放式地向我反馈需求细节，适合复杂、需要详细说明的研究任务";
+const OPTIONS_HINT =
+  "通过自动生成的选单直接向我提供预设建议，适合快速启动";
 
 export function ResearchConfigPanel() {
   const clarificationModeDraft = useResearchSessionStore(
@@ -10,58 +17,104 @@ export function ResearchConfigPanel() {
   const setClarificationModeDraft = useResearchSessionStore(
     (state) => state.setCreateTaskClarificationModeDraft,
   );
+  const [activeHint, setActiveHint] = useState<"natural" | "options" | null>(null);
 
   const isDisabled = pendingAction === "creating_task";
 
+  function handleBlur(event: FocusEvent<HTMLFieldSetElement>) {
+    if (event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+
+    setActiveHint(null);
+  }
+
+  const hintCopy =
+    activeHint === "natural"
+      ? NATURAL_HINT
+      : activeHint === "options"
+        ? OPTIONS_HINT
+        : null;
+
+  const hintLabel =
+    activeHint === "natural" ? "问答" : activeHint === "options" ? "选项" : null;
+
   return (
     <fieldset
-      className="space-y-3 bg-surface-container-low p-6"
+      className="space-y-3 bg-surface-container-lowest px-3 py-3"
       disabled={isDisabled}
+      onBlurCapture={handleBlur}
     >
-      <legend className="px-2 text-[11px] font-ui font-semibold uppercase tracking-[0.15em] text-tertiary">
-        研究配置
-      </legend>
-      <p className="text-sm leading-6 text-secondary">
-        任务创建后配置会锁定。当前阶段会按这里选择的模式进入自然语言或选单澄清 UI。
+      <p className="px-1 text-[11px] font-ui font-medium tracking-[0.12em] text-tertiary">
+        你喜欢什么样的需求沟通方式？
       </p>
 
-      <label className="flex cursor-pointer items-start gap-3 bg-surface-container-lowest px-4 py-3 transition hover:bg-surface-container-high">
-        <input
-          checked={clarificationModeDraft === "natural"}
-          className="mt-1 accent-primary"
-          name="clarification_mode"
-          onChange={() => setClarificationModeDraft("natural")}
-          type="radio"
-          value="natural"
-        />
-        <span>
-          <span className="block text-sm font-semibold text-primary">
-            自然澄清
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label
+          className={`flex cursor-pointer items-center justify-between bg-surface-container-low px-3 py-3 transition ${
+            clarificationModeDraft === "natural"
+              ? "text-primary outline outline-1 outline-primary/30"
+              : "text-secondary hover:bg-surface-container"
+          }`}
+          onMouseEnter={() => setActiveHint("natural")}
+          onMouseLeave={() => setActiveHint(null)}
+        >
+          <span className="text-sm font-semibold">问答</span>
+          <input
+            aria-label="问答"
+            checked={clarificationModeDraft === "natural"}
+            className="sr-only"
+            name="clarification_mode"
+            onFocus={() => setActiveHint("natural")}
+            onChange={() => setClarificationModeDraft("natural")}
+            type="radio"
+            value="natural"
+          />
+          <span
+            aria-hidden="true"
+            className="font-ui text-[11px] uppercase tracking-[0.18em] text-tertiary"
+          >
+            qa
           </span>
-          <span className="block text-sm text-secondary">
-            默认模式。系统先用自然语言追问，再等待用户回答。
-          </span>
-        </span>
-      </label>
+        </label>
 
-      <label className="flex cursor-pointer items-start gap-3 bg-surface-container-lowest px-4 py-3 transition hover:bg-surface-container-high">
-        <input
-          checked={clarificationModeDraft === "options"}
-          className="mt-1 accent-primary"
-          name="clarification_mode"
-          onChange={() => setClarificationModeDraft("options")}
-          type="radio"
-          value="options"
-        />
-        <span>
-          <span className="block text-sm font-semibold text-primary">
-            选单澄清
+        <label
+          className={`flex cursor-pointer items-center justify-between bg-surface-container-low px-3 py-3 transition ${
+            clarificationModeDraft === "options"
+              ? "text-primary outline outline-1 outline-primary/30"
+              : "text-secondary hover:bg-surface-container"
+          }`}
+          onMouseEnter={() => setActiveHint("options")}
+          onMouseLeave={() => setActiveHint(null)}
+        >
+          <span className="text-sm font-semibold">选项</span>
+          <input
+            aria-label="选项"
+            checked={clarificationModeDraft === "options"}
+            className="sr-only"
+            name="clarification_mode"
+            onFocus={() => setActiveHint("options")}
+            onChange={() => setClarificationModeDraft("options")}
+            type="radio"
+            value="options"
+          />
+          <span
+            aria-hidden="true"
+            className="font-ui text-[11px] uppercase tracking-[0.18em] text-tertiary"
+          >
+            opt
           </span>
-          <span className="block text-sm text-secondary">
-            系统生成结构化问题并预选默认答案，30 秒倒计时后自动提交。
-          </span>
-        </span>
-      </label>
+        </label>
+      </div>
+
+      {hintCopy !== null && hintLabel !== null ? (
+        <div className="bg-surface-container-low px-3 py-2 text-xs leading-6 text-secondary">
+          <p className="mb-1 font-ui text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">
+            {hintLabel}
+          </p>
+          <p>{hintCopy}</p>
+        </div>
+      ) : null}
     </fieldset>
   );
 }

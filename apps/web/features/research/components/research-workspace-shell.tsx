@@ -50,10 +50,15 @@ function isPhaseAtOrAfter(
 }
 
 function hasClarificationContent(args: {
+  isClarifying: boolean;
   clarificationText: string;
   questionCount: number;
 }) {
-  return args.clarificationText.trim().length > 0 || args.questionCount > 0;
+  return (
+    args.isClarifying ||
+    args.clarificationText.trim().length > 0 ||
+    args.questionCount > 0
+  );
 }
 
 function hasOutlineContent(args: {
@@ -100,8 +105,8 @@ export function ResearchWorkspaceShell() {
   const clarificationQuestionCount = questionSet?.questions.length ?? 0;
   const outlineSectionCount = outline?.sections.length ?? 0;
   const shouldShowClarification =
-    snapshot.phase === "clarifying" &&
     hasClarificationContent({
+      isClarifying: snapshot.phase === "clarifying",
       clarificationText,
       questionCount: clarificationQuestionCount,
     });

@@ -1088,7 +1088,7 @@ class CollectionOrchestrator:
                         self._task_service.terminate_task(
                             session,
                             task_id=task_id,
-                            reason="risk_control_threshold_exceeded",
+                            reason="risk_control_limit",
                         )
                         session.commit()
                     runtime.cancelled = True
