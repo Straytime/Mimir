@@ -135,8 +135,8 @@ test("creates a task, writes session context, and immediately starts the SSE con
 
     expect(store.getState().ui.pendingAction).toBe("creating_task");
     expect(screen.getByPlaceholderText("想研究些什么？")).toBeDisabled();
-    expect(screen.getByRole("radio", { name: "问答" })).toBeDisabled();
-    expect(screen.getByRole("radio", { name: "选项" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "问答式" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "选项式" })).toBeDisabled();
 
     deferred.resolve();
 

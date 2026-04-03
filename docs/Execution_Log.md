@@ -4843,3 +4843,26 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 如需继续 polish，可在独立任务包中检查其他终态相关 UI 是否仍残留“旧任务操作已禁用”旧文案
   - 合并前执行更大范围前后端回归，确认没有遗漏旧 reason 文案依赖
+
+## Active Task Package Research Config Panel Refine
+
+- 日期时间: 2026-04-03 18:58:06 CST (+0800)
+- 任务包编号: Active Task Package
+- session 标识: codex/research-config-panel-refine
+- 目标摘要: 将需求沟通方式文案统一为 `问答式` / `选项式`，把 `ResearchConfigPanel` 收紧为低存在感、轻量、矩形 terminal selector，并修复 hover / focus 提示在指针移向提示区时的闪烁消失问题。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `apps/web/tests/component/research-config-panel.spec.tsx`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/integration/create-task-flow.spec.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-config-panel.spec.tsx tests/component/research-page-client.spec.tsx tests/integration/create-task-flow.spec.tsx`
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 未运行: 其余 `apps/web` 测试；本任务包验收仅要求上述 targeted tests 与 typecheck
+- 验收结论: accepted；`问答式` / `选项式` 文案已落地，默认选中仍为 `options`，selector 已收紧为低存在感矩形终端风格，tooltip 在 hover / focus 期间只显示当前项提示且指针移向提示区时保持稳定可见。
+- blocker / 风险:
+  - tooltip 预留了固定底部空间以保证 attached panel 稳定显示；若后续文案继续增长，需要单独回归更窄视口下的垂直节奏
+- 下一步建议:
+  - 如需继续 polish，可在独立任务包中补更大范围 idle 页面对齐检查，确认该 selector 与输入区、示例主题在多断点下的整体密度一致

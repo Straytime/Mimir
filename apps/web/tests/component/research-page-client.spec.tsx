@@ -27,6 +27,8 @@ test("renders the idle workspace shell before a task is created", () => {
   expect(
     screen.getByText("你喜欢什么样的需求沟通方式？"),
   ).toBeInTheDocument();
+  expect(screen.getByRole("radio", { name: "问答式" })).toBeInTheDocument();
+  expect(screen.getByRole("radio", { name: "选项式" })).toBeChecked();
   expect(screen.queryByText("研究配置")).not.toBeInTheDocument();
   expect(screen.queryByText("示例研究主题")).not.toBeInTheDocument();
 });

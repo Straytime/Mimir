@@ -1,6 +1,6 @@
 "use client";
 
-import { type FocusEvent, useState } from "react";
+import { type FocusEvent, useId, useState } from "react";
 
 import { useResearchSessionStore } from "../providers/research-workspace-providers";
 
@@ -10,6 +10,7 @@ const OPTIONS_HINT =
   "通过自动生成的选单直接向我提供预设建议，适合快速启动";
 
 export function ResearchConfigPanel() {
+  const headingId = useId();
   const clarificationModeDraft = useResearchSessionStore(
     (state) => state.ui.createTask.clarificationModeDraft,
   );
@@ -37,84 +38,100 @@ export function ResearchConfigPanel() {
         : null;
 
   const hintLabel =
-    activeHint === "natural" ? "问答" : activeHint === "options" ? "选项" : null;
+    activeHint === "natural" ? "问答式" : activeHint === "options" ? "选项式" : null;
 
   return (
     <fieldset
-      className="space-y-3 bg-surface-container-lowest px-3 py-3"
+      aria-labelledby={headingId}
+      className="space-y-2 bg-surface-container-lowest px-2 py-2"
       disabled={isDisabled}
       onBlurCapture={handleBlur}
     >
-      <p className="px-1 text-[11px] font-ui font-medium tracking-[0.12em] text-tertiary">
+      <p
+        className="px-1 text-[11px] font-ui font-medium tracking-[0.12em] text-tertiary"
+        id={headingId}
+      >
         你喜欢什么样的需求沟通方式？
       </p>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <label
-          className={`flex cursor-pointer items-center justify-between bg-surface-container-low px-3 py-3 transition ${
-            clarificationModeDraft === "natural"
-              ? "text-primary outline outline-1 outline-primary/30"
-              : "text-secondary hover:bg-surface-container"
-          }`}
-          onMouseEnter={() => setActiveHint("natural")}
-          onMouseLeave={() => setActiveHint(null)}
-        >
-          <span className="text-sm font-semibold">问答</span>
-          <input
-            aria-label="问答"
-            checked={clarificationModeDraft === "natural"}
-            className="sr-only"
-            name="clarification_mode"
-            onFocus={() => setActiveHint("natural")}
-            onChange={() => setClarificationModeDraft("natural")}
-            type="radio"
-            value="natural"
-          />
-          <span
-            aria-hidden="true"
-            className="font-ui text-[11px] uppercase tracking-[0.18em] text-tertiary"
-          >
-            qa
-          </span>
-        </label>
+      <div
+        className="relative pb-[70px]"
+        onMouseLeave={(event) => {
+          if (
+            event.relatedTarget instanceof Node &&
+            event.currentTarget.contains(event.relatedTarget)
+          ) {
+            return;
+          }
 
-        <label
-          className={`flex cursor-pointer items-center justify-between bg-surface-container-low px-3 py-3 transition ${
-            clarificationModeDraft === "options"
-              ? "text-primary outline outline-1 outline-primary/30"
-              : "text-secondary hover:bg-surface-container"
-          }`}
-          onMouseEnter={() => setActiveHint("options")}
-          onMouseLeave={() => setActiveHint(null)}
-        >
-          <span className="text-sm font-semibold">选项</span>
-          <input
-            aria-label="选项"
-            checked={clarificationModeDraft === "options"}
-            className="sr-only"
-            name="clarification_mode"
-            onFocus={() => setActiveHint("options")}
-            onChange={() => setClarificationModeDraft("options")}
-            type="radio"
-            value="options"
-          />
-          <span
-            aria-hidden="true"
-            className="font-ui text-[11px] uppercase tracking-[0.18em] text-tertiary"
+          setActiveHint(null);
+        }}
+      >
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          <label
+            className={`flex h-10 cursor-pointer items-center justify-between bg-surface-container-lowest px-2.5 transition-colors outline outline-1 ${
+              clarificationModeDraft === "natural"
+                ? "bg-surface-container-low text-primary outline-primary/25"
+                : "text-secondary outline-outline-variant/15 hover:bg-surface-container-low hover:text-primary"
+            }`}
+            onMouseEnter={() => setActiveHint("natural")}
           >
-            opt
-          </span>
-        </label>
-      </div>
+            <span className="text-[13px] font-semibold tracking-[0.01em]">问答式</span>
+            <input
+              aria-label="问答式"
+              checked={clarificationModeDraft === "natural"}
+              className="sr-only"
+              name="clarification_mode"
+              onFocus={() => setActiveHint("natural")}
+              onChange={() => setClarificationModeDraft("natural")}
+              type="radio"
+              value="natural"
+            />
+            <span
+              aria-hidden="true"
+              className="font-ui text-[10px] uppercase tracking-[0.18em] text-tertiary"
+            >
+              qa
+            </span>
+          </label>
 
-      {hintCopy !== null && hintLabel !== null ? (
-        <div className="bg-surface-container-low px-3 py-2 text-xs leading-6 text-secondary">
-          <p className="mb-1 font-ui text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">
-            {hintLabel}
-          </p>
-          <p>{hintCopy}</p>
+          <label
+            className={`flex h-10 cursor-pointer items-center justify-between bg-surface-container-lowest px-2.5 transition-colors outline outline-1 ${
+              clarificationModeDraft === "options"
+                ? "bg-surface-container-low text-primary outline-primary/25"
+                : "text-secondary outline-outline-variant/15 hover:bg-surface-container-low hover:text-primary"
+            }`}
+            onMouseEnter={() => setActiveHint("options")}
+          >
+            <span className="text-[13px] font-semibold tracking-[0.01em]">选项式</span>
+            <input
+              aria-label="选项式"
+              checked={clarificationModeDraft === "options"}
+              className="sr-only"
+              name="clarification_mode"
+              onFocus={() => setActiveHint("options")}
+              onChange={() => setClarificationModeDraft("options")}
+              type="radio"
+              value="options"
+            />
+            <span
+              aria-hidden="true"
+              className="font-ui text-[10px] uppercase tracking-[0.18em] text-tertiary"
+            >
+              opt
+            </span>
+          </label>
         </div>
-      ) : null}
+
+        {hintCopy !== null && hintLabel !== null ? (
+          <div className="pointer-events-auto absolute inset-x-0 top-full mt-1 bg-surface-container-low px-2.5 py-2 text-[11px] leading-5 text-secondary outline outline-1 outline-outline-variant/15">
+            <p className="mb-1 font-ui text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+              {hintLabel}
+            </p>
+            <p>{hintCopy}</p>
+          </div>
+        ) : null}
+      </div>
     </fieldset>
   );
 }
