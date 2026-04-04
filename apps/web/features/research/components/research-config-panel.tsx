@@ -55,7 +55,8 @@ export function ResearchConfigPanel() {
       </p>
 
       <div
-        className="relative pb-[70px]"
+        className="space-y-1"
+        data-testid="research-config-selector-region"
         onMouseLeave={(event) => {
           if (
             event.relatedTarget instanceof Node &&
@@ -124,7 +125,11 @@ export function ResearchConfigPanel() {
         </div>
 
         {hintCopy !== null && hintLabel !== null ? (
-          <div className="pointer-events-auto absolute inset-x-0 top-full mt-1 bg-surface-container-low px-2.5 py-2 text-[11px] leading-5 text-secondary outline outline-1 outline-outline-variant/15">
+          <div
+            aria-label={`${hintLabel}提示`}
+            className="bg-surface-container-low px-2.5 py-2 text-[11px] leading-5 text-secondary outline outline-1 outline-outline-variant/15"
+            role="note"
+          >
             <p className="mb-1 font-ui text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
               {hintLabel}
             </p>

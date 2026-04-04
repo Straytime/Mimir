@@ -4866,3 +4866,27 @@ Copy the template below for each completed session:
   - tooltip 预留了固定底部空间以保证 attached panel 稳定显示；若后续文案继续增长，需要单独回归更窄视口下的垂直节奏
 - 下一步建议:
   - 如需继续 polish，可在独立任务包中补更大范围 idle 页面对齐检查，确认该 selector 与输入区、示例主题在多断点下的整体密度一致
+
+## UI-20260404 Idle Research Config Hint + Hero Slogan Polish
+
+- 日期时间: 2026-04-04 12:18:25 CST (+0800)
+- 任务包编号: UI-20260404-idle-hover-hero
+- session 标识: codex-20260404-idle-hover-hero
+- 目标摘要: 收口 Idle 首页 `ResearchConfigPanel` 的模式提示交互与 hero slogan 视觉层级；先在 `Frontend_IA` 固化 attached hint 与弱化 slogan 契约，再以组件测试锁住 hover 稳定性、弱化样式和 terminal cursor 表现，最后仅在 web 侧实现去除底部硬编码留白的 docked hint 与更紧凑、更低对比的 slogan。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-config-panel.spec.tsx`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-config-panel.spec.tsx tests/component/research-page-client.spec.tsx`；`cd apps/web && pnpm typecheck`
+  - 未运行: 浏览器级人工视觉回归；本任务包验收命令仅要求组件测试与 `typecheck`
+- 验收结论: accepted；组件测试已锁住 hint 附着位置与 hover 保持逻辑，Idle hero 仍显示 `Mimir` 与 slogan，且 slogan 已降为元信息层并带 terminal 风格下划线后缀。
+- blocker / 风险:
+  - 未做截图或真实浏览器像素级比对，跨断点的最终观感仍依赖后续人工 spot check
+  - slogan 的 terminal 感通过 pseudo-element cursor 表达，若后续文案改动需同步关注其可读性与间距
+- 下一步建议:
+  - 在桌面与移动端各做一次人工 hover / focus 巡检，确认 hint 与输入区、示例区之间的垂直节奏
+  - 若后续继续微调 Idle hero，可在不改文案主体的前提下统一 wordmark 与 slogan 的 tracking token
