@@ -19,11 +19,16 @@ test("ResearchConfigPanel reveals only the active mode hint on hover and keeps i
 
   const options = screen.getByRole("radio", { name: "选项式" });
   const natural = screen.getByRole("radio", { name: "问答式" });
+  const selectorRegion = screen.getByTestId("research-config-selector-region");
 
   await user.hover(options);
-  const optionsHint = screen.getByText(
+  const optionsHintText = screen.getByText(
     "通过自动生成的选单直接向我提供预设建议，适合快速启动",
   );
+  const optionsHint = screen.getByRole("note", { name: "选项式提示" });
+
+  expect(selectorRegion).toContainElement(optionsHint);
+  expect(selectorRegion).not.toHaveClass("pb-[70px]");
   expect(optionsHint).toBeInTheDocument();
   expect(
     screen.queryByText(
@@ -31,15 +36,7 @@ test("ResearchConfigPanel reveals only the active mode hint on hover and keeps i
     ),
   ).not.toBeInTheDocument();
 
-  const tooltipSurface = optionsHint.parentElement;
-
-  if (tooltipSurface === null || tooltipSurface.parentElement === null) {
-    throw new Error("expected tooltip to render inside the selector container");
-  }
-
-  const tooltipRegion = tooltipSurface.parentElement;
-
-  fireEvent.mouseLeave(tooltipRegion, { relatedTarget: tooltipSurface });
+  fireEvent.mouseLeave(selectorRegion, { relatedTarget: optionsHint });
   expect(
     screen.getByText(
       "通过自动生成的选单直接向我提供预设建议，适合快速启动",
@@ -51,7 +48,14 @@ test("ResearchConfigPanel reveals only the active mode hint on hover and keeps i
     ),
   ).not.toBeInTheDocument();
 
-  await user.unhover(optionsHint);
+  fireEvent.mouseLeave(selectorRegion);
+  expect(
+    screen.queryByText(
+      "通过自动生成的选单直接向我提供预设建议，适合快速启动",
+    ),
+  ).not.toBeInTheDocument();
+
+  await user.unhover(optionsHintText);
   fireEvent.focus(natural);
   expect(
     screen.getByText(

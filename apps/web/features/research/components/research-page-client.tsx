@@ -32,11 +32,11 @@ function ResearchPageContent() {
       }`}
       ref={mainRef}
     >
-      <div className="animate-fade-in-up space-y-3">
+      <div className="animate-fade-in-up space-y-1">
         <h1 className="max-w-[7ch] text-[72px] font-ui font-semibold leading-none tracking-[-0.08em] text-primary sm:text-[88px]">
           Mimir
         </h1>
-        <p className="max-w-[20rem] pl-1 text-[12px] font-ui font-medium tracking-[0.28em] text-primary/88 sm:max-w-none">
+        <p className="max-w-[20rem] pl-1 text-[12px] font-ui font-medium tracking-[0.24em] text-tertiary/72 after:ml-[0.16rem] after:content-['_'] after:text-tertiary/58 sm:max-w-none">
           Draw from depth.
         </p>
       </div>
