@@ -845,6 +845,381 @@ test("reanchors the requirement summary content when requirement detail becomes 
   }
 });
 
+test("anchors the first ready outline state to the outline card instead of the requirement summary", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const topStackRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 176,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementCardRect = {
+    x: 0,
+    y: 520,
+    top: 520,
+    left: 0,
+    right: 800,
+    bottom: 900,
+    width: 800,
+    height: 380,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementContentRect = {
+    x: 0,
+    y: 584,
+    top: 584,
+    left: 0,
+    right: 800,
+    bottom: 904,
+    width: 800,
+    height: 320,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const outlineCardRect = {
+    x: 0,
+    y: 760,
+    top: 760,
+    left: 0,
+    right: 800,
+    bottom: 1120,
+    width: 800,
+    height: 360,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "requirementSummary") {
+        return requirementCardRect;
+      }
+
+      if (
+        this.getAttribute("data-research-anchor-target") ===
+        "requirement-summary-content"
+      ) {
+        return requirementContentRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "outline") {
+        return outlineCardRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "preparing_outline",
+            status: "running",
+          }),
+          currentRevision: makeRevisionSummary({
+            requirement_detail: {
+              research_goal: "分析中国 AI 搜索产品竞争格局",
+              domain: "互联网 / AI 产品",
+              requirement_details: "聚焦中国市场，偏商业分析，覆盖近两年变化。",
+              output_format: "business_report",
+              freshness_requirement: "high",
+              language: "zh-CN",
+            },
+          }),
+        },
+        stream: {
+          outline: makeResearchOutline({
+            sections: [],
+          }),
+          outlineReady: false,
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        stream: {
+          ...state.stream,
+          outline: makeResearchOutline(),
+          outlineReady: true,
+        },
+      }));
+    });
+
+    expect(screen.getByLabelText("报告大纲")).toBeInTheDocument();
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+    expect(scrollToSpy).toHaveBeenLastCalledWith({
+      behavior: "smooth",
+      top: 560,
+    });
+    expect(scrollToSpy).not.toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 384,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
+test("reanchors the collection trace when trace content updates without changing node count", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const topStackRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 176,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementCardRect = {
+    x: 0,
+    y: 520,
+    top: 520,
+    left: 0,
+    right: 800,
+    bottom: 900,
+    width: 800,
+    height: 380,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementContentRect = {
+    x: 0,
+    y: 584,
+    top: 584,
+    left: 0,
+    right: 800,
+    bottom: 904,
+    width: 800,
+    height: 320,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const collectionTraceCardRect = {
+    x: 0,
+    y: 760,
+    top: 760,
+    left: 0,
+    right: 800,
+    bottom: 1160,
+    width: 800,
+    height: 400,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "requirementSummary") {
+        return requirementCardRect;
+      }
+
+      if (
+        this.getAttribute("data-research-anchor-target") ===
+        "requirement-summary-content"
+      ) {
+        return requirementContentRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "collectionTrace") {
+        return collectionTraceCardRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "collecting",
+            status: "running",
+          }),
+          currentRevision: makeRevisionSummary({
+            requirement_detail: {
+              research_goal: "分析中国 AI 搜索产品竞争格局",
+              domain: "互联网 / AI 产品",
+              requirement_details: "聚焦中国市场，偏商业分析，覆盖近两年变化。",
+              output_format: "business_report",
+              freshness_requirement: "high",
+              language: "zh-CN",
+            },
+          }),
+        },
+        stream: {
+          collectionTrace: makeCollectionTraceRoot({
+            nodes: [
+              makeCollectionPlanRoundNode({
+                reasoningBursts: [
+                  {
+                    id: "plan_reasoning_stage0",
+                    kind: "reasoning_burst",
+                    detail: "先拆成厂商格局和商业化两个搜集方向。",
+                    occurredAt: "2026-03-31T09:59:00+08:00",
+                  },
+                ],
+              }),
+            ],
+          }),
+          lastEventSeq: 41,
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        stream: {
+          ...state.stream,
+          collectionTrace: makeCollectionTraceRoot({
+            nodes: [
+              makeCollectionPlanRoundNode({
+                reasoningBursts: [
+                  {
+                    id: "plan_reasoning_stage0",
+                    kind: "reasoning_burst",
+                    detail: "先拆成厂商格局、商业化和定价三个搜集方向。",
+                    occurredAt: "2026-03-31T09:59:00+08:00",
+                  },
+                ],
+              }),
+            ],
+          }),
+          lastEventSeq: 42,
+        },
+      }));
+    });
+
+    expect(scrollToSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 560,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
 test("reanchors the current card when the same anchor key stays active but report content becomes ready", () => {
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
   const originalScrollTo = window.scrollTo;

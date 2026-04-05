@@ -4944,3 +4944,26 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 在预发或生产页人工检查一次 hero 与 selector hint 的实际视觉层级
   - 若后续继续调整 idle hero，仅在不改变文案与 underscore 结构的前提下微调 tracking 或 opacity
+
+## UI-20260405 Collection Trace Reanchor Fix
+
+- 日期时间: 2026-04-05 16:35:58 CST (+0800)
+- 任务包编号: UI-20260405-collection-trace-reanchor
+- session 标识: codex/collection-trace-anchor-fix
+- 目标摘要: 修复检索阶段工作台页面级自动锚点错误停留在 `Requirement Summary` 的问题。文档层明确 `planning_collection`、`collecting`、`summarizing_collection`、`merging_sources` 阶段应以 `Collection Trace` 作为页面级主锚点，并在 trace 内容更新时重新定位到 trace 自身；前端以最小改动将 `collectionTrace` 的 anchor signal 从只看 `nodes.length` 扩展为反映 trace 内容签名的信号，从而覆盖“节点数不变但内容更新”的流式场景。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-page-client.spec.tsx`
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 未运行: 其余 `apps/web` 测试与真实浏览器手动滚动回归；本返工包验收只要求目标 spec 与 `typecheck`
+- 验收结论: accepted；collection 相关阶段中，`Collection Trace` 内容更新即使 `nodes.length` 不变，也会重新触发页面级锚点并停靠在 `Collection Trace`，不再停留在更早的 `Requirement Summary`。
+- blocker / 风险:
+  - 当前实现使用 `collectionTrace.nodes` 的序列化内容签名驱动重锚；若未来 trace 规模显著增大，可能需要单独下发性能优化包，把内容签名收敛为更轻量的版本号或稳定摘要
+  - 本次未做真实浏览器人工滚动 spot check，最终体验验证仍依赖组件测试与类型检查
+- 下一步建议:
+  - 在桌面工作台做一次人工 collection phase spot check，确认真实滚动体验与预期一致
+  - 若后续发现 trace 体量继续增长，再评估把 anchor signal 切换为更轻量的 collection-specific version 信号

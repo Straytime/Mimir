@@ -358,7 +358,8 @@ UI 呈现规则：
 8. 共享 card anchor 不能只依赖 anchor key 变化；同一张卡片在当前阶段内从“未就绪”变为“内容首次就绪”时，也必须触发页面定位。
 9. 若同一轮状态更新中有多张内容卡片同时变为可见或可锚定，页面必须按既定卡片顺序选择更靠前的卡片作为锚点，例如 `Report Canvas` 与 `DeliveryActions` 同时出现时优先锚到 `Report Canvas`。
 10. `澄清详情` 与 `Requirement Summary` 两张卡片的 anchor 目标位置都不是卡片外层容器顶边；前者应让“澄清详情”标题贴合状态栏下方统一留白，后者应让需求摘要内容区默认完整露出，不被卡片标签或过多上边距挤出首屏。
-11. 共享 max-height token 的计算必须对 `Collection Trace` 与 `Report Canvas` 一致生效，确保两张长卡都占满同一可视内容带，并与统一 anchor 留白规则兼容。
+11. 在 `planning_collection`、`collecting`、`summarizing_collection`、`merging_sources` 阶段，只要 `Collection Trace` 已可见，它就是页面级自动锚点的优先目标；同阶段内 trace 内容更新时，即使 `nodes.length` 不变，也必须重新锚定到 `Collection Trace` 自身，不能回退到先前已锚定过的 `Requirement Summary`。
+12. 共享 max-height token 的计算必须对 `Collection Trace` 与 `Report Canvas` 一致生效，确保两张长卡都占满同一可视内容带，并与统一 anchor 留白规则兼容。
 
 ### 5.5.1 `OutlineCard`
 
