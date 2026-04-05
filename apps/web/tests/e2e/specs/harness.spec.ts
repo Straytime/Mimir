@@ -9,7 +9,10 @@ test("loads the research workspace shell and reaches the mock server health rout
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Mimir" })).toBeVisible();
-  await expect(page.getByText("Draw from depth.")).toBeVisible();
+  await expect(page.getByTestId("research-hero-slogan")).toContainText(
+    "Draw from depth",
+  );
+  await expect(page.getByTestId("research-hero-slogan")).toContainText("_");
   await expect(
     page.getByRole("heading", { name: "从空态进入研究工作台" }),
   ).toBeVisible();

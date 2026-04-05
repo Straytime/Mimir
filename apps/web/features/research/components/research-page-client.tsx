@@ -36,8 +36,14 @@ function ResearchPageContent() {
         <h1 className="max-w-[7ch] text-[72px] font-ui font-semibold leading-none tracking-[-0.08em] text-primary sm:text-[88px]">
           Mimir
         </h1>
-        <p className="max-w-[20rem] pl-1 text-[12px] font-ui font-medium tracking-[0.24em] text-tertiary/72 after:ml-[0.16rem] after:content-['_'] after:text-tertiary/58 sm:max-w-none">
-          Draw from depth.
+        <p
+          className="flex max-w-[20rem] items-baseline gap-[0.14rem] pl-1 text-[12px] font-ui font-medium tracking-[0.24em] text-secondary/68 sm:max-w-none"
+          data-testid="research-hero-slogan"
+        >
+          <span>Draw from depth</span>
+          <span aria-hidden="true" className="text-primary/55">
+            _
+          </span>
         </p>
       </div>
 

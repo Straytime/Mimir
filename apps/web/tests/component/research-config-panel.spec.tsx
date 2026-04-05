@@ -28,7 +28,9 @@ test("ResearchConfigPanel reveals only the active mode hint on hover and keeps i
   const optionsHint = screen.getByRole("note", { name: "选项式提示" });
 
   expect(selectorRegion).toContainElement(optionsHint);
+  expect(selectorRegion).toHaveClass("relative");
   expect(selectorRegion).not.toHaveClass("pb-[70px]");
+  expect(optionsHint).toHaveClass("absolute");
   expect(optionsHint).toBeInTheDocument();
   expect(
     screen.queryByText(

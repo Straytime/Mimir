@@ -4890,3 +4890,32 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 在桌面与移动端各做一次人工 hover / focus 巡检，确认 hint 与输入区、示例区之间的垂直节奏
   - 若后续继续微调 Idle hero，可在不改文案主体的前提下统一 wordmark 与 slogan 的 tracking token
+
+## UI-20260405 Idle Hint Overlay + Real Underscore Fix
+
+- 日期时间: 2026-04-05 15:50:10 CST (+0800)
+- 任务包编号: UI-20260405-idle-overlay-underscore
+- session 标识: codex/fix-web-overlay-slogan
+- 目标摘要: 修复生产已复现的两个 Idle 页面问题：将 `ResearchConfigPanel` 的模式提示从正常文档流节点改为 selector region 内的 attached absolute overlay，消除 hint 显示时把 idle 主舞台整体上顶的位移；同时把 hero slogan 从生产未生效的 pseudo-element 方案改为真实 DOM 文本 + underscore 节点，确保弱化颜色与 terminal 结尾在实际渲染中稳定可见。
+- 修改文件:
+  - `docs/DESIGN.md`
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-config-panel.spec.tsx`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/tests/integration/report-delivery-flow.spec.tsx`
+  - `apps/web/tests/e2e/specs/harness.spec.ts`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-config-panel.spec.tsx tests/component/research-page-client.spec.tsx`
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/integration/report-delivery-flow.spec.tsx`
+  - 未运行: `apps/web` 其余测试与浏览器级人工回归；本返工包验收要求仅包含两个组件 spec 与 `typecheck`
+- 验收结论: accepted；`research-config-selector-region` 已成为 `relative` 锚点，hint `note` 已改为 `absolute` attached panel，不再参与正常文档流；hero slogan 已改为弱化文本加真实 underscore 节点，去除了生产未生效的 pseudo-element 依赖。
+- blocker / 风险:
+  - 未在真实浏览器中重新测量 hover 前后容器几何值；当前“不会撑高页面”的证明来自代码结构与组件测试约束，而非新的生产像素测量
+  - `tests/integration/report-delivery-flow.spec.tsx` 运行时仍有既存的 MSW heartbeat 未匹配警告，但测试本身通过，本次未扩范围处理该警告
+- 下一步建议:
+  - 在生产页或预发页做一次桌面 hover / focus spot check，确认 hint overlay 不再推动首页主舞台
+  - 如需扩大回归，再补跑 `apps/web` 的 e2e/harness 用例，确认 hero slogan 新结构在真实浏览器可见
