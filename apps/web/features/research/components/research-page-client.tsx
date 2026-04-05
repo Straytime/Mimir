@@ -37,11 +37,11 @@ function ResearchPageContent() {
           Mimir
         </h1>
         <p
-          className="flex max-w-[20rem] items-baseline gap-[0.14rem] pl-1 text-[12px] font-ui font-medium tracking-[0.24em] text-secondary/68 sm:max-w-none"
+          className="flex max-w-[20rem] items-baseline gap-[0.14rem] pl-1 text-[12px] font-ui font-medium tracking-[0.24em] text-secondary sm:max-w-none"
           data-testid="research-hero-slogan"
         >
-          <span>Draw from depth</span>
-          <span aria-hidden="true" className="text-primary/55">
+          <span className="text-secondary opacity-70">Draw from depth</span>
+          <span aria-hidden="true" className="text-primary opacity-55">
             _
           </span>
         </p>

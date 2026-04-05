@@ -4919,3 +4919,28 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 在生产页或预发页做一次桌面 hover / focus spot check，确认 hint overlay 不再推动首页主舞台
   - 如需扩大回归，再补跑 `apps/web` 的 e2e/harness 用例，确认 hero slogan 新结构在真实浏览器可见
+
+## UI-20260405 Hero Tone + Hint Gap Rework
+
+- 日期时间: 2026-04-05 16:11:48 CST (+0800)
+- 任务包编号: UI-20260405-hero-tone-hint-gap
+- session 标识: codex/hero-hint-gap-tune
+- 目标摘要: 对 Idle 页做一次小范围返工：将 hero slogan 主体的弱化样式改为更稳妥的显式文本色阶加独立透明度类，避免生产环境出现“类名存在但颜色未生效”时 `Draw from depth` 仍过亮；同时保持 `ResearchConfigPanel` 的 hint 为 selector region 内的 absolute attached overlay，并通过 overlay 自身偏移补出克制的小间距，消除 selector 下沿贴边与覆盖感。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/component/research-config-panel.spec.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/research-config-panel.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-config-panel.spec.tsx tests/component/research-page-client.spec.tsx`
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 未运行: 浏览器级人工视觉回归；本返工包验收命令仅要求目标组件测试与 `typecheck`
+- 验收结论: accepted；hero slogan 仍保留独立 underscore 节点，且 `Draw from depth` 主体已通过稳定的 `text-secondary` + `opacity` 组合弱化；config hint 仍为 `absolute` overlay，不参与文档流，并与 selector 下沿保留明确小间距。
+- blocker / 风险:
+  - 本次未做生产页人工像素比对，最终亮度层级与 gap 观感仍建议在真实浏览器做一次桌面 spot check
+  - gap 当前固定为小间距 utility，若后续 selector 高度或字号继续调整，需要一并复核 docked overlay 的节奏
+- 下一步建议:
+  - 在预发或生产页人工检查一次 hero 与 selector hint 的实际视觉层级
+  - 若后续继续调整 idle hero，仅在不改变文案与 underscore 结构的前提下微调 tracking 或 opacity
