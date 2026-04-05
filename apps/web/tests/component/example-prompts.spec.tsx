@@ -23,23 +23,23 @@ test("example prompt cards use the refined docked hover and focus treatment", ()
 
   const firstCard = screen.getAllByRole("button")[0]!;
 
-  expect(firstCard).toHaveClass("transition-[background-color,color,outline-color]");
+  expect(firstCard).toHaveClass("transition-[background-color,color]");
   expect(firstCard).toHaveClass("duration-150");
-  expect(firstCard).toHaveClass("outline");
-  expect(firstCard).toHaveClass("outline-1");
-  expect(firstCard).toHaveClass("outline-transparent");
-  expect(firstCard).toHaveClass("bg-surface-container-lowest");
+  expect(firstCard).toHaveClass("bg-surface-container");
   expect(firstCard).toHaveClass("before:opacity-0");
   expect(firstCard).toHaveClass("before:transition-opacity");
-  expect(firstCard).toHaveClass("hover:bg-surface-container-low");
-  expect(firstCard).toHaveClass("hover:outline-outline-variant/15");
+  expect(firstCard).toHaveClass("hover:bg-surface-container-high");
   expect(firstCard).toHaveClass("hover:text-primary");
   expect(firstCard).toHaveClass("hover:before:opacity-100");
-  expect(firstCard).toHaveClass("focus-visible:bg-surface-container-low");
+  expect(firstCard).toHaveClass("focus-visible:bg-surface-container-high");
   expect(firstCard).toHaveClass("focus-visible:text-primary");
-  expect(firstCard).toHaveClass("focus-visible:outline-primary/25");
   expect(firstCard).toHaveClass("focus-visible:before:opacity-100");
+  expect(firstCard).toHaveClass("focus-visible:shadow-[0_0_0_2px_rgba(255,173,58,0.2)]");
   expect(firstCard).toHaveClass("before:bg-primary");
+  // No-Line Rule: no outline or border classes
+  expect(firstCard).not.toHaveClass("outline");
+  expect(firstCard).not.toHaveClass("outline-1");
+  expect(firstCard).not.toHaveClass("outline-transparent");
   expect(firstCard).not.toHaveClass("shadow-glow-sm");
   expect(firstCard).not.toHaveClass("shadow-glow-md");
   expect(firstCard).not.toHaveClass("shadow-ghost");

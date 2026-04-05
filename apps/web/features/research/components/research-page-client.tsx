@@ -54,7 +54,7 @@ function ResearchPageContent() {
         </>
       ) : (
         <section className="flex flex-1 flex-col justify-center">
-          <div className="mx-auto flex w-full max-w-[680px] flex-col gap-4">
+          <div className="flex w-full flex-col gap-4">
             <div className="animate-fade-in-up stagger-1">
               <ExamplePrompts />
             </div>

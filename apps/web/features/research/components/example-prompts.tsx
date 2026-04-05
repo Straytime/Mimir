@@ -20,7 +20,7 @@ export function ExamplePrompts() {
     <div className="grid gap-3 sm:grid-cols-3">
       {EXAMPLES.map((example) => (
         <button
-          className="relative overflow-hidden bg-surface-container-lowest px-4 py-4 text-left text-sm leading-6 text-secondary outline outline-1 outline-transparent transition-[background-color,color,outline-color] duration-150 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-primary before:opacity-0 before:transition-opacity before:duration-150 hover:bg-surface-container-low hover:text-primary hover:outline-outline-variant/15 hover:before:opacity-100 focus-visible:bg-surface-container-low focus-visible:text-primary focus-visible:outline-primary/25 focus-visible:before:opacity-100 data-[active=true]:before:opacity-100"
+          className="relative overflow-hidden bg-surface-container px-4 py-4 text-left text-sm leading-6 text-secondary transition-[background-color,color] duration-150 before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-primary before:opacity-0 before:transition-opacity before:duration-150 hover:bg-surface-container-high hover:text-primary hover:before:opacity-100 focus-visible:bg-surface-container-high focus-visible:text-primary focus-visible:before:opacity-100 focus-visible:shadow-[0_0_0_2px_rgba(255,173,58,0.2)] data-[active=true]:before:opacity-100"
           data-active={activeExample === example}
           key={example}
           onBlur={() => setActiveExample((current) => (current === example ? null : current))}
