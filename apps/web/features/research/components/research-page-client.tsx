@@ -33,7 +33,7 @@ function ResearchPageContent() {
       ref={mainRef}
     >
       <div className="animate-fade-in-up space-y-1">
-        <h1 className="max-w-[9ch] text-[68px] font-ui font-semibold uppercase leading-[0.88] tracking-[0.18em] text-white sm:text-[84px]">
+        <h1 className="text-[68px] font-ui font-semibold uppercase leading-[0.88] tracking-[-0.02em] text-white sm:text-[84px]">
           MIMIR
         </h1>
         <p
