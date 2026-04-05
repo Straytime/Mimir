@@ -4967,3 +4967,30 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 在桌面工作台做一次人工 collection phase spot check，确认真实滚动体验与预期一致
   - 若后续发现 trace 体量继续增长，再评估把 anchor signal 切换为更轻量的 collection-specific version 信号
+
+## UI-20260405 Hero Wordmark + OutlineCard Light Redesign
+
+- 日期时间: 2026-04-05 17:21:22 CST (+0800)
+- 任务包编号: UI-20260405-hero-outline-redesign
+- session 标识: codex/hero-outline-redesign
+- 目标摘要: 按小范围前端重设计任务包收紧 Idle hero 与 `OutlineCard` 的视觉契约。文档层将首页主 wordmark 固定为纯白 uppercase `MIMIR`，并明确 `OutlineCard` 必须转为更轻、更干净、以 tonal layering 为主的阅读引导卡片；测试层先锁定 `MIMIR` + slogan、章节顺序、description 不暴露，以及 neutral layered surface 合同；实现层仅调整 `research-page-client` 与 `outline-card`，去掉原先偏重的 amber 主导表达，同时保持现有数据与状态语义不变。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/tests/component/outline-card.spec.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `apps/web/features/research/components/outline-card.tsx`
+  - `apps/web/tests/integration/report-delivery-flow.spec.tsx`
+  - `apps/web/tests/e2e/specs/harness.spec.ts`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-page-client.spec.tsx tests/component/outline-card.spec.tsx`
+  - 已运行: `cd apps/web && pnpm typecheck`
+  - 未运行: 更广的 `apps/web` integration / e2e / 浏览器人工视觉回归；本任务包验收只要求目标组件 spec 与 `typecheck`
+- 验收结论: accepted；Idle hero 现为纯白 uppercase `MIMIR` 且 slogan 仍保留真实 DOM underscore，`OutlineCard` 维持 ordered section titles 与隐藏 descriptions 的行为，同时整体表面语言已切换为更轻的 neutral layered stack，不再由 amber 大面积主导。
+- blocker / 风险:
+  - 本次未做真实浏览器的人工视觉 spot check，最终观感仍建议在桌面与移动端各确认一次
+  - 已同步更新直接引用旧 hero 文案的 integration / e2e 断言，但未在本任务内重新跑这些套件
+- 下一步建议:
+  - 在真实页面确认 `MIMIR` 的 tracking、白度与 slogan 层级是否满足预期
+  - 若后续继续微调工作台卡片，保持 amber 仅作 accent，不回退到大面积暖色填充
