@@ -26,12 +26,16 @@ test("renders the idle workspace shell before a task is created", () => {
   expect(slogan).toBeInTheDocument();
   expect(slogan.parentElement).toHaveClass("space-y-1");
   expect(slogan.parentElement).not.toHaveClass("space-y-3");
-  expect(slogan).toHaveClass("text-secondary/68");
-  expect(slogan).not.toHaveClass("text-primary/88");
+  expect(slogan).toHaveClass("text-secondary");
+  expect(slogan).not.toHaveClass("text-primary");
+  expect(slogan).not.toHaveClass("text-secondary/68");
   expect(sloganText).toBeInTheDocument();
+  expect(sloganText).toHaveClass("text-secondary");
+  expect(sloganText).toHaveClass("opacity-70");
   expect(underscore.tagName).toBe("SPAN");
   expect(underscore).toBeVisible();
-  expect(underscore).toHaveClass("text-primary/55");
+  expect(underscore).toHaveClass("text-primary");
+  expect(underscore).toHaveClass("opacity-55");
   expect(screen.getByPlaceholderText("想研究些什么？")).toBeInTheDocument();
   expect(
     screen.getByText("从心理学角度解析 openclaw 爆火的原因"),

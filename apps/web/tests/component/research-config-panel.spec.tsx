@@ -31,6 +31,8 @@ test("ResearchConfigPanel reveals only the active mode hint on hover and keeps i
   expect(selectorRegion).toHaveClass("relative");
   expect(selectorRegion).not.toHaveClass("pb-[70px]");
   expect(optionsHint).toHaveClass("absolute");
+  expect(optionsHint).toHaveClass("top-full");
+  expect(optionsHint).toHaveClass("mt-1.5");
   expect(optionsHint).toBeInTheDocument();
   expect(
     screen.queryByText(
