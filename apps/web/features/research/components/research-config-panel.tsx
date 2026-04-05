@@ -55,7 +55,7 @@ export function ResearchConfigPanel() {
       </p>
 
       <div
-        className="space-y-1"
+        className="relative"
         data-testid="research-config-selector-region"
         onMouseLeave={(event) => {
           if (
@@ -127,7 +127,7 @@ export function ResearchConfigPanel() {
         {hintCopy !== null && hintLabel !== null ? (
           <div
             aria-label={`${hintLabel}提示`}
-            className="bg-surface-container-low px-2.5 py-2 text-[11px] leading-5 text-secondary outline outline-1 outline-outline-variant/15"
+            className="absolute inset-x-0 top-full z-10 bg-surface-container-low px-2.5 py-2 text-[11px] leading-5 text-secondary outline outline-1 outline-outline-variant/15"
             role="note"
           >
             <p className="mb-1 font-ui text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">

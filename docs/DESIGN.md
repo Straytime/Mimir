@@ -62,6 +62,7 @@ Traditional depth (shadows) is forbidden. We achieve hierarchy through **Density
 ### Technical Micro-Components
 * **Data Monoliths:** Small, high-density blocks of info using `label-sm` in `primary` color to highlight.
 * **Terminal Scrim:** A 5% opacity scan-line pattern (linear-gradient) can be applied to the `surface` layer to enhance the "Lab Terminal" feel.
+* **Attached Hint Panels:** Selector help text should be rendered as a docked overlay anchored to a `relative` trigger region. Keep it rectangular, shadowless, and tone-shifted from the base surface; it may overlap nearby empty space, but it must not consume layout height or force surrounding modules to reflow.
 
 ## 6. Do's and Don'ts
 

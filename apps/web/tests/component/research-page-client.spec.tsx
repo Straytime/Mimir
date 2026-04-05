@@ -19,14 +19,19 @@ test("renders the idle workspace shell before a task is created", () => {
   render(<ResearchPageClient />);
 
   expect(screen.getByRole("heading", { name: "Mimir" })).toBeInTheDocument();
-  const slogan = screen.getByText("Draw from depth.");
+  const slogan = screen.getByTestId("research-hero-slogan");
+  const sloganText = within(slogan).getByText("Draw from depth");
+  const underscore = within(slogan).getByText("_");
 
   expect(slogan).toBeInTheDocument();
   expect(slogan.parentElement).toHaveClass("space-y-1");
   expect(slogan.parentElement).not.toHaveClass("space-y-3");
-  expect(slogan).toHaveClass("text-tertiary/72");
+  expect(slogan).toHaveClass("text-secondary/68");
   expect(slogan).not.toHaveClass("text-primary/88");
-  expect(slogan).toHaveClass("after:content-['_']");
+  expect(sloganText).toBeInTheDocument();
+  expect(underscore.tagName).toBe("SPAN");
+  expect(underscore).toBeVisible();
+  expect(underscore).toHaveClass("text-primary/55");
   expect(screen.getByPlaceholderText("想研究些什么？")).toBeInTheDocument();
   expect(
     screen.getByText("从心理学角度解析 openclaw 爆火的原因"),

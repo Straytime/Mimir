@@ -89,6 +89,7 @@ apps/web/
    - 展示居中的主舞台输入区、示例研究主题、轻量澄清模式配置
    - 顶部 hero 固定为大号 `Mimir` wordmark 与 slogan `Draw from depth.`，不再使用“小号品牌 overline + AI 研究工作台”组合
    - slogan 属于弱信号元信息层：与 `Mimir` 保持更紧的垂直间距，颜色低于主标题对比度，结尾句点以 terminal 风格下划线光标表现
+   - terminal underscore 必须作为真实可见的 DOM 文本节点渲染，不得依赖 pseudo-element `content`、opacity 组合或仅存在 class 名而未实际出字的实现
 2. `ActiveWorkspace`
    - 已创建任务，正在澄清 / 分析 / 搜集 / 撰写 / 等待反馈
    - 展示工作台三栏布局
@@ -191,6 +192,7 @@ apps/web/
   - `选项式`: `通过自动生成的选单直接向我提供预设建议，适合快速启动`
 - 选项 UI 必须保持低存在感、轻量、矩形 terminal selector，不得回退为大块卡片式入口；遵守 DESIGN.md 的 0px 硬边、无阴影、以 tonal change 而非漂浮感表达选中态
 - 提示区必须作为 selector 容器的紧邻 attached hint / panel 渲染，不得依赖给父容器增加硬编码底部留白来“腾位置”
+- selector region 必须作为 `relative` 锚点，hint panel 必须作为该区域内的 `absolute` attached overlay；hint 进入显示态时不得参与正常文档流、不得撑高容器、不得把 idle 主舞台整体向上顶
 - 提示区在 hover / focus 期间必须稳定可见；指针从选项移动到提示区本体时不得闪烁、提前消失或变得难以触发
 - 任务创建后锁定，不允许在当前 Task 中变更
 
