@@ -177,6 +177,10 @@ export function ResearchWorkspaceShell() {
     }),
     [],
   );
+  const collectionTraceContentSignal = useMemo(
+    () => JSON.stringify(collectionTrace.nodes),
+    [collectionTrace.nodes],
+  );
 
   const anchorSignal = useMemo(() => {
     if (activeCardAnchor === null) {
@@ -200,6 +204,7 @@ export function ResearchWorkspaceShell() {
         return [
           snapshot.phase,
           collectionTrace.nodes.length > 0 ? "trace-ready" : "trace-pending",
+          collectionTraceContentSignal,
         ].join(":");
       case "outline":
         return [
@@ -219,6 +224,7 @@ export function ResearchWorkspaceShell() {
     clarificationQuestionCount,
     clarificationText,
     collectionTrace.nodes.length,
+    collectionTraceContentSignal,
     outline,
     outlineReady,
     reportMarkdown,
