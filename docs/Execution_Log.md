@@ -4994,3 +4994,22 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 在真实页面确认 `MIMIR` 的 tracking、白度与 slogan 层级是否满足预期
   - 若后续继续微调工作台卡片，保持 amber 仅作 accent，不回退到大面积暖色填充
+
+## UI-20260405 Example Prompt Cards Visual Enhancement
+
+- 日期时间: 2026-04-05 17:41:00 CST (+0800)
+- 任务包编号: UI-20260405-example-prompt-cards-visual
+- session 标识: codex/example-prompt-cards-visual
+- 目标摘要: 优化首页示例研究问题卡片的视觉表现，使其从黑色背景中清晰可辨。将卡片默认背景从 `bg-surface-container-lowest` (#000000) 提升至 `bg-surface-container` (#1a1919)，hover/focus 背景提升至 `bg-surface-container-high` (#2c2c2c)，移除所有 outline 类以遵循设计宪法 No-Line Rule，并为 focus-visible 状态添加 amber shadow 作为无障碍指示器。
+- 修改文件:
+  - `apps/web/features/research/components/example-prompts.tsx`
+  - `apps/web/tests/component/example-prompts.spec.tsx`
+  - `docs/execution_log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm typecheck` -- 通过
+  - 已运行: `cd apps/web && npx vitest run tests/component/example-prompts.spec.tsx` -- 3/3 通过
+- 验收结论: accepted；卡片默认状态背景色高于 base layer，无 border/outline 线条分隔，hover 保持左侧 amber 竖线 + 背景提亮，focus-visible 使用 amber shadow ring 作为无障碍指示。
+- blocker / 风险:
+  - 纯视觉修改，建议在真实浏览器确认最终观感
+- 下一步建议:
+  - 在桌面与移动端浏览器确认卡片从背景中的视觉区分度
