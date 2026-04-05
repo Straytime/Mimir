@@ -8,7 +8,7 @@ test("loads the research workspace shell and reaches the mock server health rout
 }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Mimir" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "MIMIR" })).toBeVisible();
   await expect(page.getByTestId("research-hero-slogan")).toContainText(
     "Draw from depth",
   );

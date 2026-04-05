@@ -87,8 +87,9 @@ apps/web/
 1. `Idle`
    - 尚未创建任务
    - 展示居中的主舞台输入区、示例研究主题、轻量澄清模式配置
-   - 顶部 hero 固定为大号 `Mimir` wordmark 与 slogan `Draw from depth.`，不再使用“小号品牌 overline + AI 研究工作台”组合
-   - slogan 属于弱信号元信息层：与 `Mimir` 保持更紧的垂直间距，颜色低于主标题对比度；`Draw from depth` 主体必须持续明显弱于 `Mimir`，且弱化效果应通过稳定的文本色阶与独立透明度类组合实现，不依赖在生产环境可能失效的单一 slash opacity 颜色写法；结尾句点以 terminal 风格下划线光标表现
+   - 顶部 hero 固定为大号纯白 uppercase `MIMIR` wordmark 与 slogan `Draw from depth.`，不再使用“小号品牌 overline + AI 研究工作台”组合
+   - `MIMIR` 必须作为当前屏首最强视觉信号：字形全大写、纯白、不混入 amber 主色填充；允许通过 tracking 与尺寸建立压迫感，但不能依赖 glow、描边或多色渐变
+   - slogan 属于弱信号元信息层：与 `MIMIR` 保持更紧的垂直间距，颜色低于主标题对比度；`Draw from depth` 主体必须持续明显弱于 `MIMIR`，且弱化效果应通过稳定的文本色阶与独立透明度类组合实现，不依赖在生产环境可能失效的单一 slash opacity 颜色写法；结尾句点以 terminal 风格下划线光标表现
    - terminal underscore 必须作为真实可见的 DOM 文本节点渲染，不得依赖 pseudo-element `content`、opacity 组合或仅存在 class 名而未实际出字的实现
 2. `ActiveWorkspace`
    - 已创建任务，正在澄清 / 分析 / 搜集 / 撰写 / 等待反馈
@@ -371,11 +372,11 @@ UI 呈现规则：
 展示规则：
 
 1. `OutlineCard` 只在 `outlineReady === true` 且存在 `outline` 时渲染。
-2. 视觉结构必须体现 `DESIGN.md` 的 `Lab Terminal` 风格：使用 leading-zero 编号、分层 tonal stacking、无圆角漂移、无简单分隔线。
-3. 卡片头部保留 `Outline` 技术标签与报告标题；正文以章节标题序列为主，不额外暴露 section description。
-4. 各 section 必须按 `order` 顺序渲染，并显式展示 `01`、`02` 这类编号，强化终端式结构感。
-5. 每个 section 至少应拆分为“编号 / 标题”两层信息；若后端提供 `description`，前端在该卡片中仍不展示，避免提前泄露章节展开内容。
-6. section 之间通过留白与 tonal surface 分组，不使用 1px 横线切割。
+2. 视觉结构必须体现 `DESIGN.md` 的 `Lab Terminal` 风格，但本卡片应走更轻、更干净的阅读引导方向：通过 leading-zero 编号、分层 tonal stacking、留白与轻量 ghost outline 建立层次，不得回退到 amber 大面积底色或厚重的高对比堆叠。
+3. 卡片头部保留 `Outline` 技术标签、报告标题与章节总数；标题区应以中性 surface 为主，amber 只作为小面积点状 accent，不主导标题、计数块或整卡文本色。
+4. 各 section 必须按 `order` 顺序渲染，并显式展示 `01`、`02` 这类编号，强化终端式结构感；每个 section 至少应拆分为“编号 / 标题”两层信息。
+5. 若后端提供 `description`，前端在该卡片中仍不展示，避免提前泄露章节展开内容；章节列表只暴露 ordered titles，不额外添加摘要段落。
+6. section 之间通过留白、tone shift 与内外 surface 的嵌套形成“薄板叠层”关系，不使用 1px 横线切割，不制造 bloated panel 或 amber-heavy 信息墙。
 
 ### 5.11 `UnifiedInputBar`
 

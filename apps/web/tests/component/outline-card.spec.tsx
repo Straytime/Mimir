@@ -47,6 +47,12 @@ test("renders title and indexed section groups without section descriptions", ()
     title: "测试报告标题",
     sections: [
       {
+        section_id: "s3",
+        title: "第三章",
+        description: "第三章描述",
+        order: 3,
+      },
+      {
         section_id: "s1",
         title: "第一章",
         description: "第一章描述",
@@ -57,12 +63,6 @@ test("renders title and indexed section groups without section descriptions", ()
         title: "第二章",
         description: "第二章描述",
         order: 2,
-      },
-      {
-        section_id: "s3",
-        title: "第三章",
-        description: "第三章描述",
-        order: 3,
       },
     ],
   });
@@ -78,17 +78,39 @@ test("renders title and indexed section groups without section descriptions", ()
 
   renderWithStore(<OutlineCard />, { store });
 
-  expect(screen.getByLabelText("报告大纲")).toBeInTheDocument();
-  expect(screen.getByText("测试报告标题")).toBeInTheDocument();
+  const outlineCard = screen.getByRole("region", { name: "报告大纲" });
+  const title = screen.getByRole("heading", { name: "测试报告标题" });
   const sectionList = screen.getByRole("list", { name: "章节序列" });
+  const sectionItems = within(sectionList).getAllByRole("listitem");
+  const sectionTitles = within(sectionList).getAllByRole("heading", { level: 4 });
+  const sectionsSummary = screen.getByText("Sections").closest("div");
+
+  expect(outlineCard).toBeInTheDocument();
+  expect(outlineCard).toHaveClass("bg-surface-container");
+  expect(outlineCard).toHaveClass("outline");
+  expect(outlineCard).toHaveClass("outline-outline-variant/15");
+  expect(outlineCard).not.toHaveClass("bg-primary");
+  expect(title).toHaveClass("text-white");
+  expect(title).not.toHaveClass("text-primary");
+  expect(sectionsSummary).not.toBeNull();
+  expect(sectionsSummary).toHaveClass("bg-surface-container-lowest");
   expect(sectionList).toBeInTheDocument();
-  expect(within(sectionList).getAllByRole("listitem")).toHaveLength(3);
-  expect(screen.getByText("章节 01 / Report Flow")).toBeInTheDocument();
-  expect(screen.getByText("章节 02 / Report Flow")).toBeInTheDocument();
-  expect(screen.getByText("章节 03 / Report Flow")).toBeInTheDocument();
-  expect(screen.getByText("第一章")).toBeInTheDocument();
-  expect(screen.getByText("第二章")).toBeInTheDocument();
-  expect(screen.getByText("第三章")).toBeInTheDocument();
+  expect(sectionItems).toHaveLength(3);
+  expect(sectionTitles.map((node) => node.textContent)).toEqual([
+    "第一章",
+    "第二章",
+    "第三章",
+  ]);
+  expect(screen.getByText("Section 01")).toBeInTheDocument();
+  expect(screen.getByText("Section 02")).toBeInTheDocument();
+  expect(screen.getByText("Section 03")).toBeInTheDocument();
+  for (const item of sectionItems) {
+    expect(item).toHaveClass("bg-surface-container-lowest");
+    expect(item).toHaveClass("outline");
+    expect(item).toHaveClass("outline-outline-variant/15");
+    expect(item).not.toHaveClass("bg-primary");
+  }
+  expect(screen.queryByText("Report Flow")).not.toBeInTheDocument();
   expect(screen.queryByText("第一章描述")).not.toBeInTheDocument();
   expect(screen.queryByText("第二章描述")).not.toBeInTheDocument();
   expect(screen.queryByText("第三章描述")).not.toBeInTheDocument();

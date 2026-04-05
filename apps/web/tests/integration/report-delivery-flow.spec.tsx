@@ -339,7 +339,7 @@ describe("Stage 6 report canvas and delivery flow", () => {
     await user.click(within(statusBar).getByRole("button", { name: "新研究" }));
 
     expect(disconnectCalls).toBe(0);
-    expect(screen.getByRole("heading", { name: "Mimir" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "MIMIR" })).toBeInTheDocument();
     expect(screen.getByTestId("research-hero-slogan")).toHaveTextContent(
       "Draw from depth_",
     );

@@ -33,15 +33,15 @@ function ResearchPageContent() {
       ref={mainRef}
     >
       <div className="animate-fade-in-up space-y-1">
-        <h1 className="max-w-[7ch] text-[72px] font-ui font-semibold leading-none tracking-[-0.08em] text-primary sm:text-[88px]">
-          Mimir
+        <h1 className="max-w-[9ch] text-[68px] font-ui font-semibold uppercase leading-[0.88] tracking-[0.18em] text-white sm:text-[84px]">
+          MIMIR
         </h1>
         <p
-          className="flex max-w-[20rem] items-baseline gap-[0.14rem] pl-1 text-[12px] font-ui font-medium tracking-[0.24em] text-secondary sm:max-w-none"
+          className="flex max-w-[20rem] items-baseline gap-[0.14rem] pl-[0.18rem] text-[11px] font-ui font-medium tracking-[0.24em] text-secondary sm:max-w-none"
           data-testid="research-hero-slogan"
         >
           <span className="text-secondary opacity-70">Draw from depth</span>
-          <span aria-hidden="true" className="text-primary opacity-55">
+          <span aria-hidden="true" className="text-primary opacity-45">
             _
           </span>
         </p>
