@@ -18,6 +18,8 @@ import {
 test("renders the idle workspace shell before a task is created", () => {
   render(<ResearchPageClient />);
 
+  const heroBlock = screen.getByTestId("research-hero");
+  const metadataRow = screen.getByTestId("research-hero-metadata-row");
   const wordmark = screen.getByRole("heading", { name: "MIMIR" });
   const slogan = screen.getByTestId("research-hero-slogan");
   const sloganText = within(slogan).getByText("Draw from depth");
@@ -28,9 +30,17 @@ test("renders the idle workspace shell before a task is created", () => {
   expect(wordmark).toHaveTextContent("MIMIR");
   expect(wordmark).toHaveClass("text-white");
   expect(wordmark).not.toHaveClass("text-primary");
+  expect(heroBlock).toContainElement(wordmark);
+  expect(heroBlock).toContainElement(metadataRow);
   expect(slogan).toBeInTheDocument();
-  expect(slogan.parentElement).toHaveClass("space-y-1");
-  expect(slogan.parentElement).not.toHaveClass("space-y-3");
+  expect(metadataRow).toContainElement(slogan);
+  expect(metadataRow).toContainElement(signatureLink);
+  expect(slogan.parentElement).toBe(metadataRow);
+  expect(signatureLink.parentElement).toBe(metadataRow);
+  expect(metadataRow).toHaveClass("justify-between");
+  expect(metadataRow).toHaveClass("gap-4");
+  expect(metadataRow).not.toHaveClass("space-y-1");
+  expect(metadataRow).not.toHaveClass("space-y-3");
   expect(slogan).toHaveClass("text-secondary");
   expect(slogan).not.toHaveClass("text-primary");
   expect(slogan).not.toHaveClass("text-secondary/68");
@@ -46,6 +56,8 @@ test("renders the idle workspace shell before a task is created", () => {
   expect(signatureLink).toHaveAttribute("href", "https://robiniflore.com");
   expect(signatureLink).toHaveAttribute("target", "_blank");
   expect(signatureLink).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+  expect(signatureLink).toHaveClass("justify-self-end");
+  expect(signatureLink).not.toHaveClass("pl-[0.18rem]");
   expect(screen.getByPlaceholderText("想研究些什么？")).toBeInTheDocument();
   expect(
     screen.getByText("从心理学角度解析 openclaw 爆火的原因"),

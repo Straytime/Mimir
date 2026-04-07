@@ -1260,3 +1260,24 @@ Copy the template below for each completed session:
 - 下一步建议:
   - 在真实浏览器桌面与移动端各检查一次 hero 元信息层级，确认外链不会被误读为主 CTA
   - 若后续继续微调 `OutlineCard`，保持“目录板”方向，不再引回独立 summary slab、重复 sublabel 或更重的 amber stack
+
+## FE-HERO-METADATA-ROW-POLISH Hero Alignment + Signature Row
+
+- 日期时间: 2026-04-07 11:40:27 CST (+0800)
+- 任务包编号: FE-HERO-METADATA-ROW-POLISH
+- session 标识: codex/hero-alignment-signature-row
+- 目标摘要: 按 docs-first -> tests-first -> implementation 收紧 Idle hero 的元信息层布局。文档先明确 hero metadata row 必须把 slogan 与 `robiniflore.com` 放在同一行、左侧与 `MIMIR` 视觉左缘收齐、右侧签名保持弱化；随后更新组件测试，锁定新 row 结构并拒绝旧的 slogan 下方独立链接布局；最后仅在 `research-page-client` 中把 slogan 和签名链接合并到同一 metadata row，去掉旧的左侧补偿与堆叠结构。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-page-client.spec.tsx` -- 19/19 通过
+  - 已运行: `cd apps/web && pnpm typecheck` -- 通过
+  - 未运行: 真实浏览器人工视觉验收；本任务包验收命令仅要求 targeted component spec 与 `typecheck`
+- 验收结论: accepted；hero 现在以单行 metadata row 呈现 slogan 与签名链接，链接保持弱化并右对齐，旧的下方独立链接契约已由测试锁死不再回退。
+- blocker / 风险:
+  - 尚未做真实浏览器下的人工视觉 spot check，不同字重渲染或窄屏下仍可能需要极小 spacing 微调
+- 下一步建议:
+  - 在桌面与移动端各做一次人工视觉确认，重点看 `MIMIR` 与 slogan 左缘是否已自然收齐、签名是否保持“弱元信息”而非 CTA 感
