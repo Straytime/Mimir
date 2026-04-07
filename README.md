@@ -6,6 +6,8 @@ AI-powered deep research platform that transforms a user question into a structu
 
 **Live in production** on Railway (API) and Vercel (Web).
 
+Built 100% through vibe coding with [Claude Code](https://claude.ai/code) and [Codex](https://openai.com/index/introducing-codex/) — no line of code was written by hand.
+
 ## What It Does
 
 1. **Clarify** — Asks follow-up questions (free-form or multiple-choice with a 15 s auto-commit timer) to sharpen the research scope.
@@ -171,4 +173,4 @@ See [`docs/Deploy_Contract.md`](docs/Deploy_Contract.md) for the full deployment
 
 ## License
 
-Private repository. All rights reserved.
+This project is licensed under the [GPL-3.0 License](LICENSE).

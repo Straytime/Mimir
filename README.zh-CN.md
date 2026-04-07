@@ -4,6 +4,8 @@ AI 驱动的深度研究平台，将用户提问转化为结构化、带引用�
 
 **已上线生产环境**，部署于 Railway（API）和 Vercel（Web）。
 
+由 [Claude Code](https://claude.ai/code) 和 [Codex](https://openai.com/index/introducing-codex/) 100% vibe coding 实现——没有一行代码是手写的。
+
 ## 功能概览
 
 1. **澄清** — 通过自由文本或选择题（15 秒自动提交计时器）追问，收窄研究范围。
@@ -169,4 +171,4 @@ pnpm test:e2e         # Playwright e2e（需先安装 chromium: pnpm exec playwr
 
 ## 许可证
 
-私有仓库，保留所有权利。
+本项目基于 [GPL-3.0 许可证](LICENSE) 开源。
