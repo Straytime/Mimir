@@ -1,217 +1,174 @@
 # Mimir
 
-AI-powered deep research assistant — 从用户提问到结构化研究报告的全链路产品。
+[中文版 README](README.zh-CN.md)
 
-## 项目当前状态
+AI-powered deep research platform that transforms a user question into a structured, citation-backed research report — end to end.
 
-**M0 ~ M4 实施已完成，R1-001 真实 provider adapter 已接线，仓库进入发布前工程化收尾阶段。**
+**Live in production** on Railway (API) and Vercel (Web).
 
-所有里程碑交付物已落地并通过自动化回归与人工 smoke 验证：
+## What It Does
 
-| 里程碑 | 内容 | 状态 |
-| --- | --- | --- |
-| M0 | 契约与基础设施（monorepo 骨架、contracts、测试基础设施） | ✅ 完成 |
-| M1 | 任务框架（创建任务、SSE、heartbeat、disconnect、终止态） | ✅ 完成 |
-| M2 | 需求阶段（natural / options 澄清、15s 倒计时、需求分析） | ✅ 完成 |
-| M3 | 搜集引擎（planner、collector、summary、barrier、source merge） | ✅ 完成 |
-| M4 | 输出引擎（outline、writer、artifact、下载、feedback revision、cleanup） | ✅ 完成 |
-| R1-001 | 真实 provider adapter（Zhipu LLM SDK、web_search HTTP、web_fetch HTTP） | ✅ 完成 |
+1. **Clarify** — Asks follow-up questions (free-form or multiple-choice with a 15 s auto-commit timer) to sharpen the research scope.
+2. **Analyze** — Extracts structured requirements from the clarified prompt.
+3. **Plan & Collect** — An explicit planner agent loop dispatches parallel collector subtasks that search the web, fetch pages, and summarize findings.
+4. **Merge** — Deduplicates sources and normalizes citations.
+5. **Outline & Write** — A writer agent loop drafts the report section by section, optionally executing Python in an E2B sandbox for data analysis.
+6. **Deliver** — Exports the finished report as downloadable Markdown, PDF, and ZIP artifacts.
+7. **Revise** — Accepts user feedback and reruns the writer to refine the delivered report.
 
-当前阶段的工作口径是**发布前工程化收尾**（Release Engineering），聚焦于：
-- 仓库级文档收敛与规范化
-- 本地开发体验完善（一条命令拉起联调环境）
-- 真实 provider 本地联调验证
-- 静态检查门禁（ruff、mypy、ESLint flat config）
-- 部署配置与 CI pipeline
+The entire pipeline streams progress to the browser via SSE.
 
-当前 deploy config baseline 已固定为：
-
-- `apps/web -> Vercel`
-- `services/api -> Railway`
-- 生产部署合同见 [`docs/Deploy_Contract.md`](docs/Deploy_Contract.md)
-
-## 仓库结构
+## Architecture
 
 ```text
-Mimir/
-├─ apps/
-│  └─ web/                    # Next.js App Router 前端
-├─ services/
-│  └─ api/                    # FastAPI 后端
-├─ packages/
-│  └─ contracts/              # 共享 JS/TS 契约类型
-├─ docs/                      # source-of-truth 设计与实施文档
-└─ scripts/                   # 仓库级自动化脚本
+Browser ──SSE/REST──▸ FastAPI (Railway)
+                          │
+                          ├─▸ PostgreSQL (Railway)
+                          ├─▸ Zhipu LLM API
+                          ├─▸ Zhipu Web Search API
+                          ├─▸ Jina Reader (web fetch)
+                          └─▸ E2B Sandbox (code execution)
 ```
 
-### 各目录职责
+Key constraints:
 
-- **`apps/web`** — Next.js App Router + TailwindCSS + shadcn/ui 前端；负责研究输入、澄清交互、流式事件渲染、报告展示、下载与反馈。不承担业务编排、prompt 拼接或数据持久化。
-- **`services/api`** — FastAPI + Pydantic v2 后端；采用分层架构（`api` / `application` / `domain` / `infrastructure` / `core`），驱动 Task / Revision / SubTask / Event 生命周期，管理 LLM、web_search、web_fetch、E2B 等外部 adapter。
-- **`packages/contracts`** — 前后端共享的 TypeScript 类型定义（`TaskSnapshot`、`EventEnvelope` 等）。前端通过 workspace 依赖引入，后端通过 Python domain schemas 保持语义一致。
-- **`docs`** — 架构、API、TDD 计划、前端 IA、实施总控与执行日志。所有行为变更必须先更新文档。
-- **`scripts`** — 仓库级自动化（预留）。
+- No LangChain / LangGraph — explicit state machine + explicit orchestrator
+- Contract-first, TDD development
+- One active research task at a time (global singleton)
+- SSE streaming only; no WebSocket
+- `task_token` is memory-only — disconnect abandons the task
 
-## 技术栈
+## Repository Layout
 
-### 前端
+```
+apps/web/            Next.js App Router frontend
+services/api/        FastAPI backend (not a pnpm workspace member; uses uv)
+packages/contracts/  Shared TypeScript type definitions (TaskSnapshot, EventEnvelope, …)
+docs/                Source-of-truth design & implementation docs
+scripts/             Repo-level automation
+```
+
+### Backend Layers (`services/api/app/`)
+
+```
+api/              FastAPI routes, request/response serialization
+application/      Orchestrators, services, DTOs, prompt builders, port definitions
+domain/           Domain models, enums, state machine
+infrastructure/   Adapter implementations (LLM, search, fetch, sandbox, SSE, DB)
+core/             Settings, JSON utilities, ID generation
+```
+
+## Tech Stack
+
+### Frontend
+
 - Next.js (App Router), React 19, TypeScript
-- TailwindCSS, shadcn/ui
-- react-markdown + rehype-sanitize（安全 markdown 渲染）
-- Vitest + Testing Library + Playwright
-- MSW（HTTP mock）
+- Tailwind CSS with a custom industrial design system (see `docs/DESIGN.md`)
+- react-markdown + rehype-sanitize
+- Vitest, Testing Library, Playwright
 
-### 后端
+### Backend
+
 - Python 3.12+, FastAPI, Pydantic v2
-- SQLAlchemy 2.0 + Alembic（PostgreSQL）
-- httpx（HTTP 客户端）
-- 智谱官方 SDK（LLM）、原生 HTTP（web_search / web_fetch）
-- pytest + pytest-asyncio + respx
+- SQLAlchemy 2.0 + Alembic (PostgreSQL)
+- httpx, Zhipu SDK
+- pytest, pytest-asyncio, respx
 
-### 核心约束
-- 不使用 LangChain / LangGraph 或其他 Agent 编排框架
-- 显式状态机 + 显式编排器
-- 全局同一时刻只允许一个活动研究任务
-- SSE 单向流式，不使用 WebSocket
-- 前端不缓存 `task_token` 到 localStorage，断连即放弃任务
-- contract-first + TDD 开发方式
+## Getting Started
 
-## Provider Mode
+### Prerequisites
 
-后端默认以 `stub` 模式运行，所有外部依赖使用 deterministic local stub / scripted fake，适用于开发与测试。
+- Docker (for local PostgreSQL)
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
+- [pnpm](https://pnpm.io/) (Node package manager)
 
-| 环境变量 | 说明 |
-| --- | --- |
-| `MIMIR_PROVIDER_MODE=stub` | 全局默认，所有 adapter 使用本地 stub |
-| `MIMIR_PROVIDER_MODE=real` | 切换 LLM / web_search / web_fetch / E2B 为真实 provider |
-| `MIMIR_LLM_PROVIDER_MODE` | 单独覆盖 LLM adapter 模式 |
-| `MIMIR_WEB_SEARCH_PROVIDER_MODE` | 单独覆盖 web_search adapter 模式 |
-| `MIMIR_WEB_FETCH_PROVIDER_MODE` | 单独覆盖 web_fetch adapter 模式 |
-| `MIMIR_E2B_PROVIDER_MODE` | 单独覆盖 E2B sandbox adapter 模式 |
-
-`real` 模式下，LLM / `web_search` 需要 `ZHIPU_API_KEY`，`web_fetch` 需要 `JINA_API_KEY`，E2B sandbox 需要 `E2B_API_KEY`。详见 [`services/api/.env.example`](services/api/.env.example)。
-
-使用 `./scripts/dev.sh` 启动本地联调时，provider 模式、数据库地址与密钥都读取当前 shell 环境；脚本不再强制覆盖为 `stub`。因此本地 real smoke 应先在 shell 中导出 `MIMIR_PROVIDER_MODE`、各 provider override、可选的 `MIMIR_DATABASE_URL` 以及 `ZHIPU_API_KEY` / `JINA_API_KEY` / `E2B_API_KEY`，再执行脚本。
-
-## 本地联调（一条命令）
-
-从仓库根目录启动完整本地开发环境：
+### Quick Start
 
 ```bash
-# 前置条件：docker, uv, pnpm
-pnpm install                        # 首次：安装 JS 依赖
-cd services/api && uv sync --group dev && cd ../..  # 首次：安装 Python 依赖
+# Install dependencies
+pnpm install
+cd services/api && uv sync --group dev && cd ../..
 
-# 启动（PostgreSQL + migrate + API + Web）
+# Start everything (PostgreSQL + migrations + API + Web)
 ./scripts/dev.sh
-
-# 或通过 pnpm
-pnpm dev
 ```
 
-启动后：
-- Web: http://localhost:3000
-- API: http://localhost:8000
-- DB: `postgresql://postgres@localhost:5432/postgres`
-- Provider 模式: `stub`（不需要真实密钥）
+After startup:
+
+| Service | URL |
+|---------|-----|
+| Web     | http://localhost:3000 |
+| API     | http://localhost:8000 |
+| DB      | postgresql://postgres@localhost:5432/postgres |
+
+Default provider mode is `stub` — no API keys required for local development.
 
 ```bash
-# 仅运行迁移
-./scripts/dev.sh migrate
-
-# 停止 PostgreSQL
-./scripts/dev.sh stop
-
-# 停止 PostgreSQL 并清除数据
-docker compose down -v
+./scripts/dev.sh migrate   # Run migrations only
+./scripts/dev.sh stop      # Stop PostgreSQL
+docker compose down -v     # Stop PostgreSQL and wipe data
 ```
 
-> `services/api` 不是 pnpm workspace 的一部分，后端工具链使用 `uv` 独立管理。
+## Provider Modes
 
-## 常用命令
+The backend defaults to deterministic local stubs for all external services. Switch to real providers with environment variables:
 
-### 后端 (`services/api`)
+| Variable | Description |
+|----------|-------------|
+| `MIMIR_PROVIDER_MODE=stub\|real` | Global default for all adapters |
+| `MIMIR_LLM_PROVIDER_MODE` | Override for Zhipu LLM |
+| `MIMIR_WEB_SEARCH_PROVIDER_MODE` | Override for Zhipu web search |
+| `MIMIR_WEB_FETCH_PROVIDER_MODE` | Override for Jina web fetch |
+| `MIMIR_E2B_PROVIDER_MODE` | Override for E2B sandbox |
+
+Real mode requires `ZHIPU_API_KEY`, `JINA_API_KEY`, and/or `E2B_API_KEY`. See [`services/api/.env.example`](services/api/.env.example).
+
+## Commands
+
+### Backend (`services/api`)
 
 ```bash
 cd services/api
-
-# 依赖安装
-uv sync --group dev
-
-# 启动 API 服务器（需本地 PostgreSQL）
-uv run --group dev uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-
-# 运行测试
-uv run --group dev pytest tests/unit
-uv run --group dev pytest tests/contract
-uv run --group dev pytest tests/integration
-uv run --group dev pytest tests/unit tests/contract tests/integration  # 全量
-
-# 数据库迁移（需本地 PostgreSQL）
-uv run alembic upgrade head
+uv sync --group dev                          # Install dependencies
+uv run --group dev pytest tests/unit         # Unit tests
+uv run --group dev pytest tests/contract     # Contract tests
+uv run --group dev pytest tests/integration  # Integration tests (needs PostgreSQL)
+uv run alembic upgrade head                  # Run migrations
 ```
 
-### 前端 (`apps/web`)
+### Frontend (`apps/web`)
 
 ```bash
 cd apps/web
-
-# 开发服务器（读取 .env.local 中的 NEXT_PUBLIC_API_BASE_URL）
-pnpm dev
-
-# 类型检查与 lint
-pnpm typecheck
-pnpm lint
-
-# 运行测试
-pnpm test:unit
-pnpm test:contract
-pnpm test:component
-pnpm test:integration
-pnpm test:e2e          # 需要先安装 Chromium: pnpm exec playwright install chromium
+pnpm dev              # Dev server
+pnpm typecheck        # TypeScript check
+pnpm lint             # ESLint
+pnpm test:unit        # Unit tests
+pnpm test:contract    # Contract tests
+pnpm test:component   # Component tests
+pnpm test:e2e         # Playwright e2e (needs chromium: pnpm exec playwright install chromium)
 ```
 
-### 根目录
+## Production Deployment
 
-```bash
-# 安装所有 JS workspace 依赖
-pnpm install
-```
+| Component | Platform | Details |
+|-----------|----------|---------|
+| `apps/web` | Vercel | Next.js, auto-deploy from `main` |
+| `services/api` | Railway | FastAPI + PostgreSQL + Volume (artifact storage) |
 
-## 文档索引
+See [`docs/Deploy_Contract.md`](docs/Deploy_Contract.md) for the full deployment contract.
 
-| 文档 | 说明 |
-| --- | --- |
-| [`docs/Architecture.md`](docs/Architecture.md) | 架构设计（技术选型、状态机、Schema、API 契约、数据存储） |
-| [`docs/OpenAPI_v1.md`](docs/OpenAPI_v1.md) | v1 API 契约与 SSE 事件规范 |
-| [`docs/Backend_TDD_Plan.md`](docs/Backend_TDD_Plan.md) | 后端 TDD 分阶段计划 |
-| [`docs/Frontend_IA.md`](docs/Frontend_IA.md) | 前端信息架构与交互规范 |
-| [`docs/Frontend_TDD_Plan.md`](docs/Frontend_TDD_Plan.md) | 前端 TDD 分阶段计划 |
-| [`docs/Implementation_Playbook.md`](docs/Implementation_Playbook.md) | 实施总控（任务包规范、并行策略、回报验收） |
-| [`docs/Deploy_Contract.md`](docs/Deploy_Contract.md) | Vercel / Railway 部署合同与 env matrix |
-| [`docs/Release_Readiness_Checklist.md`](docs/Release_Readiness_Checklist.md) | 发布前检查单与待拍板决策 |
-| [`docs/Execution_Log.md`](docs/Execution_Log.md) | 全局实施历史（append-only） |
+## Documentation
 
-> `docs/` 是 source of truth。行为变更必须先更新文档，再写测试，再实现。
+| Document | Description |
+|----------|-------------|
+| [`docs/Architecture.md`](docs/Architecture.md) | System architecture, state machine, schemas, API contracts |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | Frontend design system — "The Kinetic Monolith" |
+| [`docs/OpenAPI_v1.md`](docs/OpenAPI_v1.md) | v1 API contract and SSE event specification |
+| [`docs/Deploy_Contract.md`](docs/Deploy_Contract.md) | Vercel / Railway deployment contract |
+| [`docs/Frontend_IA.md`](docs/Frontend_IA.md) | Frontend information architecture |
+| [`docs/Mimir_v1.0.0_prd_0.3.md`](docs/Mimir_v1.0.0_prd_0.3.md) | Product requirements document |
 
-## 当前已知非阻塞事项
+## License
 
-- `pnpm lint` 使用 ESLint 9 legacy `.eslintrc` 兼容模式，会打印 deprecation warning（lint 本身通过）
-- `ruff check` 与 `mypy` 在后端尚未作为门禁启用
-- `pnpm test:e2e` 与后端 integration tests 依赖本机 PostgreSQL 与 Chromium
-- 本地联调入口 `./scripts/dev.sh` 已提供，依赖 Docker（PostgreSQL）+ uv + pnpm
-- E2B sandbox 已具备真实 adapter baseline；完整 writer 实战联调仍待后续独立 smoke
-- 浏览器 e2e 通过 test-only `__MIMIR_TEST_RUNTIME__ / __MIMIR_TEST_STORE__` 注入驱动
-
-## 发布前工程化收尾 — 下一步方向
-
-以下工作属于 Release Engineering 阶段，不应混入新功能实现：
-
-1. **仓库文档收敛** — README / AGENTS 更新、commit message 规范落地
-2. **本地开发体验** — `docker-compose` 或等价一键联调入口
-3. **真实 provider 联调** — 受控样本 smoke、模型稳定性收敛
-4. **静态检查门禁** — ruff + mypy 后端门禁、ESLint flat config 迁移
-5. **CI pipeline** — GitHub Actions 全量回归
-6. **真实上线演练** — Railway / Vercel 控制台参数录入、preview/prod 联调与回滚手册
-7. **E2B 真实 adapter** — sandbox 真实接线与 artifact store 对接
-8. **test-only surface 收敛** — 浏览器注入策略统一到 e2e harness 层
+Private repository. All rights reserved.
