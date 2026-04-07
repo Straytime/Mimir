@@ -38,9 +38,8 @@ const CARD_ANCHORS = [
   "collectionTrace",
   "outline",
   "report",
+  "delivery",
 ] as const;
-
-type WorkspaceCardAnchor = (typeof CARD_ANCHORS)[number];
 
 function isPhaseAtOrAfter(
   phase: (typeof PHASE_ORDER)[number],
@@ -127,35 +126,6 @@ export function ResearchWorkspaceShell() {
     reportMarkdown.trim().length > 0;
   const shouldShowDelivery =
     snapshot.phase === "delivered" && delivery !== null;
-  const activeCardAnchor = useMemo<WorkspaceCardAnchor | null>(() => {
-    if (shouldShowClarification) {
-      return "clarification";
-    }
-
-    if (shouldShowReport) {
-      return "report";
-    }
-
-    if (shouldShowOutline) {
-      return "outline";
-    }
-
-    if (shouldShowCollectionTrace) {
-      return "collectionTrace";
-    }
-
-    if (shouldShowRequirementSummary) {
-      return "requirementSummary";
-    }
-
-    return null;
-  }, [
-    shouldShowCollectionTrace,
-    shouldShowClarification,
-    shouldShowOutline,
-    shouldShowReport,
-    shouldShowRequirementSummary,
-  ]);
   const cardAnchorRefs = useMemo(
     () => ({
       clarification: clarificationRef,
@@ -163,6 +133,7 @@ export function ResearchWorkspaceShell() {
       collectionTrace: collectionTraceRef,
       outline: outlineRef,
       report: reportRef,
+      delivery: deliveryRef,
     }),
     [],
   );
@@ -181,63 +152,74 @@ export function ResearchWorkspaceShell() {
     () => JSON.stringify(collectionTrace.nodes),
     [collectionTrace.nodes],
   );
-
-  const anchorSignal = useMemo(() => {
-    if (activeCardAnchor === null) {
-      return null;
-    }
-
-    switch (activeCardAnchor) {
-      case "clarification":
-        return [
-          snapshot.phase,
-          shouldShowClarification ? "card-visible" : "card-hidden",
-          clarificationText.trim().length > 0 ? "text-ready" : "text-pending",
-          clarificationQuestionCount,
-        ].join(":");
-      case "requirementSummary":
-        return [
-          snapshot.phase,
-          requirementDetail === null ? "pending" : "ready",
-        ].join(":");
-      case "collectionTrace":
-        return [
-          snapshot.phase,
-          collectionTrace.nodes.length > 0 ? "trace-ready" : "trace-pending",
-          collectionTraceContentSignal,
-        ].join(":");
-      case "outline":
-        return [
-          snapshot.phase,
-          outlineReady ? "outline-ready" : "outline-pending",
-          outline?.sections.length ?? 0,
-        ].join(":");
-      case "report":
-        return [
-          snapshot.phase,
-          reportMarkdown.trim().length > 0 ? "report-ready" : "report-pending",
-          shouldShowDelivery ? "delivery-visible" : "delivery-hidden",
-        ].join(":");
-    }
-  }, [
-    activeCardAnchor,
-    clarificationQuestionCount,
-    clarificationText,
-    collectionTrace.nodes.length,
-    collectionTraceContentSignal,
-    outline,
-    outlineReady,
-    reportMarkdown,
-    requirementDetail,
-    shouldShowClarification,
-    shouldShowDelivery,
-    snapshot.phase,
-  ]);
+  const cardAnchorStates = useMemo(
+    () => ({
+      clarification: {
+        isVisible: shouldShowClarification,
+        signal: shouldShowClarification
+          ? [
+              clarificationText.trim().length > 0 ? "text-ready" : "text-pending",
+              clarificationQuestionCount,
+            ].join(":")
+          : null,
+      },
+      requirementSummary: {
+        isVisible: shouldShowRequirementSummary,
+        signal: shouldShowRequirementSummary
+          ? JSON.stringify(requirementDetail)
+          : null,
+      },
+      collectionTrace: {
+        isVisible: shouldShowCollectionTrace,
+        signal: shouldShowCollectionTrace
+          ? [
+              collectionTrace.nodes.length > 0 ? "trace-ready" : "trace-pending",
+              collectionTraceContentSignal,
+            ].join(":")
+          : null,
+      },
+      outline: {
+        isVisible: shouldShowOutline,
+        signal: shouldShowOutline
+          ? JSON.stringify(outline?.sections ?? [])
+          : null,
+      },
+      report: {
+        isVisible: shouldShowReport,
+        signal: shouldShowReport
+          ? reportMarkdown
+          : null,
+      },
+      delivery: {
+        isVisible: shouldShowDelivery,
+        signal: shouldShowDelivery
+          ? JSON.stringify(delivery)
+          : null,
+      },
+    }),
+    [
+      clarificationQuestionCount,
+      clarificationText,
+      collectionTrace.nodes.length,
+      collectionTraceContentSignal,
+      outline,
+      outlineReady,
+      reportMarkdown,
+      requirementDetail,
+      delivery,
+      shouldShowClarification,
+      shouldShowCollectionTrace,
+      shouldShowDelivery,
+      shouldShowOutline,
+      shouldShowReport,
+      shouldShowRequirementSummary,
+    ],
+  );
 
   useWorkspaceCardAnchor(
-    activeCardAnchor,
+    CARD_ANCHORS,
     cardAnchorRefs,
-    anchorSignal,
+    cardAnchorStates,
     cardAnchorTargets,
   );
 

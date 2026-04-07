@@ -18,6 +18,14 @@ type AnchorTargets<TAnchorKey extends string> = Partial<
   >
 >;
 
+type AnchorStates<TAnchorKey extends string> = Record<
+  TAnchorKey,
+  {
+    isVisible: boolean;
+    signal: string | null;
+  }
+>;
+
 function resolveVisibleBottom(element: HTMLElement | null) {
   if (element === null) {
     return null;
@@ -85,28 +93,48 @@ function resolveAnchorTarget(
 }
 
 export function useWorkspaceCardAnchor<TAnchorKey extends string>(
-  activeAnchor: TAnchorKey | null,
+  anchorOrder: readonly TAnchorKey[],
   anchorRefs: AnchorRefs<TAnchorKey>,
-  anchorSignal: string | null,
+  anchorStates: AnchorStates<TAnchorKey>,
   anchorTargets?: AnchorTargets<TAnchorKey>,
 ) {
-  const previousAnchorRef = useRef<{
-    anchor: TAnchorKey | null;
-    signal: string | null;
-  }>({
-    anchor: null,
-    signal: null,
-  });
+  const previousAnchorStatesRef = useRef<AnchorStates<TAnchorKey> | null>(null);
 
   useLayoutEffect(() => {
-    if (
-      activeAnchor === null ||
-      (previousAnchorRef.current.anchor === activeAnchor &&
-        previousAnchorRef.current.signal === anchorSignal)
-    ) {
+    const changedAnchors = anchorOrder.filter((anchor) => {
+      const currentState = anchorStates[anchor];
+
+      if (!currentState.isVisible || currentState.signal === null) {
+        return false;
+      }
+
+      const previousStates = previousAnchorStatesRef.current;
+
+      if (previousStates === null) {
+        return true;
+      }
+
+      const previousState = previousStates[anchor];
+
+      return (
+        previousState.isVisible !== currentState.isVisible ||
+        previousState.signal !== currentState.signal
+      );
+    });
+    const nextAnchorStates = anchorOrder.reduce<AnchorStates<TAnchorKey>>(
+      (states, anchor) => {
+        states[anchor] = anchorStates[anchor];
+        return states;
+      },
+      {} as AnchorStates<TAnchorKey>,
+    );
+
+    if (changedAnchors.length === 0) {
+      previousAnchorStatesRef.current = nextAnchorStates;
       return;
     }
 
+    const activeAnchor = changedAnchors[0];
     const rootTarget = anchorRefs[activeAnchor]?.current;
 
     if (rootTarget === null || rootTarget === undefined) {
@@ -119,9 +147,6 @@ export function useWorkspaceCardAnchor<TAnchorKey extends string>(
     );
 
     scrollCardIntoAnchorBand(target);
-    previousAnchorRef.current = {
-      anchor: activeAnchor,
-      signal: anchorSignal,
-    };
-  }, [activeAnchor, anchorRefs, anchorSignal, anchorTargets]);
+    previousAnchorStatesRef.current = nextAnchorStates;
+  }, [anchorOrder, anchorRefs, anchorStates, anchorTargets]);
 }

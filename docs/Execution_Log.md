@@ -5013,3 +5013,45 @@ Copy the template below for each completed session:
   - 纯视觉修改，建议在真实浏览器确认最终观感
 - 下一步建议:
   - 在桌面与移动端浏览器确认卡片从背景中的视觉区分度
+
+## UI-20260407 Workspace Card Anchor Strategy Fix
+
+- 日期时间: 2026-04-07 10:41:17 CST (+0800)
+- 任务包编号: UI-20260407-workspace-card-anchor-strategy-fix
+- session 标识: codex/workspace-anchor-strategy-fix
+- 目标摘要: 修复工作台共享 card anchor 行为，使页面级自动滚动不再依赖反向 phase 优先级，而是只在“本轮新出现或内容变化的卡片”里按既定卡片顺序选择最早目标；覆盖 `Collection Trace` 首次出现、`Outline` 首次 ready、同轮多卡同时变更以及 later changed card 仍可成为锚点的回归场景。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `apps/web/features/research/hooks/use-workspace-card-anchor.ts`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-page-client.spec.tsx` -- 18/18 通过
+  - 已运行: `cd apps/web && pnpm typecheck` -- 通过
+- 验收结论: accepted；共享 anchor 现在按工作台既有卡片顺序从 changed cards 中选取目标，`Collection Trace` 首次出现会正确锚定到自身，`Requirement Summary` 与 `Collection Trace` 同轮变化时会优先锚到更靠前的需求摘要，而未变化的早卡不会抢走 later changed card 的锚点。
+- blocker / 风险:
+  - 当前回归集中在 component 层；尚未在真实浏览器中手动确认长页面、实际 sticky top stack 高度和 smooth scroll 体感
+  - `report` 卡片的页面级 anchor 仍只覆盖首次 ready，不会因后续正文 delta 持续触发页面滚动；这与当前文档“正文刷新只滚内部容器”的约束保持一致，但若后续产品预期变化需单独补文档和测试
+- 下一步建议:
+  - 在真实工作台流程中确认从需求摘要进入 `Collection Trace`、再进入 `Outline` 的滚动体验是否符合预期
+
+## UI-20260407 Workspace Card Anchor Strategy Fix Follow-up
+
+- 日期时间: 2026-04-07 10:46:40 CST (+0800)
+- 任务包编号: UI-20260407-workspace-card-anchor-strategy-fix-followup
+- session 标识: codex/workspace-anchor-strategy-fix
+- 目标摘要: 将共享 card anchor 规则从 `Collection Trace` / `Outline` 的局部修复收紧为适用于全部内容卡片的统一策略。文档层明确“任一卡片出现或内容更新都可成为候选锚点，若同轮多卡变化则按工作台顺序选最早者”；实现层把 `DeliveryActions` 纳入 shared anchor order，并让 `Report Canvas` 在后续正文内容更新时也能触发页面级锚定；测试层补齐 report content update 与 delivery-only appearance 两个回归。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/features/research/components/research-workspace-shell.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-page-client.spec.tsx` -- 19/19 通过
+  - 已运行: `cd apps/web && pnpm typecheck` -- 通过
+- 验收结论: accepted；共享 anchor 现在对所有内容卡片统一按 changed-cards 规则工作，`Report Canvas` 的正文更新可在未改变的早卡存在时重新成为页面锚点，`DeliveryActions` 也能在单独出现时成为该轮锚点；若 report 与 delivery 同轮变化，仍按既定顺序优先锚到 report。
+- blocker / 风险:
+  - 仍未做真实浏览器下的人工滚动体验确认，尤其是 delivered 阶段 report / delivery 切换时的页面观感
+- 下一步建议:
+  - 在真实任务流里验证 report 流式增量、delivered 切换和 delivery 单独出现三种场景的滚动体感
