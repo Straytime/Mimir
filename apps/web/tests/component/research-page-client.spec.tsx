@@ -305,10 +305,23 @@ test("renders the embedded gallery inside DeliveryActions and not as a standalon
   expect(within(deliveryPanel).getByText("chart_market_share.png")).toBeInTheDocument();
 });
 
-test("scrolls the current focus card to the shared workspace anchor offset", () => {
+test("anchors the earliest visible workspace card on first render using card order", () => {
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
   const originalScrollTo = window.scrollTo;
   const scrollToSpy = vi.fn();
+  const topStackRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 176,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
   const statusBarRect = {
     x: 0,
     y: 0,
@@ -318,6 +331,32 @@ test("scrolls the current focus card to the shared workspace anchor offset", () 
     bottom: 104,
     width: 800,
     height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementCardRect = {
+    x: 0,
+    y: 520,
+    top: 520,
+    left: 0,
+    right: 800,
+    bottom: 900,
+    width: 800,
+    height: 380,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementContentRect = {
+    x: 0,
+    y: 584,
+    top: 584,
+    left: 0,
+    right: 800,
+    bottom: 904,
+    width: 800,
+    height: 320,
     toJSON() {
       return this;
     },
@@ -345,8 +384,23 @@ test("scrolls the current focus card to the shared workspace anchor offset", () 
     configurable: true,
     writable: true,
     value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
       if (this.getAttribute("data-research-status-bar") === "true") {
         return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "requirementSummary") {
+        return requirementCardRect;
+      }
+
+      if (
+        this.getAttribute("data-research-anchor-target") ===
+        "requirement-summary-content"
+      ) {
+        return requirementContentRect;
       }
 
       if (this.getAttribute("data-research-card-anchor") === "report") {
@@ -393,7 +447,7 @@ test("scrolls the current focus card to the shared workspace anchor offset", () 
 
     expect(scrollToSpy).toHaveBeenCalledWith({
       behavior: "smooth",
-      top: 292,
+      top: 384,
     });
   } finally {
     Object.defineProperty(window, "scrollTo", {
@@ -1028,7 +1082,374 @@ test("anchors the first ready outline state to the outline card instead of the r
   }
 });
 
-test("reanchors the collection trace when trace content updates without changing node count", () => {
+test("anchors the first visible collection trace to the collection trace card instead of the requirement summary", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const topStackRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 176,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementCardRect = {
+    x: 0,
+    y: 520,
+    top: 520,
+    left: 0,
+    right: 800,
+    bottom: 900,
+    width: 800,
+    height: 380,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementContentRect = {
+    x: 0,
+    y: 584,
+    top: 584,
+    left: 0,
+    right: 800,
+    bottom: 904,
+    width: 800,
+    height: 320,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const collectionTraceCardRect = {
+    x: 0,
+    y: 760,
+    top: 760,
+    left: 0,
+    right: 800,
+    bottom: 1160,
+    width: 800,
+    height: 400,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "requirementSummary") {
+        return requirementCardRect;
+      }
+
+      if (
+        this.getAttribute("data-research-anchor-target") ===
+        "requirement-summary-content"
+      ) {
+        return requirementContentRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "collectionTrace") {
+        return collectionTraceCardRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "planning_collection",
+            status: "running",
+          }),
+          currentRevision: makeRevisionSummary({
+            requirement_detail: {
+              research_goal: "分析中国 AI 搜索产品竞争格局",
+              domain: "互联网 / AI 产品",
+              requirement_details: "聚焦中国市场，偏商业分析，覆盖近两年变化。",
+              output_format: "business_report",
+              freshness_requirement: "high",
+              language: "zh-CN",
+            },
+          }),
+        },
+        stream: {
+          collectionTrace: makeCollectionTraceRoot({
+            nodes: [],
+          }),
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        stream: {
+          ...state.stream,
+          collectionTrace: makeCollectionTraceRoot({
+            nodes: [makeCollectionPlanRoundNode()],
+          }),
+        },
+      }));
+    });
+
+    expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+    expect(scrollToSpy).toHaveBeenLastCalledWith({
+      behavior: "smooth",
+      top: 560,
+    });
+    expect(scrollToSpy).not.toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 384,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
+test("chooses the earlier card in workspace order when multiple cards become anchorable in the same state transition", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const topStackRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 176,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementCardRect = {
+    x: 0,
+    y: 520,
+    top: 520,
+    left: 0,
+    right: 800,
+    bottom: 900,
+    width: 800,
+    height: 380,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementContentRect = {
+    x: 0,
+    y: 584,
+    top: 584,
+    left: 0,
+    right: 800,
+    bottom: 904,
+    width: 800,
+    height: 320,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const collectionTraceCardRect = {
+    x: 0,
+    y: 760,
+    top: 760,
+    left: 0,
+    right: 800,
+    bottom: 1160,
+    width: 800,
+    height: 400,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "requirementSummary") {
+        return requirementCardRect;
+      }
+
+      if (
+        this.getAttribute("data-research-anchor-target") ===
+        "requirement-summary-content"
+      ) {
+        return requirementContentRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "collectionTrace") {
+        return collectionTraceCardRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "analyzing_requirement",
+            status: "running",
+          }),
+          currentRevision: makeRevisionSummary({
+            requirement_detail: null,
+          }),
+        },
+        stream: {
+          collectionTrace: makeCollectionTraceRoot({
+            nodes: [],
+          }),
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        remote: {
+          ...state.remote,
+          snapshot: makeTaskSnapshot({
+            phase: "planning_collection",
+            status: "running",
+          }),
+          currentRevision: makeRevisionSummary({
+            requirement_detail: {
+              research_goal: "分析中国 AI 搜索产品竞争格局",
+              domain: "互联网 / AI 产品",
+              requirement_details: "聚焦中国市场，偏商业分析，覆盖近两年变化。",
+              output_format: "business_report",
+              freshness_requirement: "high",
+              language: "zh-CN",
+            },
+          }),
+        },
+        stream: {
+          ...state.stream,
+          collectionTrace: makeCollectionTraceRoot({
+            nodes: [makeCollectionPlanRoundNode()],
+          }),
+        },
+      }));
+    });
+
+    expect(screen.getByText("需求摘要已生成")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Collection Trace" })).toBeInTheDocument();
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+    expect(scrollToSpy).toHaveBeenLastCalledWith({
+      behavior: "smooth",
+      top: 384,
+    });
+    expect(scrollToSpy).not.toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 560,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
+test("anchors a later changed card when earlier visible cards do not change", () => {
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
   const originalScrollTo = window.scrollTo;
   const scrollToSpy = vi.fn();
@@ -1225,7 +1646,176 @@ test("reanchors the collection trace when trace content updates without changing
   }
 });
 
-test("reanchors the current card when the same anchor key stays active but report content becomes ready", () => {
+test("anchors a report content update when earlier visible cards do not change", () => {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  const originalScrollTo = window.scrollTo;
+  const scrollToSpy = vi.fn();
+  const topStackRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 176,
+    width: 800,
+    height: 176,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const statusBarRect = {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 104,
+    width: 800,
+    height: 104,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementCardRect = {
+    x: 0,
+    y: 520,
+    top: 520,
+    left: 0,
+    right: 800,
+    bottom: 900,
+    width: 800,
+    height: 380,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const requirementContentRect = {
+    x: 0,
+    y: 584,
+    top: 584,
+    left: 0,
+    right: 800,
+    bottom: 904,
+    width: 800,
+    height: 320,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+  const reportCardRect = {
+    x: 0,
+    y: 420,
+    top: 420,
+    left: 0,
+    right: 800,
+    bottom: 820,
+    width: 800,
+    height: 400,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
+
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollToSpy,
+  });
+  Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+    configurable: true,
+    writable: true,
+    value(this: Element) {
+      if (this.getAttribute("data-research-top-stack") === "true") {
+        return topStackRect;
+      }
+
+      if (this.getAttribute("data-research-status-bar") === "true") {
+        return statusBarRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "requirementSummary") {
+        return requirementCardRect;
+      }
+
+      if (
+        this.getAttribute("data-research-anchor-target") ===
+        "requirement-summary-content"
+      ) {
+        return requirementContentRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "report") {
+        return reportCardRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    },
+  });
+
+  try {
+    const store = createResearchSessionStore(
+      makeResearchSessionState({
+        session: {
+          taskId: "tsk_stage0",
+          taskToken: "secret_stage0",
+          sseState: "open",
+        },
+        remote: {
+          snapshot: makeTaskSnapshot({
+            phase: "writing_report",
+            status: "running",
+          }),
+          currentRevision: makeRevisionSummary({
+            requirement_detail: {
+              research_goal: "分析中国 AI 搜索产品竞争格局",
+              domain: "互联网 / AI 产品",
+              requirement_details: "聚焦中国市场，偏商业分析，覆盖近两年变化。",
+              output_format: "business_report",
+              freshness_requirement: "high",
+              language: "zh-CN",
+            },
+          }),
+        },
+        stream: {
+          reportMarkdown: "# 标题\n\n第一版正文。",
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        stream: {
+          ...state.stream,
+          reportMarkdown: "# 标题\n\n第二版正文，补充更多结论。",
+        },
+      }));
+    });
+
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+    expect(scrollToSpy).toHaveBeenCalledWith({
+      behavior: "smooth",
+      top: 220,
+    });
+  } finally {
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      writable: true,
+      value: originalScrollTo,
+    });
+    Object.defineProperty(Element.prototype, "getBoundingClientRect", {
+      configurable: true,
+      writable: true,
+      value: originalGetBoundingClientRect,
+    });
+  }
+});
+
+test("anchors delivery actions when delivery appears after report is already visible", () => {
   const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
   const originalScrollTo = window.scrollTo;
   const scrollToSpy = vi.fn();
@@ -1255,6 +1845,19 @@ test("reanchors the current card when the same anchor key stays active but repor
       return this;
     },
   } as DOMRect;
+  const deliveryCardRect = {
+    x: 0,
+    y: 860,
+    top: 860,
+    left: 0,
+    right: 800,
+    bottom: 1160,
+    width: 800,
+    height: 300,
+    toJSON() {
+      return this;
+    },
+  } as DOMRect;
 
   Object.defineProperty(window, "scrollTo", {
     configurable: true,
@@ -1271,6 +1874,10 @@ test("reanchors the current card when the same anchor key stays active but repor
 
       if (this.getAttribute("data-research-card-anchor") === "report") {
         return reportCardRect;
+      }
+
+      if (this.getAttribute("data-research-card-anchor") === "delivery") {
+        return deliveryCardRect;
       }
 
       return originalGetBoundingClientRect.call(this);
@@ -1290,9 +1897,13 @@ test("reanchors the current card when the same anchor key stays active but repor
             phase: "writing_report",
             status: "running",
           }),
+          delivery: null,
         },
         stream: {
-          reportMarkdown: "",
+          outline: makeResearchOutline(),
+          outlineReady: true,
+          reportMarkdown: "# 标题\n\n正文。",
+          artifacts: [],
         },
       }),
     );
@@ -1304,16 +1915,30 @@ test("reanchors the current card when the same anchor key stays active but repor
     act(() => {
       store.setState((state) => ({
         ...state,
-        stream: {
-          ...state.stream,
-          reportMarkdown: "# 标题\n\n正文。",
+        remote: {
+          ...state.remote,
+          snapshot: makeTaskSnapshot({
+            phase: "delivered",
+            status: "awaiting_feedback",
+            available_actions: ["download_markdown", "download_pdf"],
+          }),
+          delivery: makeDeliverySummary({
+            artifact_count: 1,
+            artifacts: [
+              makeArtifactSummary({
+                filename: "chart_market_share.png",
+                url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAE/wJ/lL0uWQAAAABJRU5ErkJggg==",
+              }),
+            ],
+          }),
         },
       }));
     });
 
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
     expect(scrollToSpy).toHaveBeenCalledWith({
       behavior: "smooth",
-      top: 292,
+      top: 732,
     });
   } finally {
     Object.defineProperty(window, "scrollTo", {
@@ -1408,6 +2033,30 @@ test("keeps the report anchor when report canvas and delivery appear together", 
         },
         remote: {
           snapshot: makeTaskSnapshot({
+            phase: "writing_report",
+            status: "running",
+          }),
+          delivery: null,
+        },
+        stream: {
+          outline: makeResearchOutline(),
+          outlineReady: true,
+          reportMarkdown: "",
+          artifacts: [],
+        },
+      }),
+    );
+
+    render(<ResearchPageClient store={store} />);
+
+    scrollToSpy.mockClear();
+
+    act(() => {
+      store.setState((state) => ({
+        ...state,
+        remote: {
+          ...state.remote,
+          snapshot: makeTaskSnapshot({
             phase: "delivered",
             status: "awaiting_feedback",
             available_actions: ["download_markdown", "download_pdf"],
@@ -1423,8 +2072,7 @@ test("keeps the report anchor when report canvas and delivery appear together", 
           }),
         },
         stream: {
-          outline: makeResearchOutline(),
-          outlineReady: true,
+          ...state.stream,
           reportMarkdown: "# 标题\n\n正文。",
           artifacts: [
             makeArtifactSummary({
@@ -1433,11 +2081,10 @@ test("keeps the report anchor when report canvas and delivery appear together", 
             }),
           ],
         },
-      }),
-    );
+      }));
+    });
 
-    render(<ResearchPageClient store={store} />);
-
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
     expect(scrollToSpy).toHaveBeenCalledWith({
       behavior: "smooth",
       top: 292,

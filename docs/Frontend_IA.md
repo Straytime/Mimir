@@ -353,14 +353,15 @@ UI 呈现规则：
 2. `Collection Trace` 与 `Report Canvas` 共享同一动态卡片级 max-height token，该 token 由工作台“内容带”高度推导：上边界是 sticky 状态区底部后的统一留白起点，下边界是固定底部输入托盘上缘前的统一留白终点，而不是依据卡片自身当前文档位置推导。
 3. 该约束作用于卡片容器本身；卡片头部保持固定可见，内部 body 才是滚动区。
 4. 当页面从 `Idle` 进入 active workspace、顶栏挂载完成后，前端必须重新计算并写入该 token，不能只依赖首次挂载或窗口 resize。
-5. 内容卡片进入当前关注阶段或首次出现时，页面级自动定位必须使用工作台级共享 card anchor 定义，而不是各卡片自行调用页面滚动。
+5. 任意内容卡片在首次出现或其 anchor 内容发生更新时，页面级自动定位都必须使用工作台级共享 card anchor 定义，而不是各卡片各自维护独立的页面滚动策略。
 6. 共享 card anchor 的目标位置是“卡片容器顶端对齐到顶栏下方统一留白”，其 offset 必须基于真实顶栏位置计算。
-7. `Collection Trace` 与 `Report Canvas` 的内容刷新只允许滚动卡片内部容器，不得驱动页面级滚动。
+7. 卡片内部滚动可以独立发生，例如 `Collection Trace` 与 `Report Canvas` 仍可各自维护内部跟随最新内容的滚动；但这类内部滚动不能替代、阻断或改写工作台级共享 page anchor 规则。
 8. 共享 card anchor 不能只依赖 anchor key 变化；同一张卡片在当前阶段内从“未就绪”变为“内容首次就绪”时，也必须触发页面定位。
-9. 若同一轮状态更新中有多张内容卡片同时变为可见或可锚定，页面必须按既定卡片顺序选择更靠前的卡片作为锚点，例如 `Report Canvas` 与 `DeliveryActions` 同时出现时优先锚到 `Report Canvas`。
-10. `澄清详情` 与 `Requirement Summary` 两张卡片的 anchor 目标位置都不是卡片外层容器顶边；前者应让“澄清详情”标题贴合状态栏下方统一留白，后者应让需求摘要内容区默认完整露出，不被卡片标签或过多上边距挤出首屏。
-11. 在 `planning_collection`、`collecting`、`summarizing_collection`、`merging_sources` 阶段，只要 `Collection Trace` 已可见，它就是页面级自动锚点的优先目标；同阶段内 trace 内容更新时，即使 `nodes.length` 不变，也必须重新锚定到 `Collection Trace` 自身，不能回退到先前已锚定过的 `Requirement Summary`。
-12. 共享 max-height token 的计算必须对 `Collection Trace` 与 `Report Canvas` 一致生效，确保两张长卡都占满同一可视内容带，并与统一 anchor 留白规则兼容。
+9. 页面级共享 card anchor 必须先只考虑“本轮状态更新里新出现或 anchor 内容发生变化”的卡片，再按既定工作台卡片顺序选择更靠前的卡片作为锚点；不能在所有当前可见卡片里重新做全局优先级竞争。
+10. 若同一轮状态更新中有多张内容卡片同时出现或内容同时变化，页面必须按既定卡片顺序选择更靠前的卡片作为锚点，例如 `Requirement Summary` 与 `Collection Trace` 同时变化时优先锚到 `Requirement Summary`，`Report Canvas` 与 `DeliveryActions` 同时出现时优先锚到 `Report Canvas`。
+11. `澄清详情` 与 `Requirement Summary` 两张卡片的 anchor 目标位置都不是卡片外层容器顶边；前者应让“澄清详情”标题贴合状态栏下方统一留白，后者应让需求摘要内容区默认完整露出，不被卡片标签或过多上边距挤出首屏。
+12. 同一套 changed-cards 规则适用于 `Collection Trace`、`OutlineCard`、`Report Canvas`、`DeliveryActions` 等所有内容卡片；例如 `Collection Trace` 内容更新、`Report Canvas` 正文增量刷新、或 `DeliveryActions` 单独出现时，都必须按该轮实际发生变化的卡片集合重新选择锚点，不能回退到未变化的早卡。
+13. 共享 max-height token 的计算必须对 `Collection Trace` 与 `Report Canvas` 一致生效，确保两张长卡都占满同一可视内容带，并与统一 anchor 留白规则兼容。
 
 ### 5.5.1 `OutlineCard`
 
