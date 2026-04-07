@@ -83,17 +83,12 @@ test("renders title and indexed section groups without section descriptions", ()
   const sectionList = screen.getByRole("list", { name: "章节序列" });
   const sectionItems = within(sectionList).getAllByRole("listitem");
   const sectionTitles = within(sectionList).getAllByRole("heading", { level: 4 });
-  const sectionsSummary = screen.getByText("Sections").closest("div");
 
   expect(outlineCard).toBeInTheDocument();
   expect(outlineCard).toHaveClass("bg-surface-container");
-  expect(outlineCard).toHaveClass("outline");
-  expect(outlineCard).toHaveClass("outline-outline-variant/15");
   expect(outlineCard).not.toHaveClass("bg-primary");
   expect(title).toHaveClass("text-white");
   expect(title).not.toHaveClass("text-primary");
-  expect(sectionsSummary).not.toBeNull();
-  expect(sectionsSummary).toHaveClass("bg-surface-container-lowest");
   expect(sectionList).toBeInTheDocument();
   expect(sectionItems).toHaveLength(3);
   expect(sectionTitles.map((node) => node.textContent)).toEqual([
@@ -101,16 +96,19 @@ test("renders title and indexed section groups without section descriptions", ()
     "第二章",
     "第三章",
   ]);
-  expect(screen.getByText("Section 01")).toBeInTheDocument();
-  expect(screen.getByText("Section 02")).toBeInTheDocument();
-  expect(screen.getByText("Section 03")).toBeInTheDocument();
-  for (const item of sectionItems) {
-    expect(item).toHaveClass("bg-surface-container-lowest");
-    expect(item).toHaveClass("outline");
-    expect(item).toHaveClass("outline-outline-variant/15");
-    expect(item).not.toHaveClass("bg-primary");
-  }
+  expect(within(sectionItems[0]).getByText("01")).toBeInTheDocument();
+  expect(within(sectionItems[1]).getByText("02")).toBeInTheDocument();
+  expect(within(sectionItems[2]).getByText("03")).toBeInTheDocument();
+  expect(sectionItems[0]).toHaveClass("bg-surface-container-low");
+  expect(sectionItems[1]).toHaveClass("bg-surface-container-low");
+  expect(sectionItems[2]).toHaveClass("bg-surface-container-low");
   expect(screen.queryByText("Report Flow")).not.toBeInTheDocument();
+  expect(screen.queryByText("Sections")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("Structured reading path before report delivery"),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText("Ordered title")).not.toBeInTheDocument();
+  expect(screen.queryByText("Section 01")).not.toBeInTheDocument();
   expect(screen.queryByText("第一章描述")).not.toBeInTheDocument();
   expect(screen.queryByText("第二章描述")).not.toBeInTheDocument();
   expect(screen.queryByText("第三章描述")).not.toBeInTheDocument();

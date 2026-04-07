@@ -91,6 +91,7 @@ apps/web/
    - `MIMIR` 必须作为当前屏首最强视觉信号：字形全大写、纯白、不混入 amber 主色填充；允许通过 tracking 与尺寸建立压迫感，但不能依赖 glow、描边或多色渐变
    - slogan 属于弱信号元信息层：与 `MIMIR` 保持更紧的垂直间距，颜色低于主标题对比度；`Draw from depth` 主体必须持续明显弱于 `MIMIR`，且弱化效果应通过稳定的文本色阶与独立透明度类组合实现，不依赖在生产环境可能失效的单一 slash opacity 颜色写法；结尾句点以 terminal 风格下划线光标表现
    - terminal underscore 必须作为真实可见的 DOM 文本节点渲染，不得依赖 pseudo-element `content`、opacity 组合或仅存在 class 名而未实际出字的实现
+   - slogan 附近需保留一个极低存在感的外部署名链接 `robiniflore.com`：位置应贴近 hero 元信息层，可放在 slogan 下方或同组近邻；样式必须是 subdued terminal / editorial metadata，而不是主 CTA、导航 chrome 或大面积 amber 链接块；可带极小 external marker，并以新标签页打开
 2. `ActiveWorkspace`
    - 已创建任务，正在澄清 / 分析 / 搜集 / 撰写 / 等待反馈
    - 展示工作台三栏布局
@@ -373,11 +374,11 @@ UI 呈现规则：
 展示规则：
 
 1. `OutlineCard` 只在 `outlineReady === true` 且存在 `outline` 时渲染。
-2. 视觉结构必须体现 `DESIGN.md` 的 `Lab Terminal` 风格，但本卡片应走更轻、更干净的阅读引导方向：通过 leading-zero 编号、分层 tonal stacking、留白与轻量 ghost outline 建立层次，不得回退到 amber 大面积底色或厚重的高对比堆叠。
-3. 卡片头部保留 `Outline` 技术标签、报告标题与章节总数；标题区应以中性 surface 为主，amber 只作为小面积点状 accent，不主导标题、计数块或整卡文本色。
-4. 各 section 必须按 `order` 顺序渲染，并显式展示 `01`、`02` 这类编号，强化终端式结构感；每个 section 至少应拆分为“编号 / 标题”两层信息。
-5. 若后端提供 `description`，前端在该卡片中仍不展示，避免提前泄露章节展开内容；章节列表只暴露 ordered titles，不额外添加摘要段落。
-6. section 之间通过留白、tone shift 与内外 surface 的嵌套形成“薄板叠层”关系，不使用 1px 横线切割，不制造 bloated panel 或 amber-heavy 信息墙。
+2. 视觉结构必须体现 `DESIGN.md` 的 `Lab Terminal` 风格，但本卡片应进一步收紧为 compact index / contents plate：通过 leading-zero 编号、浅层 tonal shift 与克制留白建立层次，不得回退到 amber 大面积底色、厚重计数盒、重复 sublabel 或 bloated panel stack。
+3. 卡片头部保留 `Outline` 技术标签、报告标题与章节总数，但章节总数应并入头部的弱化元信息，不再拆成独立 summary block；标题区以中性 surface 为主，amber 只允许作为极小面积点状 accent。
+4. 各 section 必须按 `order` 顺序渲染，并显式展示 `01`、`02` 这类编号，强化终端式结构感；单个 section 收紧为“编号 + 标题”的紧凑两列或两段结构，不再追加 `Ordered title` 等重复说明性 sublabel。
+5. 若后端提供 `description`，前端在该卡片中仍不展示，避免提前泄露章节展开内容；章节列表只暴露 ordered titles，不额外添加摘要段落或 summary 文本块。
+6. section 之间通过留白、tone shift 与轻量 surface 嵌套形成“薄板目录”关系，不使用 1px 横线切割，不制造 bloated panel 或 amber-heavy 信息墙。
 
 ### 5.11 `UnifiedInputBar`
 

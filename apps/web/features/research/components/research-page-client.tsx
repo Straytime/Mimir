@@ -45,6 +45,20 @@ function ResearchPageContent() {
             _
           </span>
         </p>
+        <a
+          className="inline-flex items-center gap-1 pl-[0.18rem] text-[10px] font-ui font-medium uppercase tracking-[0.18em] text-secondary opacity-55 transition-opacity hover:opacity-80 focus-visible:opacity-80"
+          href="https://robiniflore.com"
+          rel="noreferrer noopener"
+          target="_blank"
+        >
+          <span aria-hidden="true" className="text-tertiary">
+            &gt;
+          </span>
+          <span>robiniflore.com</span>
+          <span aria-hidden="true" className="text-tertiary">
+            ↗
+          </span>
+        </a>
       </div>
 
       {isActiveWorkspace ? (

@@ -22,6 +22,7 @@ test("renders the idle workspace shell before a task is created", () => {
   const slogan = screen.getByTestId("research-hero-slogan");
   const sloganText = within(slogan).getByText("Draw from depth");
   const underscore = within(slogan).getByText("_");
+  const signatureLink = screen.getByRole("link", { name: /robiniflore\.com/i });
 
   expect(wordmark).toBeInTheDocument();
   expect(wordmark).toHaveTextContent("MIMIR");
@@ -41,6 +42,10 @@ test("renders the idle workspace shell before a task is created", () => {
   expect(underscore).toHaveClass("text-primary");
   expect(underscore.className).toContain("opacity-");
   expect(underscore).not.toHaveClass("opacity-0");
+  expect(signatureLink).toBeInTheDocument();
+  expect(signatureLink).toHaveAttribute("href", "https://robiniflore.com");
+  expect(signatureLink).toHaveAttribute("target", "_blank");
+  expect(signatureLink).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
   expect(screen.getByPlaceholderText("想研究些什么？")).toBeInTheDocument();
   expect(
     screen.getByText("从心理学角度解析 openclaw 爆火的原因"),
