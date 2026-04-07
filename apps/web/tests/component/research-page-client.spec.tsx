@@ -20,6 +20,7 @@ test("renders the idle workspace shell before a task is created", () => {
 
   const heroBlock = screen.getByTestId("research-hero");
   const metadataRow = screen.getByTestId("research-hero-metadata-row");
+  const metadataLeading = screen.getByTestId("research-hero-metadata-leading");
   const wordmark = screen.getByRole("heading", { name: "MIMIR" });
   const slogan = screen.getByTestId("research-hero-slogan");
   const sloganText = within(slogan).getByText("Draw from depth");
@@ -32,15 +33,21 @@ test("renders the idle workspace shell before a task is created", () => {
   expect(wordmark).not.toHaveClass("text-primary");
   expect(heroBlock).toContainElement(wordmark);
   expect(heroBlock).toContainElement(metadataRow);
+  expect(metadataRow).toContainElement(metadataLeading);
   expect(slogan).toBeInTheDocument();
-  expect(metadataRow).toContainElement(slogan);
+  expect(metadataLeading).toContainElement(slogan);
   expect(metadataRow).toContainElement(signatureLink);
-  expect(slogan.parentElement).toBe(metadataRow);
+  expect(metadataLeading.parentElement).toBe(metadataRow);
   expect(signatureLink.parentElement).toBe(metadataRow);
   expect(metadataRow).toHaveClass("justify-between");
   expect(metadataRow).toHaveClass("gap-4");
+  expect(metadataRow).not.toHaveClass("pl-[5px]");
+  expect(metadataRow).not.toHaveClass("ml-[5px]");
   expect(metadataRow).not.toHaveClass("space-y-1");
   expect(metadataRow).not.toHaveClass("space-y-3");
+  expect(metadataLeading).toHaveClass("pl-[5px]");
+  expect(metadataLeading).toHaveClass("min-w-0");
+  expect(metadataLeading).toHaveClass("flex-1");
   expect(slogan).toHaveClass("text-secondary");
   expect(slogan).not.toHaveClass("text-primary");
   expect(slogan).not.toHaveClass("text-secondary/68");
@@ -57,6 +64,8 @@ test("renders the idle workspace shell before a task is created", () => {
   expect(signatureLink).toHaveAttribute("target", "_blank");
   expect(signatureLink).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
   expect(signatureLink).toHaveClass("justify-self-end");
+  expect(signatureLink).not.toHaveClass("w-full");
+  expect(signatureLink).not.toHaveClass("mt-2");
   expect(signatureLink).not.toHaveClass("pl-[0.18rem]");
   expect(screen.getByPlaceholderText("想研究些什么？")).toBeInTheDocument();
   expect(

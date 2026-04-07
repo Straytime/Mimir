@@ -17,6 +17,10 @@ export type ResearchPageClientProps = {
   store?: StoreApi<ResearchSessionStore>;
 };
 
+// Compensates for the visible left bearing of the MIMIR wordmark so the slogan
+// starts on the same optical left edge without shifting the whole metadata row.
+const HERO_WORDMARK_OPTICAL_OFFSET_CLASS = "pl-[5px]";
+
 function ResearchPageContent() {
   const taskId = useResearchSessionStore((state) => state.session.taskId);
   const snapshot = useResearchSessionStore((state) => state.remote.snapshot);
@@ -40,15 +44,20 @@ function ResearchPageContent() {
           className="flex w-full items-baseline justify-between gap-4"
           data-testid="research-hero-metadata-row"
         >
-          <p
-            className="flex max-w-[20rem] min-w-0 items-baseline gap-[0.14rem] text-[11px] font-ui font-medium tracking-[0.24em] text-secondary sm:max-w-none"
-            data-testid="research-hero-slogan"
+          <div
+            className={`min-w-0 flex-1 ${HERO_WORDMARK_OPTICAL_OFFSET_CLASS}`}
+            data-testid="research-hero-metadata-leading"
           >
-            <span className="text-secondary opacity-70">Draw from depth</span>
-            <span aria-hidden="true" className="text-primary opacity-45">
-              _
-            </span>
-          </p>
+            <p
+              className="flex max-w-[20rem] min-w-0 items-baseline gap-[0.14rem] text-[11px] font-ui font-medium tracking-[0.24em] text-secondary sm:max-w-none"
+              data-testid="research-hero-slogan"
+            >
+              <span className="text-secondary opacity-70">Draw from depth</span>
+              <span aria-hidden="true" className="text-primary opacity-45">
+                _
+              </span>
+            </p>
+          </div>
           <a
             className="inline-flex shrink-0 justify-self-end items-baseline gap-1 whitespace-nowrap text-[10px] font-ui font-medium uppercase tracking-[0.18em] text-secondary opacity-55 transition-opacity hover:opacity-80 focus-visible:opacity-80"
             href="https://robiniflore.com"

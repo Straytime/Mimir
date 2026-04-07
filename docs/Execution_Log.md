@@ -1281,3 +1281,24 @@ Copy the template below for each completed session:
   - 尚未做真实浏览器下的人工视觉 spot check，不同字重渲染或窄屏下仍可能需要极小 spacing 微调
 - 下一步建议:
   - 在桌面与移动端各做一次人工视觉确认，重点看 `MIMIR` 与 slogan 左缘是否已自然收齐、签名是否保持“弱元信息”而非 CTA 感
+
+## FE-HERO-OPTICAL-ALIGNMENT-FIX Metadata Optical Offset
+
+- 日期时间: 2026-04-07 12:02:51 CST (+0800)
+- 任务包编号: FE-HERO-OPTICAL-ALIGNMENT-FIX
+- session 标识: codex/hero-wordmark-left-edge-fix
+- 目标摘要: 按 docs-first -> tests-first -> implementation 修复 Idle hero 中 `MIMIR` 字形可见左缘与 metadata slogan 起点的光学错位。先在 `Frontend_IA` 明确 metadata row 只能对左侧 slogan 起点施加约 `5px` 的静态 optical offset，不能整体平移整行；随后收紧 `research-page-client` 组件测试，锁定新的 left-leading wrapper 与“非 stacked link row”契约；最后仅在 `research-page-client` 内加入一个具名 optical offset wrapper，把补偿限定在左侧 slogan 起点，不影响右侧 `robiniflore.com` 的稳定右对齐。
+- 修改文件:
+  - `docs/Frontend_IA.md`
+  - `apps/web/tests/component/research-page-client.spec.tsx`
+  - `apps/web/features/research/components/research-page-client.tsx`
+  - `docs/Execution_Log.md`
+- 测试/验证:
+  - 已运行: `cd apps/web && pnpm exec vitest run tests/component/research-page-client.spec.tsx` -- 19/19 通过
+  - 已运行: `cd apps/web && pnpm typecheck` -- 通过
+  - 未运行: 真实浏览器视觉 spot check；本任务包验收仅要求 targeted component spec 与 `typecheck`
+- 验收结论: accepted；文档、测试、实现与验证顺序符合要求，且代码以具名 optical offset 明确表达这是字形 left bearing 补偿，不是容器布局漂移。
+- blocker / 风险:
+  - 当前 `5px` 补偿来自已知 DevTools 测量，若后续更换 hero 字体、字重或字号，可能需要重新做一次视觉校准
+- 下一步建议:
+  - 在 Chrome 实际页面上做一次桌面视觉复核，确认 slogan 可见左缘与 `MIMIR` 的光学起点已收齐

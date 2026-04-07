@@ -91,7 +91,8 @@ apps/web/
    - `MIMIR` 必须作为当前屏首最强视觉信号：字形全大写、纯白、不混入 amber 主色填充；允许通过 tracking 与尺寸建立压迫感，但不能依赖 glow、描边或多色渐变
   - slogan 属于弱信号元信息层：与 `MIMIR` 保持更紧的垂直间距，颜色低于主标题对比度；`Draw from depth` 主体必须持续明显弱于 `MIMIR`，且弱化效果应通过稳定的文本色阶与独立透明度类组合实现，不依赖在生产环境可能失效的单一 slash opacity 颜色写法；结尾句点以 terminal 风格下划线光标表现
   - terminal underscore 必须作为真实可见的 DOM 文本节点渲染，不得依赖 pseudo-element `content`、opacity 组合或仅存在 class 名而未实际出字的实现
-  - hero 元信息层必须作为单独一行的 metadata row 渲染：左侧为 slogan + underscore，右侧为极低存在感的外部署名链接 `robiniflore.com`；该行左右两端对齐，并与 `MIMIR` 的左边缘在同一视觉起点上收齐，不得依赖明显可感知的硬编码大偏移来“修正”对齐
+  - hero 元信息层必须作为单独一行的 metadata row 渲染：左侧为 slogan + underscore，右侧为极低存在感的外部署名链接 `robiniflore.com`；该行左右两端对齐，并与 `MIMIR` 的左边缘在同一视觉起点上收齐
+  - `MIMIR` 因字形 left bearing 存在约 `5px` 的可见左缘内缩时，metadata row 必须只对左侧 slogan 起点施加一个小的静态 optical offset 补偿；补偿语义必须在结构或 class 上可读，且不得把整行 metadata 一起平移、不得破坏右侧 `robiniflore.com` 的稳定右对齐
   - `robiniflore.com` 必须保留 subdued terminal / editorial metadata 语气，并在同一 metadata row 内右对齐；不得再回退为 slogan 下方单独堆叠的一行链接；可带极小 external marker，并以新标签页打开
 2. `ActiveWorkspace`
    - 已创建任务，正在澄清 / 分析 / 搜集 / 撰写 / 等待反馈
