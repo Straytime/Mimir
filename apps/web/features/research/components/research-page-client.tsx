@@ -32,33 +32,38 @@ function ResearchPageContent() {
       }`}
       ref={mainRef}
     >
-      <div className="animate-fade-in-up space-y-1">
+      <div className="animate-fade-in-up space-y-1" data-testid="research-hero">
         <h1 className="text-[68px] font-ui font-semibold uppercase leading-[0.88] tracking-[-0.02em] text-white sm:text-[84px]">
           MIMIR
         </h1>
-        <p
-          className="flex max-w-[20rem] items-baseline gap-[0.14rem] pl-[0.18rem] text-[11px] font-ui font-medium tracking-[0.24em] text-secondary sm:max-w-none"
-          data-testid="research-hero-slogan"
+        <div
+          className="flex w-full items-baseline justify-between gap-4"
+          data-testid="research-hero-metadata-row"
         >
-          <span className="text-secondary opacity-70">Draw from depth</span>
-          <span aria-hidden="true" className="text-primary opacity-45">
-            _
-          </span>
-        </p>
-        <a
-          className="inline-flex items-center gap-1 pl-[0.18rem] text-[10px] font-ui font-medium uppercase tracking-[0.18em] text-secondary opacity-55 transition-opacity hover:opacity-80 focus-visible:opacity-80"
-          href="https://robiniflore.com"
-          rel="noreferrer noopener"
-          target="_blank"
-        >
-          <span aria-hidden="true" className="text-tertiary">
-            &gt;
-          </span>
-          <span>robiniflore.com</span>
-          <span aria-hidden="true" className="text-tertiary">
-            ↗
-          </span>
-        </a>
+          <p
+            className="flex max-w-[20rem] min-w-0 items-baseline gap-[0.14rem] text-[11px] font-ui font-medium tracking-[0.24em] text-secondary sm:max-w-none"
+            data-testid="research-hero-slogan"
+          >
+            <span className="text-secondary opacity-70">Draw from depth</span>
+            <span aria-hidden="true" className="text-primary opacity-45">
+              _
+            </span>
+          </p>
+          <a
+            className="inline-flex shrink-0 justify-self-end items-baseline gap-1 whitespace-nowrap text-[10px] font-ui font-medium uppercase tracking-[0.18em] text-secondary opacity-55 transition-opacity hover:opacity-80 focus-visible:opacity-80"
+            href="https://robiniflore.com"
+            rel="noreferrer noopener"
+            target="_blank"
+          >
+            <span aria-hidden="true" className="text-tertiary">
+              &gt;
+            </span>
+            <span>robiniflore.com</span>
+            <span aria-hidden="true" className="text-tertiary">
+              ↗
+            </span>
+          </a>
+        </div>
       </div>
 
       {isActiveWorkspace ? (
